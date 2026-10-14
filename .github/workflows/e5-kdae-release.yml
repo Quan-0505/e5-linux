@@ -77,6 +77,7 @@ jobs:
           persist-credentials: false
       - name: Validate device repositories
         run: |
+          python3 tools/prepare-screen-compat.py
           python3 tools/device-layout.py check --system openwrt --model e5
           python3 tools/tests/device-layout.py
       - name: Record sources and UTC+8 compile start

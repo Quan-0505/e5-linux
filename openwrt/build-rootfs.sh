@@ -325,7 +325,7 @@ openssl version
 # init script (which forbids loading the modules a connecting device needs)
 apk add pulseaudio-daemon-avahi pulseaudio-tools >/dev/null
 # Reuse the tested Debian hostless FE_ST_VOICE backend for cellular audio.
-apk add python3 tc-full ip-full >/dev/null
+apk add python3 python3-sqlite3 tc-full ip-full >/dev/null
 if [ "$CONTAINERS" = 1 ]; then
     # Do not run dockerd post-install scripts inside the build container.
     apk add --no-scripts docker dockerd iptables-nft ip6tables-nft resize2fs >/dev/null

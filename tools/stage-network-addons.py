@@ -35,6 +35,7 @@ def fetch():
         assert len(data) > 100000 and not data.lstrip().startswith(b'<'), 'Invalid geo download'
         (WORK / name).write_bytes(data)
         metadata['geo_sha256'][name] = sha(data)
+    metadata['nodebaby_software_files'] = [name for name, _, _ in nodebaby_files()]
     (WORK / 'build.json').write_text(json.dumps(metadata, indent=2) + '\n')
 
 def nodebaby_files():
