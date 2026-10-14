@@ -7,10 +7,13 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
+import shutil
 import subprocess
 import struct
 import tarfile
 import time
+import tempfile
 import zipfile
 
 TOP = Path(__file__).resolve().parents[1]
@@ -101,6 +104,27 @@ def audit_root(info):
     for name in ('vendor-start.sh', 'e5-modem-coldboot'):
         expected['opt/e5/' + name] = file_digest(TOP / 'rootfs/overlay/opt/e5' / name)
     expected['etc/e5/block-mount.build-id'] = hashlib.sha256((block_build_id() + '\n').encode()).hexdigest()
+    kernel = (TOP / 'upstream/out-release/kernel.release').read_text().strip()
+    if '-e5-mobile4-' in kernel:
+        # Independently reproduce the source transformations, rather than
+        # trusting hashes read back from the assembled image itself.
+        with tempfile.TemporaryDirectory() as temp:
+            reference = Path(temp)
+            for source, destination in (
+                (TOP / 'openwrt/overlay', reference),
+                (TOP / 'ci/infoscreen/root', reference),
+                (TOP / 'rootfs/overlay/opt/e5', reference / 'opt/e5'),
+            ):
+                shutil.copytree(source, destination, dirs_exist_ok=True, symlinks=True)
+            runpy.run_path(str(TOP / 'devices/e5/stage.py'))['stage'](reference)
+            for name in list(expected):
+                derived = reference / name
+                if derived.is_file():
+                    expected[name] = file_digest(derived)
+            for prefix in ('usr/', 'www/', 'opt/'):
+                for path in (reference / prefix).rglob('*'):
+                    if path.is_file() and not path.is_symlink():
+                        expected[path.relative_to(reference).as_posix()] = file_digest(path)
     found, versions, modules = {}, {}, set()
     rootfs = TOP / 'work/openwrt' / f'e5-openwrt-{info["openwrt_version"]}-generic-rootfs.tar.gz'
     if not rootfs.is_file():
@@ -132,7 +156,6 @@ def audit_root(info):
     for name in ('sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab'):
         if not versions.get(name):
             raise ValueError('guarded block-mount payload missing: ' + name)
-    kernel = (TOP / 'upstream/out-release/kernel.release').read_text().strip()
     if modules != {kernel}:
         raise ValueError('root modules do not all match the release kernel')
     if int(versions['etc/e5/build-time']) != info['build_epoch']:
