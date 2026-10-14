@@ -180,6 +180,7 @@ jobs:
           CGO_ENABLED=0 make OUTPUT="$GITHUB_WORKSPACE/e5-linux/work/network-addons/daed" APPNAME=daed WEB_DIST="$GITHUB_WORKSPACE/kdae-source/dist" VERSION=v2.2.4-kdae-dnsfix bundle
           cd "$GITHUB_WORKSPACE/e5-linux"
           python3 tools/stage-network-addons.py --fetch
+          python3 tools/tests/network-addons.py
       - name: Compile the release kernel
         env:
           E5_RELEASE: '1'
