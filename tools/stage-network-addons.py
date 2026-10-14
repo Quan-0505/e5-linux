@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import struct
+import subprocess
 import tarfile
 import urllib.request
 
@@ -16,13 +17,27 @@ LOCK = json.loads((BASE / 'lock.json').read_text())
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
+def download(urls, destination, expected=None):
+    temporary = destination.with_suffix(destination.suffix + '.part')
+    for url in urls:
+        result = subprocess.run(['curl', '--fail', '--location', '--ipv4',
+            '--connect-timeout', '15', '--max-time', '120', '--retry', '2',
+            '--retry-delay', '2', '--retry-all-errors', '--silent', '--show-error',
+            '--output', str(temporary), url])
+        if result.returncode == 0 and temporary.is_file():
+            if expected is None or sha(temporary.read_bytes()) == expected:
+                temporary.replace(destination)
+                return
+        temporary.unlink(missing_ok=True)
+    raise RuntimeError('Public download failed validation: ' + destination.name)
+
 def fetch():
     WORK.mkdir(parents=True, exist_ok=True)
     archive = WORK / 'nodebaby.tgz'
     if not archive.exists() or sha(archive.read_bytes()) != LOCK['nodebaby_sha256']:
-        # No authorization is needed for this public software download.
-        with urllib.request.urlopen(LOCK['nodebaby_url'], timeout=120) as response:
-            archive.write_bytes(response.read())
+        # Cache contains exactly the checksum-pinned official public payload.
+        urls = [LOCK['nodebaby_mirror'], LOCK['nodebaby_url']] if LOCK.get('nodebaby_mirror') else [LOCK['nodebaby_url']]
+        download(urls, archive, LOCK['nodebaby_sha256'])
     assert sha(archive.read_bytes()) == LOCK['nodebaby_sha256'], 'NodeBaby checksum mismatch'
     binary = (WORK / 'daed').read_bytes()
     assert binary[:4] == b'\x7fELF' and binary[4] == 2 and struct.unpack('<H', binary[18:20])[0] == 183, 'KDAE must be ARM64 ELF'
@@ -30,8 +45,9 @@ def fetch():
     metadata = {**LOCK, 'kdae_binary_sha256': sha(binary), 'geo_sha256': {}}
     for name in ['geoip.dat', 'geosite.dat']:
         url = 'https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/' + name
-        with urllib.request.urlopen(url, timeout=120) as response:
-            data = response.read()
+        destination = WORK / name
+        download([url], destination)
+        data = destination.read_bytes()
         assert len(data) > 100000 and not data.lstrip().startswith(b'<'), 'Invalid geo download'
         (WORK / name).write_bytes(data)
         metadata['geo_sha256'][name] = sha(data)
