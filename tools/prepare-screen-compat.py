@@ -14,3 +14,25 @@ if after.encode() not in source:
     assert source.count(before.encode()) == 1
     path.write_bytes(source.replace(before.encode(), after.encode()))
 print('USB unknown-setting rejection applied before hardware status probing')
+
+# The pinned network harness predates the shared hotspot module. Keep the
+# wireless-state unit dependency explicit and mount the real module for API tests.
+path = top / 'ci/infoscreen/tests/network-checks.sh'
+source = path.read_bytes()
+before = b"source = (top / 'root/usr/share/e5-infoscreen/api.uc').read_text()"
+after = b"shutil.copytree(top.parent.parent / 'device/openwrt_device_common/luci-app-t551m/root/usr/libexec/unisoc-modem', temp / 'unisoc-modem')\n" + before
+if after not in source:
+    assert hashlib.sha256(source).hexdigest() == '63bb2b4577bd2dc8b590144d6efc2add7112113be42279e163554ad71537790d'
+    source = source.replace(before, after)
+    source = source.replace(b'const cursor=ctx.cursor,', b'const hotspot={config:ctx.hotspot_config}; const cursor=ctx.cursor,')
+    source = source.replace(b'    -v "$T/helpers":/helpers:ro', b'    -v "$T/unisoc-modem":/usr/libexec/unisoc-modem:ro \\\n    -v "$T/helpers":/helpers:ro')
+    path.write_bytes(source)
+path = top / 'ci/infoscreen/tests/wifi-status.uc'
+source = path.read_bytes()
+before = b'const ctx={\n'
+after = before + b" hotspot_config:()=>({radio:'radio0',enabled,qr_revision:1}),\n"
+if after not in source:
+    assert hashlib.sha256(source).hexdigest() == '07036507fc3d5d093f265e5f232f615faed862e3ebde908dd56ad974fd7530fd'
+    assert source.count(before) == 1
+    path.write_bytes(source.replace(before, after))
+print('Network harness restored: explicit unit dependency and real shared module for API tests')
