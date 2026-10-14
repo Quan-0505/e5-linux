@@ -100,7 +100,7 @@ IMAGE_MB=${E5_IMAGE_MB:-$DEFAULT_IMAGE_MB}
 FIRMWARE=${E5_FIRMWARE:-$TOP/rootfs/overlay/lib/firmware}
 ANDROID=${E5_ANDROID_SUBSET:-$TOP/work/android-subset}
 KBUILD=${E5_KBUILD:-$TOP/out_linux}
-mkdir -p "$WORK" "$OUT"
+mkdir -p "$WORK" "$OUT" "$TOP/out/boot"
 python3 "$TOP/tools/openwrt-package-state.py" check "$VER"
 # /dev/sd* also matches Unisoc communication channels. Install only the APK
 # whose probe filters device types before opening them (shared by all boards).
@@ -297,7 +297,7 @@ retry_apk() {
 }
 apk update >/dev/null
 retry_apk apk add --allow-untrusted /in/block-mount-guarded.apk >/dev/null
-retry_apk apk add e2fsprogs resize2fs >/dev/null
+retry_apk apk add e2fsprogs resize2fs f2fs-tools ucode-mod-fs >/dev/null
 # ModemManager first, from its local file (unsigned): its release is above the
 # repository one, so what depends on it takes this one and apk upgrade keeps it
 retry_apk apk add --allow-untrusted /in/apk/modemmanager-1*.apk /in/apk/modemmanager-rpcd-*.apk >/dev/null
@@ -480,10 +480,13 @@ IMG=e5-openwrt-$VER.ext4
 [ "$DEVICE_FILES" != 0 ] || IMG=e5-openwrt-$VER-generic.ext4
 docker run --rm --platform linux/arm64 -v "$WORK":/w -v "$OUT":/out \
     -v "$HERE/prepare-ext4-tools.py":/prepare-ext4-tools.py:ro \
+    -v "$TOP/boot/prepare-f2fs-tools.py":/prepare-f2fs-tools.py:ro \
+    -v "$TOP/out/boot":/boot-out \
     -e NAME="$NAME" -e IMG="$IMG" -e MB="$IMAGE_MB" alpine:3.22 sh -euc '
 apk add -q e2fsprogs python3 binutils >/dev/null
 rm -rf /tmp/r && mkdir /tmp/r && tar -xzf /w/$NAME -C /tmp/r
 python3 /prepare-ext4-tools.py --root /tmp/r --out /out/ext4-tools.tar
+python3 /prepare-f2fs-tools.py --root /tmp/r --out /boot-out/f2fs-tools
 rm -f /w/$IMG
 mke2fs -q -t ext4 -L e5-openwrt -m 1 -d /tmp/r /w/$IMG ${MB}M
 e2fsck -fn /w/$IMG >/dev/null
