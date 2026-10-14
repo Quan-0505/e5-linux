@@ -174,7 +174,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Quan-0505/daed-kdae
-          ref: ba1e98402460c165e3269d5458d16aa171daa9f4
+          ref: 92aa565ae2d8de920380d1cca0872f4780b9c316
           path: kdae-source
           persist-credentials: false
       - uses: pnpm/action-setup@v4
@@ -199,7 +199,7 @@ jobs:
           make deps
           go test ./dae ./maintenance ./observability ./consoleapi ./graphql ./graphql/service/subscription
           mkdir -p "$GITHUB_WORKSPACE/work/network-addons"
-          CGO_ENABLED=0 make OUTPUT="$GITHUB_WORKSPACE/work/network-addons/daed" APPNAME=daed WEB_DIST="$GITHUB_WORKSPACE/kdae-source/dist" VERSION=v2.2.4-kdae-dnsfix bundle
+          CGO_ENABLED=0 make OUTPUT="$GITHUB_WORKSPACE/work/network-addons/daed" APPNAME=daed WEB_DIST="$GITHUB_WORKSPACE/kdae-source/dist" VERSION=v2.2.5-kdae bundle
           cd "$GITHUB_WORKSPACE"
           python3 tools/stage-network-addons.py --fetch
           python3 tools/tests/network-addons.py

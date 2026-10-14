@@ -46,7 +46,8 @@ def fetch():
     for name in ['geoip.dat', 'geosite.dat']:
         url = 'https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/' + name
         destination = WORK / name
-        download([url], destination)
+        fallback = 'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/' + name
+        download([url, fallback], destination)
         data = destination.read_bytes()
         assert len(data) > 100000 and not data.lstrip().startswith(b'<'), 'Invalid geo download'
         (WORK / name).write_bytes(data)
