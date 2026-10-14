@@ -325,7 +325,7 @@ openssl version
 # init script (which forbids loading the modules a connecting device needs)
 apk add pulseaudio-daemon-avahi pulseaudio-tools >/dev/null
 # Reuse the tested Debian hostless FE_ST_VOICE backend for cellular audio.
-apk add python3 >/dev/null
+apk add python3 tc-full ip-full >/dev/null
 if [ "$CONTAINERS" = 1 ]; then
     # Do not run dockerd post-install scripts inside the build container.
     apk add --no-scripts docker dockerd iptables-nft ip6tables-nft resize2fs >/dev/null
@@ -392,6 +392,8 @@ printf "E5\n" > $R/etc/hostname
 
 cp -a /in/overlay/. $R/
 rm -f $R/.device-overlay.json
+# Separate public add-ons: never copy a live device state directory.
+python3 /in/feature-source/tools/stage-network-addons.py --root $R
 if [ "$CONTAINERS" = 1 ]; then
     python3 $R/usr/libexec/e5-container-setup --root $R
 fi
