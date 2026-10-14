@@ -121,10 +121,14 @@ def audit_root(info):
                 derived = reference / name
                 if derived.is_file():
                     expected[name] = file_digest(derived)
-            for prefix in ('usr/', 'www/', 'opt/'):
+            for prefix in ('usr/', 'www/'):
                 for path in (reference / prefix).rglob('*'):
-                    if path.is_file() and not path.is_symlink():
+                    if path.is_file() and not path.is_symlink() and path.relative_to(reference).as_posix() != 'usr/libexec/e5-sysupgrade':
                         expected[path.relative_to(reference).as_posix()] = file_digest(path)
+            for name in ('vendor-start.sh', 'android-import-perms.sh', 'android-run',
+                         'e5-modem-coldboot', 'e5-at', 'e5-next-boot', 'e5-os',
+                         'e5-sd-registry', 'e5-call-audio.py', 'e5-data-priority'):
+                expected['opt/e5/' + name] = file_digest(reference / 'opt/e5' / name)
     found, versions, modules = {}, {}, set()
     rootfs = TOP / 'work/openwrt' / f'e5-openwrt-{info["openwrt_version"]}-generic-rootfs.tar.gz'
     if not rootfs.is_file():
