@@ -203,7 +203,20 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           python3 tools/stage-network-addons.py --fetch
           python3 tools/tests/network-addons.py
+      - name: Fingerprint native kernel sources and toolchain
+        id: kernel-key
+        run: |
+          fingerprint=$(docker run --rm e5-mainline-build sh -ec 'clang --version; ld.lld --version; pahole --version' | sha256sum | cut -d ' ' -f 1)
+          revision=$(git -C linux-lts-e5 rev-parse HEAD)
+          echo "key=e5-native-profile-${{ runner.arch }}-$revision-$fingerprint-${{ hashFiles('upstream/*.config', 'upstream/*.txt', 'upstream/*.py', 'upstream/Dockerfile', 'devices/**') }}" >> "$GITHUB_OUTPUT"
+      - name: Restore verified native E5 kernel
+        id: kernel-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: upstream/out-release
+          key: ${{ steps.kernel-key.outputs.key }}
       - name: Compile the release kernel
+        if: steps.kernel-cache.outputs.cache-hit != 'true'
         env:
           E5_RELEASE: '1'
         run: |
@@ -213,6 +226,17 @@ jobs:
             -e E5_FEATURE_OUT=/work/upstream/out-release \
             -e JOBS="$(nproc)" e5-mainline-build bash devices/e5/build-kernel.sh
           sudo chown -R "$(id -u):$(id -g)" upstream/out-release
+          printf '%s\n' "$E5_BUILD_EPOCH" > upstream/out-release/compile-epoch
+      - name: Verify compiled or cached native E5 kernel
+        run: |
+          test "$(cat upstream/out-release/source-commit)" = "$(git -C linux-lts-e5 rev-parse HEAD)"
+          python3 upstream/check-container-support.py upstream/out-release
+      - name: Save verified native E5 kernel
+        if: steps.kernel-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: upstream/out-release
+          key: ${{ steps.kernel-key.outputs.key }}
       - name: Restore patched OpenWrt packages
         id: packages
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4

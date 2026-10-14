@@ -168,6 +168,9 @@ def audit_root(info):
         raise ValueError('generic image has a machine ID')
     info.update({'kernel_release': kernel, 'infoscreen_version': versions['usr/share/e5-infoscreen/VERSION'].decode().strip(),
                  'phone_version': json.loads(versions['etc/e5-infoscreen/plugins/phone/manifest.json'])['version']})
+    kernel_epoch = TOP / 'upstream/out-release/compile-epoch'
+    if kernel_epoch.is_file():
+        info['kernel_build_epoch'] = int(kernel_epoch.read_text())
 
 
 def verify():

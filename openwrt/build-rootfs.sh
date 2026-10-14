@@ -480,13 +480,13 @@ IMG=e5-openwrt-$VER.ext4
 [ "$DEVICE_FILES" != 0 ] || IMG=e5-openwrt-$VER-generic.ext4
 docker run --rm --platform linux/arm64 -v "$WORK":/w -v "$OUT":/out \
     -v "$HERE/prepare-ext4-tools.py":/prepare-ext4-tools.py:ro \
-    -v "$TOP/boot/prepare-f2fs-tools.py":/prepare-f2fs-tools.py:ro \
+    -v "$TOP/boot/prepare-f2fs-tools.py":/tools/boot/prepare-f2fs-tools.py:ro \
     -v "$TOP/out/boot":/boot-out \
     -e NAME="$NAME" -e IMG="$IMG" -e MB="$IMAGE_MB" alpine:3.22 sh -euc '
 apk add -q e2fsprogs python3 binutils >/dev/null
 rm -rf /tmp/r && mkdir /tmp/r && tar -xzf /w/$NAME -C /tmp/r
 python3 /prepare-ext4-tools.py --root /tmp/r --out /out/ext4-tools.tar
-python3 /prepare-f2fs-tools.py --root /tmp/r --out /boot-out/f2fs-tools
+python3 /tools/boot/prepare-f2fs-tools.py --root /tmp/r --out /boot-out/f2fs-tools
 rm -f /w/$IMG
 mke2fs -q -t ext4 -L e5-openwrt -m 1 -d /tmp/r /w/$IMG ${MB}M
 e2fsck -fn /w/$IMG >/dev/null
