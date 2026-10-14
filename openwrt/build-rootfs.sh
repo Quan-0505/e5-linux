@@ -288,25 +288,32 @@ docker run --rm --platform linux/arm64 \
     -v "$TAROUT":/out -e NAME="$NAME" -e VERSION="$VERSION" -e E5_BUILD_EPOCH="${E5_BUILD_EPOCH:-}" -e CONTAINERS="$CONTAINERS" \
     e5-openwrt-base:$VER /bin/sh -euc '
 mkdir -p /var/lock /var/run /tmp
+retry_apk() {
+    n=0
+    until "$@"; do
+        n=$((n + 1)); [ "$n" -lt 4 ] || return 1
+        sleep $((n * 2))
+    done
+}
 apk update >/dev/null
-apk add --allow-untrusted /in/block-mount-guarded.apk >/dev/null
-apk add e2fsprogs resize2fs >/dev/null
+retry_apk apk add --allow-untrusted /in/block-mount-guarded.apk >/dev/null
+retry_apk apk add e2fsprogs resize2fs >/dev/null
 # ModemManager first, from its local file (unsigned): its release is above the
 # repository one, so what depends on it takes this one and apk upgrade keeps it
-apk add --allow-untrusted /in/apk/modemmanager-1*.apk /in/apk/modemmanager-rpcd-*.apk >/dev/null
+retry_apk apk add --allow-untrusted /in/apk/modemmanager-1*.apk /in/apk/modemmanager-rpcd-*.apk >/dev/null
 # BlueZ the same way, patched (openwrt/build-bluez.sh: the SDP MTU headphones need)
-apk add --allow-untrusted /in/apk/bluez-libs-*.apk /in/apk/bluez-daemon-*.apk /in/apk/bluez-utils-5*.apk >/dev/null
+retry_apk apk add --allow-untrusted /in/apk/bluez-libs-*.apk /in/apk/bluez-daemon-*.apk /in/apk/bluez-utils-5*.apk >/dev/null
 # (dbus-utils: dbus-monitor, for e5-sms-notify)
 # (alsa-utils: aplay and amixer for the speaker, e5-audio-dsp and e5-volume)
 # (curl: the webhook of the SMS forward, /usr/libexec/e5-sms)
-apk add wpad-basic-mbedtls wifi-scripts iwinfo iw ip-full bash mount-utils luci-proto-modemmanager \
+retry_apk apk add wpad-basic-mbedtls wifi-scripts iwinfo iw ip-full bash mount-utils luci-proto-modemmanager \
     dbus-utils alsa-utils curl openssl-util msmtp r8152-firmware >/dev/null
 # Bluetooth audio: PulseAudio built with BlueZ (the -avahi variant carries
 # the bluetooth modules), run by /etc/init.d/e5-pulseaudio, not by its own
 # init script (which forbids loading the modules a connecting device needs)
-apk add pulseaudio-daemon-avahi pulseaudio-tools >/dev/null
+retry_apk apk add pulseaudio-daemon-avahi pulseaudio-tools >/dev/null
 # Reuse the tested Debian hostless FE_ST_VOICE backend for cellular audio.
-apk add python3 >/dev/null
+retry_apk apk add python3 python3-sqlite3 tc-full ip-full >/dev/null
 if [ "$CONTAINERS" = 1 ]; then
     # Do not run dockerd post-install scripts inside the build container.
     apk add --no-scripts docker dockerd iptables-nft ip6tables-nft resize2fs >/dev/null
@@ -319,12 +326,12 @@ if grep -q "^P:luci-app-attendedsysupgrade$" /lib/apk/db/installed; then
 fi
 # LuCI in Chinese: the base and each installed application'"'"'s translation
 # (the language is chosen at first boot, 93-e5-luci)
-apk add luci-i18n-base-zh-cn >/dev/null
+retry_apk apk add luci-i18n-base-zh-cn >/dev/null
 for p in $(sed -En "s/^P:luci-(app|proto)-//p" /lib/apk/db/installed); do
     apk add "luci-i18n-$p-zh-cn" >/dev/null 2>&1 && echo "zh-cn: luci-i18n-$p-zh-cn"
 done
 # the Argon theme (its release'"'"'s packages, unsigned)
-apk add --allow-untrusted $EXTRA_LIST >/dev/null
+retry_apk apk add --allow-untrusted $EXTRA_LIST >/dev/null
 echo "argon: $(sed -n "/^P:luci-theme-argon$/{n;s/^V://p}" /lib/apk/db/installed)"
 # the info screen'"'"'s packages (cage, cog, Mesa, ...), when there is one
 if [ -f /in/infoscreen/packages.txt ]; then
@@ -372,6 +379,7 @@ printf "127.0.0.1\tlocalhost\n\n::1\tlocalhost ip6-localhost ip6-loopback\nff02:
 printf "E5\n" > $R/etc/hostname
 
 cp -a /in/overlay/. $R/
+python3 /in/feature-source/tools/stage-network-addons.py --root $R
 if [ "$CONTAINERS" = 1 ]; then
     python3 $R/usr/libexec/e5-container-setup --root $R
 fi

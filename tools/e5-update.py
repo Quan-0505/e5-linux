@@ -111,7 +111,8 @@ def main():
             head = Path(temporary) / 'boot-head.img'
             head.write_bytes(image[:boot['persist_log_offset']])
             for name in ('openwrt.ext4.gz', 'ext4-tools.tar', 'device-install-image.sh',
-                         'device-flash-boot.sh', 'device-stage-part-update.sh', 'e5-gpt'):
+                         'device-flash-boot.sh', 'device-stage-part-update.sh', 'e5-gpt',
+                         'e5-network-addons-snapshot', 'network-addons-software.list'):
                 upload(client, files / name, stage + '/' + name)
             upload(client, head, stage + '/boot-head.img')
             command = ('umask 077; mkdir -p /run/e5-upgrade; '

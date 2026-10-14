@@ -81,7 +81,7 @@ part_update_pending() {
     mount -t ext4 "$dev" /part-update-new || { part_fail 'new root mount'; return 1; }
     local new=/part-update-new name
     mkdir -p "$ram/new-version" "$ram/new-phone"
-    for name in image-version image-form build-time build.json feature-port.json device-profile; do
+    for name in image-version image-form build-time build.json feature-port.json device-profile network-addons.json; do
         [ ! -f "$new/etc/e5/$name" ] || cp "$new/etc/e5/$name" "$ram/new-version/"
     done
     cp -a "$new/etc/e5-infoscreen/plugins/phone/." "$ram/new-phone/" || return 1

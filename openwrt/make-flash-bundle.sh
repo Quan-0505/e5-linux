@@ -129,6 +129,8 @@ S=$(mktemp -d)
 trap 'rm -rf "$S0" "$S"' EXIT
 P=$S/$NAME
 mkdir -p "$P/files" "$P/scripts/tools"
+cp "$TOP/work/network-addons/software.list" "$P/files/network-addons-software.list"
+cp "$HERE/network-addons/overlay/usr/libexec/e5-network-addons-snapshot" "$P/files/"
 if [ -n "$MAINLINE" ]; then
     python3 "$TOP/upstream/check-container-support.py" "$KOUT"
     cp "$KOUT/config" "$P/files/kernel.config"

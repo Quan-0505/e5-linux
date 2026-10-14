@@ -1,0 +1,10 @@
+{
+  "admin/services/daed": {
+    "title": "daed",
+    "order": 90,
+    "action": {
+      "type": "view",
+      "path": "network-addons/daed"
+    }
+  }
+}
