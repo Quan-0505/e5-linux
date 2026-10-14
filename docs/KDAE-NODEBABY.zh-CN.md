@@ -9,7 +9,7 @@ LuCI → 服务 → daed / 节点小宝 自动打开当前设备的 2023 / 9118 
 
 内核显式启用 NETKIT、VETH、BPF/JIT/BTF、流量分类和入口 qdisc；最终内核配置与 ELF、文件清单在发布前校验。数据源自动更新沿用 KDAE 的服务实现。
 
-更新器保留设备本地 KDAE 数据库与节点小宝身份，不用旧软件覆盖新软件；SQLite 使用在线备份读取已提交 WAL。旧系统更新前需有 python3-sqlite3；缺少时更新在切换镜像前失败，原镜像保留。通用发布包始终没有这些设备状态。
+更新器保留设备本地 KDAE 数据库与节点小宝身份，不用旧软件覆盖新软件；SQLite 使用在线备份读取已提交 WAL。更新器通过新镜像自带的 Python/SQLite 运行，不依赖旧系统 Python 模块。早期 E5 Go 使用 /etc/daed/wing.db 时继续使用原目录；没有 Go 数据库时使用 /etc/daed-kdae。Rust daed.db 不会被自动读取。通用发布包始终没有这些设备状态。
 
 固定的信息屏 09b7ec8 的 USB 调度器有未知操作先查询硬件导致错误返回不一致的问题。tools/prepare-screen-compat.py 校验原始 SHA 后加入参数拒绝，保留原 USB 测试并记录补丁在本仓库。
 

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Use the new root's interpreter and SQLite module, including on old systems.
+set -eu
+old=${1:?old root}
+new=${2:?new root}
+loader=$new/lib/ld-musl-aarch64.so.1
+[ -f "$loader" ] && [ -x "$new/usr/bin/python3" ] || {
+    echo 'New image is missing its Python runtime; keeping the current image' >&2
+    exit 1
+}
+exec env PYTHONHOME="$new/usr" PYTHONPATH= \
+    "$loader" --library-path "$new/lib:$new/usr/lib" \
+    "$new/usr/bin/python3" "$new/usr/libexec/e5-network-addons-preserve" "$old" "$new"

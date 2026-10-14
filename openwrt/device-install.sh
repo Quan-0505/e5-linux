@@ -71,7 +71,7 @@ if [ -d "$DEST/etc/config" ]; then
     done
 fi
 
-[ ! -d "$DEST" ] || python3 "$NEW/usr/libexec/e5-network-addons-preserve" "$DEST" "$NEW"
+[ ! -d "$DEST" ] || sh "$NEW/usr/libexec/e5-network-addons-preserve-run" "$DEST" "$NEW"
 
 if [ ! -f "$NEW/etc/e5/install.conf" ]; then
     echo "== settings from Debian"

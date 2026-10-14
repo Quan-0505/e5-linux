@@ -297,6 +297,17 @@ docker run --rm --platform linux/arm64 \
     -v "$TAROUT":/out -e NAME="$NAME" -e VERSION="$VERSION" -e E5_BUILD_EPOCH="${E5_BUILD_EPOCH:-}" -e CONTAINERS="$CONTAINERS" \
     e5-openwrt-base:$VER /bin/sh -euc '
 mkdir -p /var/lock /var/run /tmp
+# Recover interrupted package downloads, as in MU300 clean-tf-7.2. Keep
+# optional translation probes separate so missing translations fail quickly.
+apk_retry() {
+    n=0
+    until apk "$@"; do
+        n=$((n + 1))
+        [ "$n" -lt 4 ] || return 1
+        echo "Retrying required OpenWrt package installation ($n/3)" >&2
+        sleep $((n * 2))
+    done
+}
 attempt=1
 until apk update >/dev/null; do
     [ "$attempt" -lt 4 ] || exit 1
@@ -304,17 +315,17 @@ until apk update >/dev/null; do
     sleep $((attempt * 2))
     attempt=$((attempt + 1))
 done
-apk add --allow-untrusted /in/block-mount-guarded.apk >/dev/null
-apk add e2fsprogs resize2fs f2fs-tools >/dev/null
+apk_retry add --allow-untrusted /in/block-mount-guarded.apk >/dev/null
+apk_retry add e2fsprogs resize2fs f2fs-tools >/dev/null
 # ModemManager first, from its local file (unsigned): its release is above the
 # repository one, so what depends on it takes this one and apk upgrade keeps it
-apk add --allow-untrusted /in/apk/modemmanager-1*.apk /in/apk/modemmanager-rpcd-*.apk >/dev/null
+apk_retry add --allow-untrusted /in/apk/modemmanager-1*.apk /in/apk/modemmanager-rpcd-*.apk >/dev/null
 # BlueZ the same way, patched (openwrt/build-bluez.sh: the SDP MTU headphones need)
-apk add --allow-untrusted /in/apk/bluez-libs-*.apk /in/apk/bluez-daemon-*.apk /in/apk/bluez-utils-5*.apk >/dev/null
+apk_retry add --allow-untrusted /in/apk/bluez-libs-*.apk /in/apk/bluez-daemon-*.apk /in/apk/bluez-utils-5*.apk >/dev/null
 # (dbus-utils: dbus-monitor, for e5-sms-notify)
 # (alsa-utils: aplay and amixer for the speaker, e5-audio-dsp and e5-volume)
 # (curl: the webhook of the SMS forward, /usr/libexec/e5-sms)
-apk add $(sed -e "s/#.*//" -e "/^[[:space:]]*$/d" /in/packages.list) >/dev/null
+apk_retry add $(sed -e "s/#.*//" -e "/^[[:space:]]*$/d" /in/packages.list) >/dev/null
 # SMS email encoding and DingTalk signatures need the OpenSSL command itself.
 command -v openssl >/dev/null
 openssl version
@@ -323,9 +334,9 @@ openssl version
 # Bluetooth audio: PulseAudio built with BlueZ (the -avahi variant carries
 # the bluetooth modules), run by /etc/init.d/e5-pulseaudio, not by its own
 # init script (which forbids loading the modules a connecting device needs)
-apk add pulseaudio-daemon-avahi pulseaudio-tools >/dev/null
+apk_retry add pulseaudio-daemon-avahi pulseaudio-tools >/dev/null
 # Reuse the tested Debian hostless FE_ST_VOICE backend for cellular audio.
-apk add python3 python3-sqlite3 tc-full ip-full >/dev/null
+apk_retry add python3 python3-sqlite3 tc-full ip-full >/dev/null
 if [ "$CONTAINERS" = 1 ]; then
     # Do not run dockerd post-install scripts inside the build container.
     apk add --no-scripts docker dockerd iptables-nft ip6tables-nft resize2fs >/dev/null
@@ -338,12 +349,12 @@ if grep -q "^P:luci-app-attendedsysupgrade$" /lib/apk/db/installed; then
 fi
 # LuCI in Chinese: the base and each installed application'"'"'s translation
 # (the language is chosen at first boot, 93-e5-luci)
-apk add luci-i18n-base-zh-cn >/dev/null
+apk_retry add luci-i18n-base-zh-cn >/dev/null
 for p in $(sed -En "s/^P:luci-(app|proto)-//p" /lib/apk/db/installed); do
     apk add "luci-i18n-$p-zh-cn" >/dev/null 2>&1 && echo "zh-cn: luci-i18n-$p-zh-cn"
 done
 # the Argon theme (its release'"'"'s packages, unsigned)
-apk add --allow-untrusted $EXTRA_LIST >/dev/null
+apk_retry add --allow-untrusted $EXTRA_LIST >/dev/null
 echo "argon: $(sed -n "/^P:luci-theme-argon$/{n;s/^V://p}" /lib/apk/db/installed)"
 # the info screen'"'"'s packages (cage, cog, Mesa, ...), when there is one
 if [ -f /in/infoscreen/packages.txt ]; then
@@ -499,7 +510,7 @@ docker run --rm --platform linux/arm64 -v "$WORK":/w -v "$OUT":/out \
     -v "$HERE/prepare-ext4-tools.py":/prepare-ext4-tools.py:ro \
     -v "$TOP/boot/prepare-f2fs-tools.py":/prepare-f2fs-tools.py:ro -v "$TOP/out/boot":/boot-out \
     -e NAME="$NAME" -e IMG="$IMG" -e MB="$IMAGE_MB" alpine:3.22 sh -euc '
-apk add -q e2fsprogs python3 binutils >/dev/null
+apk_retry add -q e2fsprogs python3 binutils >/dev/null
 rm -rf /tmp/r && mkdir /tmp/r && tar -xzf /w/$NAME -C /tmp/r
 rm -f /w/$IMG
 python3 /prepare-ext4-tools.py --root /tmp/r --out /out/ext4-tools.tar

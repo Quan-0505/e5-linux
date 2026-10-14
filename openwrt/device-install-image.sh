@@ -90,7 +90,7 @@ keep_config() {
         cp -a "$phone/." "$N/etc/e5-infoscreen/plugins/phone/"
     fi
     rm -rf "$phone"
-    python3 "$N/usr/libexec/e5-network-addons-preserve" "$from" "$N"
+    sh "$N/usr/libexec/e5-network-addons-preserve-run" "$from" "$N"
 }
 
 # The device's own files (firmware, the Android vendor subset) as a tar on
