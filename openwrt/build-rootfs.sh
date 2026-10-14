@@ -169,7 +169,7 @@ if [ "${E5_ROOT_MODULES_ONLY:-0}" = 1 ]; then
     ROOT_REL=$(basename "$1")
     if [ "$FEATURES" = 1 ]; then
         case "$ROOT_REL" in
-            *-e5-mobile1-*) ;;
+            *-e5-mobile1-*|*-e5-mobile4-*) ;;
             *) echo 'E5_FEATURES requires the devices/e5 kernel, not donor board modules' >&2; exit 1 ;;
         esac
         [ -f "$1/aw32257_charger.ko" ] && [ -f "$1/audio/snd-soc-sprd-pa-aw87xxx.ko" ] || {

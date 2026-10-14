@@ -206,7 +206,12 @@ jobs:
       - name: Compile the release kernel
         env:
           E5_RELEASE: '1'
-        run: bash upstream/build.sh
+        run: |
+          docker run --rm -v "$PWD":/work -v "$PWD/linux-lts-e5":/src/linux \
+            -v e5-profile-objects:/objects -w /work \
+            -e E5_KERNEL_TREE=/src/linux -e E5_OUTDIR=/objects \
+            -e E5_FEATURE_OUT=/work/upstream/out-release \
+            -e JOBS="$(nproc)" e5-mainline-build bash devices/e5/build-kernel.sh
       - name: Restore patched OpenWrt packages
         id: packages
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
@@ -242,6 +247,8 @@ jobs:
         env:
           E5_MAINLINE: '1'
           E5_TOOLS_BUILD_IMAGE: e5-mainline-build
+          E5_FEATURES: '1'
+          T551M_CC: gcc
         run: |
           set -o pipefail
           export E5_INFOSCREEN="$GITHUB_WORKSPACE/ci/infoscreen"
