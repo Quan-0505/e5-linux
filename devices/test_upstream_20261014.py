@@ -193,7 +193,8 @@ int main(void){{
 }}
 '''
         p=self.root/'sensor.c';p.write_text(harness);binary=self.root/'sensor'
-        subprocess.run(['cc','-Wall','-Werror',str(p),'-o',str(binary)],check=True,capture_output=True)
+        result = subprocess.run(['cc','-Wall','-Werror',str(p),'-o',str(binary)],capture_output=True,text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
         subprocess.run([str(binary)],check=True)
 
     def check_e5_virtual_sensor(self):
@@ -206,6 +207,7 @@ int main(void){{
         body = source[start:source.index('\nstatic void virtual_thm_unregister', start)]
         harness = r'''#include <limits.h>
 #include <errno.h>
+#include <stddef.h>
 struct device {int unused;};
 struct thermal_zone_device {void *priv; int value,err;};
 struct real_tz_list {struct thermal_zone_device *tz_dev; int temp;};
@@ -230,7 +232,8 @@ int main(void){
 }
 '''
         p=self.root/'e5-sensor.c'; p.write_text(harness); binary=self.root/'e5-sensor'
-        subprocess.run(['cc','-Wall','-Werror',str(p),'-o',str(binary)],check=True,capture_output=True)
+        result = subprocess.run(['cc','-Wall','-Werror',str(p),'-o',str(binary)],capture_output=True,text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
         subprocess.run([str(binary)],check=True)
 
     @unittest.skipUnless(shutil.which('bash'), 'needs POSIX shell')

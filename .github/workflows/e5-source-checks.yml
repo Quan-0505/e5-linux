@@ -31,7 +31,10 @@ jobs:
           bash -n boot/init tools/build-e5-kernel.sh openwrt/build-modemmanager.sh openwrt/build-rootfs.sh openwrt/make-flash-bundle.sh magisk/build.sh
       - name: Check installation, packaging and source gates
         run: |
-          python3 devices/test_upstream_20261014.py
+          mkdir -p "$RUNNER_TEMP/e5-test-kernel/drivers/unisoc_platform/thermal"
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/sprd-linux-devs/linux/020b970e351eee3887e6caaf2d653926e7086e44/drivers/unisoc_platform/thermal/sprd_soc_thm.c -o "$RUNNER_TEMP/e5-test-kernel/drivers/unisoc_platform/thermal/sprd_soc_thm.c"
+          echo "b0051b8d46cdb19608ac92de4a1dcca62e31b4f08240357f8098a8ea616bc86d  $RUNNER_TEMP/e5-test-kernel/drivers/unisoc_platform/thermal/sprd_soc_thm.c" | sha256sum --check
+          E5_TEST_KERNEL="$RUNNER_TEMP/e5-test-kernel" python3 devices/test_upstream_20261014.py
           python3 tools/tests/openwrt-package-state.py
           python3 tools/tests/ci-release.py
           python3 openwrt/tests/install-entrypoints.py

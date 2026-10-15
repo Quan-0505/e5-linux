@@ -133,7 +133,7 @@ def prepare():
     if not re.fullmatch(r'\d+\.\d+\.\d+', ver):
         raise ValueError('invalid OpenWrt version')
     sources = {name: {'repository': repo, 'revision': revision(path)} for name, repo, path in [
-        ('e5-linux', os.environ.get('E5_SOURCE_REPOSITORY', 'sprd-linux-devs/e5-linux'), TOP),
+        ('e5-linux', os.environ.get('E5_SOURCE_REPOSITORY', os.environ.get('GITHUB_REPOSITORY', 'sprd-linux-devs/e5-linux')), TOP),
         ('kernel', 'sprd-linux-devs/linux', TOP / 'linux-lts-e5'),
         ('infoscreen', 'Enceka/infoscreen', TOP / 'ci/infoscreen'),
         ('plugins', 'Enceka/infoscreen-plugins', TOP / 'ci/infoscreen-plugins'),
