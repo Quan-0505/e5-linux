@@ -29,7 +29,7 @@ class UpstreamRegressions(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('bash'), 'needs POSIX shell')
     def test_import_permissions_and_symlink_targets(self):
-        helper = TOP / ('device/linux_device_common/overlay/opt/e5/android-import-perms.sh' if E5 else
+        helper = TOP / ('openwrt/fork-compat/overlay/opt/e5/android-import-perms.sh' if E5 else
                         'rootfs/overlay/opt/mu300/lib/android-import-perms.sh')
         props = 'dev/__properties__' if E5 else 'dev-properties'
         root = self.root / 'android'
@@ -168,6 +168,8 @@ int thermal_zone_get_temp(struct thermal_zone_device *s,int *v){*v=s->value;retu
 
     @unittest.skipUnless(shutil.which('cc'), 'needs host C compiler')
     def test_virtual_sensor_partial_failure_and_all_failed(self):
+        if E5:
+            return self.check_e5_virtual_sensor()
         path=TOP/('device/linux_device_m8/sprd_virtual_thermal.c' if E5 else 'upstream/modules/mu300_thermal/mu300_thermal.c')
         source=path.read_text();name='sprd' if E5 else 'mu300'
         start=source.index(f'static int {name}_virtual_temp(')
@@ -191,6 +193,43 @@ int main(void){{
 }}
 '''
         p=self.root/'sensor.c';p.write_text(harness);binary=self.root/'sensor'
+        subprocess.run(['cc','-Wall','-Werror',str(p),'-o',str(binary)],check=True,capture_output=True)
+        subprocess.run([str(binary)],check=True)
+
+    def check_e5_virtual_sensor(self):
+        path = Path(os.environ.get('E5_TEST_KERNEL', str(TOP / 'linux-lts-e5'))) / 'drivers/unisoc_platform/thermal/sprd_soc_thm.c'
+        if not path.is_file():
+            self.skipTest('E5 thermal callback needs the pinned kernel checkout')
+        adapter = module(TOP / 'devices/common/thermal.py')
+        source = adapter.adapt(path.read_text())
+        start = source.index('static int virtual_thm_get_temp(')
+        body = source[start:source.index('\nstatic void virtual_thm_unregister', start)]
+        harness = r'''#include <limits.h>
+#include <errno.h>
+struct device {int unused;};
+struct thermal_zone_device {void *priv; int value,err;};
+struct real_tz_list {struct thermal_zone_device *tz_dev; int temp;};
+struct virtual_sensor {struct device *dev;};
+struct virtual_thm_data {struct virtual_sensor *vir_thm; int nr_thm; struct real_tz_list *tz_list;};
+#define thermal_zone_device_priv(tz) ((tz)->priv)
+#define max(a,b) ((a)>(b)?(a):(b))
+#define IS_ERR(p) 0
+#define dev_err_ratelimited(dev, ...) ((void)(dev))
+int thermal_zone_get_temp(struct thermal_zone_device *s,int *v){*v=s->value;return s->err;}
+''' + body + r'''
+int main(void){
+ struct thermal_zone_device a={0,94000,0},b={0,0,-5},c={0,89000,0};
+ struct real_tz_list sensors[]={{&a,0},{&b,0},{&c,0}};
+ struct virtual_sensor v={0};
+ struct virtual_thm_data data={&v,3,sensors};
+ struct thermal_zone_device zone={&data,0,0};int value=123;
+ if(virtual_thm_get_temp(&zone,&value)||value!=94000)return 1;
+ a.err=c.err=-5;value=123;
+ if(virtual_thm_get_temp(&zone,&value)!=-EIO||value!=123)return 2;
+ return 0;
+}
+'''
+        p=self.root/'e5-sensor.c'; p.write_text(harness); binary=self.root/'e5-sensor'
         subprocess.run(['cc','-Wall','-Werror',str(p),'-o',str(binary)],check=True,capture_output=True)
         subprocess.run([str(binary)],check=True)
 

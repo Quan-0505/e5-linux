@@ -30,7 +30,7 @@ def stage(root):
         upstream(root)
     finally:
         upstream.__globals__['copy'] = original_copy
-    for name in ('etc/init.d/e5-boot-ok', 'usr/libexec/e5-gpt'):
+    for name in ('etc/init.d/e5-boot-ok', 'usr/libexec/e5-gpt', 'opt/e5/android-import-perms.sh'):
         target = root / name
         if target.is_symlink():
             raise ValueError('Refusing to follow fork runtime symlink: ' + name)

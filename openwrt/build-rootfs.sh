@@ -409,7 +409,9 @@ if [ -n "$screen" ] && [ -f /in/infoscreen-plugins/plugins/phone/manifest.json ]
     chown -R 0:0 $R/etc/e5-infoscreen/plugins/phone
 fi
 for f in vendor-start.sh android-import-perms.sh e5-modem-coldboot android-run node-perms.sh regdb-load.sh gadget-guard.sh usb-watch.sh e5-next-boot e5-os e5-sd-registry e5-at e5-data-priority e5-audio-dsp e5-call-audio.py; do
-    cp /in/opt-e5/$f $R/opt/e5/$f; chmod 755 $R/opt/e5/$f
+    source=/in/feature-source/openwrt/fork-compat/overlay/opt/e5/$f
+    [ -f "$source" ] || source=/in/opt-e5/$f
+    cp "$source" $R/opt/e5/$f; chmod 755 $R/opt/e5/$f
 done
 cp /in/logdw $R/opt/e5/bin/logdw && chmod 755 $R/opt/e5/bin/logdw
 cp /in/e5-vibrate $R/usr/bin/e5-vibrate && chmod 755 $R/usr/bin/e5-vibrate

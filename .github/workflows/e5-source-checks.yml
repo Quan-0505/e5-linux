@@ -31,6 +31,7 @@ jobs:
           bash -n boot/init tools/build-e5-kernel.sh openwrt/build-modemmanager.sh openwrt/build-rootfs.sh openwrt/make-flash-bundle.sh magisk/build.sh
       - name: Check installation, packaging and source gates
         run: |
+          python3 devices/test_upstream_20261014.py
           python3 tools/tests/openwrt-package-state.py
           python3 tools/tests/ci-release.py
           python3 openwrt/tests/install-entrypoints.py
