@@ -104,7 +104,7 @@ Linux 中可通过屏幕的系统切换入口，或 `e5-next-boot android && reb
 推荐使用本仓库 **Actions → Build and publish OpenWrt**，选择 `codex/e5-internal-kdae` 分支运行。Fork 后先按 [构建说明](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/RELEASE.md) 准备构建输入，并检查实际工作流中的依赖与权限。
 
 ```sh
-git clone --branch codex/e5-internal-kdae https://github.com/Quan-0505/e5-linux.git
+git clone --recurse-submodules --branch codex/e5-internal-kdae https://github.com/Quan-0505/e5-linux.git
 cd e5-linux
 ```
 
