@@ -82,8 +82,22 @@ def prepare():
     print(info['build_started_at'])
 
 
+def reconcile_staged_reference(expected, reference, obsolete):
+    """Accept only explicit UI removals; retain all other missing-file gates."""
+    for name in obsolete:
+        path = reference / name
+        if path.exists() or path.is_symlink():
+            raise ValueError('obsolete UI was not removed by staging: ' + name)
+        expected.pop(name, None)
+    for name in list(expected):
+        derived = reference / name
+        if derived.is_file():
+            expected[name] = file_digest(derived)
+
+
 def audit_root(info):
     expected = {}
+    obsolete = ()
     for source, root, relative, prefix in [
         ('e5-linux', TOP, 'openwrt/overlay', ''),
         ('infoscreen', TOP / 'ci/infoscreen', 'root', ''),
@@ -117,10 +131,8 @@ def audit_root(info):
             ):
                 shutil.copytree(source, destination, dirs_exist_ok=True, symlinks=True)
             runpy.run_path(str(TOP / 'devices/e5/stage.py'))['stage'](reference)
-            for name in list(expected):
-                derived = reference / name
-                if derived.is_file():
-                    expected[name] = file_digest(derived)
+            obsolete = runpy.run_path(str(TOP / 'devices/t551m/ui-cleanup.py'))['OBSOLETE']
+            reconcile_staged_reference(expected, reference, obsolete)
             for prefix in ('usr/', 'www/'):
                 for path in (reference / prefix).rglob('*'):
                     if path.is_file() and not path.is_symlink() and path.relative_to(reference).as_posix() != 'usr/libexec/e5-sysupgrade':
@@ -141,6 +153,8 @@ def audit_root(info):
     with tarfile.open(rootfs, 'r|gz') as archive:
         for entry in archive:
             name = entry.name.removeprefix('./')
+            if name in obsolete:
+                raise ValueError('obsolete UI in release image: ' + name)
             if forbidden.match(name):
                 raise ValueError('device-specific file in generic image: ' + name)
             if name.startswith('lib/modules/') and entry.isfile() and name.endswith('.ko'):

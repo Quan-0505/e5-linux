@@ -72,6 +72,21 @@ class Bootstrap(unittest.TestCase):
             inputs.package_paths('P:cog\n\nP:libcogcore\n\nP:libwpewebkit\n\nP:vendor-firmware\n')
 
 
+class StagedReference(unittest.TestCase):
+    def test_explicit_removal_keeps_unexpected_missing_file_required(self):
+        with tempfile.TemporaryDirectory() as temp:
+            expected = {'www/old.js': 'old', 'www/required.js': 'required'}
+            release.reconcile_staged_reference(expected, Path(temp), ('www/old.js',))
+            self.assertEqual(expected, {'www/required.js': 'required'})
+
+    def test_obsolete_file_must_actually_be_removed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'old.js').write_text('obsolete')
+            with self.assertRaisesRegex(ValueError, 'not removed'):
+                release.reconcile_staged_reference({'old.js': 'old'}, root, ('old.js',))
+
+
 class RootAudit(unittest.TestCase):
     def audit(self, files):
         with tempfile.TemporaryDirectory() as temp:
