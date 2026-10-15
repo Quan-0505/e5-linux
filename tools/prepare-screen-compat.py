@@ -20,7 +20,7 @@ print('USB unknown-setting rejection applied before hardware status probing')
 path = top / 'ci/infoscreen/tests/network-checks.sh'
 source = path.read_bytes()
 before = b"source = (top / 'root/usr/share/e5-infoscreen/api.uc').read_text()"
-after = b"shutil.copytree(top.parent.parent / 'openwrt/luci-app-t551m/root/usr/libexec/unisoc-modem', temp / 'unisoc-modem')\n" + before
+after = b"shutil.copytree(top.parent.parent / 'device/openwrt_device_common/luci-app-t551m/root/usr/libexec/unisoc-modem', temp / 'unisoc-modem')\n" + before
 if after not in source:
     assert hashlib.sha256(source).hexdigest() == '63bb2b4577bd2dc8b590144d6efc2add7112113be42279e163554ad71537790d'
     source = source.replace(before, after)
