@@ -187,6 +187,14 @@ jobs:
         with:
           go-version: '1.26.x'
           cache: false
+      - name: Download checksum-pinned NodeBaby from this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p work/network-addons
+          gh release download build-inputs --repo "$GITHUB_REPOSITORY" \
+            --pattern owjdxb_openwrt_arm64_4.3.5-734.tgz --output work/network-addons/nodebaby.tgz
+          echo 'c2c1853eac004ae3699a8f3beba3331afc42aca1878acd2c7945a5658deea702  work/network-addons/nodebaby.tgz' | sha256sum --check
       - name: Build pinned Go KDAE and stage public NodeBaby inputs
         run: |
           sudo apt-get install -y clang llvm libelf-dev

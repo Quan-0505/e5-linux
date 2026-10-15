@@ -157,7 +157,7 @@ printf "e5-openwrt-flash %s (OpenWrt %s, e5-linux %s, kernel %s)\n" \
 
 # One ZIP, usable both from Magisk and after extraction on a computer. Keep
 # the native E5 TF partition/update layout and share the same compressed image.
-docker run --rm --platform linux/arm64 -v "$P/files":/out \
+docker run --rm --platform linux/arm64 --user "$(id -u):$(id -g)" -v "$P/files":/out \
     -v "$TOP/magisk/e5-linux-switch/bootctl.c":/src.c:ro \
     "${E5_MAGISK_BUILD_IMAGE:-e5-mainline-build}" \
     sh -ec 'gcc -static -Os -s -Wall -Wextra -Werror -o /out/e5-bootctl /src.c'
