@@ -75,6 +75,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+          submodules: recursive
           persist-credentials: false
       - name: Check bootstrap configuration
         env:
@@ -142,20 +143,20 @@ jobs:
           printf '%s  %s\n' "$checksum" "work/openwrt/$file" | sha256sum --check
           docker import --platform linux/arm64 "work/openwrt/$file" "e5-openwrt-base:$E5_WRT_VER"
           python3 boot/tests/part-update.py
-          python3 openwrt/tests/flash-diagnostics.py
+          python3 device/openwrt_device_common/tests/flash-diagnostics.py
           python3 tools/tests/network-addons-snapshot.py
           python3 openwrt/tests/install-entrypoints.py
           python3 openwrt/tests/hybrid-package.py
             python3 devices/test_upstream_20261014.py
           python3 tools/tests/android-bootchain.py
           python3 openwrt/tests/block-probe.py
-          E5_TEST_IMAGE="e5-openwrt-base:$E5_WRT_VER" python3 openwrt/tests/gpt-plan.py
-          python3 openwrt/tests/voice-audio.py
-          python3 openwrt/tests/dual-sms.py
-          python3 openwrt/tests/dual-sms-send.py
-          python3 openwrt/tests/sim-probe.py
-          E5_TEST_IMAGE="e5-openwrt-base:$E5_WRT_VER" python3 openwrt/tests/sim-lock.py
-          node openwrt/tests/luci-sim-slots.cjs
+          E5_TEST_IMAGE="e5-openwrt-base:$E5_WRT_VER" python3 device/openwrt_device_common/tests/gpt-plan.py
+          python3 device/openwrt_device_common/tests/voice-audio.py
+          python3 device/openwrt_device_common/tests/dual-sms.py
+          python3 device/openwrt_device_common/tests/dual-sms-send.py
+          python3 device/openwrt_device_common/tests/sim-probe.py
+          E5_TEST_IMAGE="e5-openwrt-base:$E5_WRT_VER" python3 device/openwrt_device_common/tests/sim-lock.py
+          node device/openwrt_device_common/tests/luci-sim-slots.cjs
           python3 magisk/tests.py
           python3 rootfs/tests/sd-registry.py
           python3 rootfs/tests/early-sd-firmware.py
@@ -218,7 +219,7 @@ jobs:
           revision=$(git -C linux-lts-e5 rev-parse HEAD)
           # Only tracked source objects count: test-generated Python bytecode
           # contains timestamps and otherwise causes a cache miss every run.
-          source_fingerprint=$(git ls-files -s -- 'upstream/*.config' 'upstream/*.txt' 'upstream/*.py' upstream/Dockerfile devices/ | sha256sum | cut -d ' ' -f 1)
+          source_fingerprint=$(git ls-files -s -- 'upstream/*.config' 'upstream/*.txt' 'upstream/*.py' upstream/Dockerfile device/ devices/common/ tools/prepare-e5-kernel-compat.py tools/build-e5-kernel.sh | sha256sum | cut -d ' ' -f 1)
           echo "key=e5-native-profile-v2-${{ runner.arch }}-$revision-$fingerprint-$source_fingerprint" >> "$GITHUB_OUTPUT"
       - name: Restore verified native E5 kernel
         id: kernel-cache
@@ -235,7 +236,7 @@ jobs:
             -v e5-profile-objects:/objects -w /work \
             -e E5_KERNEL_TREE=/src/linux -e E5_OUTDIR=/objects \
             -e E5_FEATURE_OUT=/work/upstream/out-release \
-            -e JOBS="$(nproc)" e5-mainline-build bash devices/e5/build-kernel.sh
+            -e JOBS="$(nproc)" e5-mainline-build bash tools/build-e5-kernel.sh
           sudo chown -R "$(id -u):$(id -g)" upstream/out-release
           printf '%s\n' "$E5_BUILD_EPOCH" > upstream/out-release/compile-epoch
       - name: Verify compiled or cached native E5 kernel
@@ -255,7 +256,7 @@ jobs:
           path: |
             out/openwrt/*.apk
             out/openwrt/e5-modemmanager-build.json
-          key: patched-apk-${{ runner.os }}-${{ runner.arch }}-${{ env.E5_WRT_VER }}-${{ hashFiles('tools/openwrt-package-state.py', 'openwrt/tests/voice-identity.py', 'openwrt/tests/sim-power.py', 'openwrt/build-modemmanager.sh', 'openwrt/build-bluez.sh', 'openwrt/patches/**', 'rootfs/deb-patches/modemmanager-*.patch', 'rootfs/deb-patches/bluez-*.patch') }}
+          key: patched-apk-${{ runner.os }}-${{ runner.arch }}-${{ env.E5_WRT_VER }}-${{ hashFiles('tools/openwrt-package-state.py', 'device/openwrt_device_common/tests/voice-identity.py', 'device/openwrt_device_common/tests/sim-power.py', 'openwrt/build-modemmanager.sh', 'openwrt/build-bluez.sh', 'openwrt/patches/**', 'device/debian_device_common/patches/modemmanager-*.patch', 'device/debian_device_common/patches/bluez-*.patch') }}
       - name: Compile patched ModemManager and BlueZ
         if: steps.packages.outputs.cache-hit != 'true'
         run: |

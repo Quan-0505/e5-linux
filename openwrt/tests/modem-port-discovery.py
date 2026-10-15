@@ -29,7 +29,7 @@ MODEMMANAGER_EVENTS_CACHE={cache}
 mm_report_event() {{ printf '%s %s %s\\n' "$1" "$2" "$3" >> {root}/events; }}
 ''')
         script = root/'report'
-        source = (TOP/'openwrt/overlay/usr/libexec/e5-mm-report-ports').read_text()
+        source = (TOP/'device/openwrt_device_common/overlay/usr/libexec/e5-mm-report-ports').read_text()
         script.write_text(source.replace('/sys/', str(root)+'/sys/').replace(
             '/usr/share/ModemManager/modemmanager.common', str(common)))
         return root, script
@@ -62,7 +62,7 @@ mm_report_event() {{ printf '%s %s %s\\n' "$1" "$2" "$3" >> {root}/events; }}
         self.assertEqual(self.run_script(root, script), ['add wwan0at0 wwan'])
 
     def test_shared_patch_is_idempotent_and_preserves_replay_sequence(self):
-        patch = runpy.run_path(str(TOP/'devices/t551m/network-startup.py'))['patch_root']
+        patch = runpy.run_path(str(TOP/'device/openwrt_device_common/shared/network-startup.py'))['patch_root']
         for profile in ('e5','t551m','m8'):
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp); wrapper = root/'usr/sbin/ModemManager-wrapper'
@@ -75,7 +75,7 @@ main() {
 }
 ''')
                 loader = root/'etc/init.d/e5-sipc-wwan'; loader.parent.mkdir(parents=True)
-                loader.write_text((TOP/'openwrt/overlay/etc/init.d/e5-sipc-wwan').read_text())
+                loader.write_text((TOP/'device/openwrt_device_common/overlay/etc/init.d/e5-sipc-wwan').read_text())
                 patch(root, profile); first = wrapper.read_bytes(), loader.read_bytes()
                 patch(root, profile); self.assertEqual(first, (wrapper.read_bytes(), loader.read_bytes()))
                 text = wrapper.read_text()
@@ -88,12 +88,12 @@ main() {
             root = Path(tmp)
             installed = root/'opt/e5/t551m-network-startup'
             installed.parent.mkdir(parents=True)
-            installed.write_bytes((TOP/'devices/t551m/network-startup.py').read_bytes())
+            installed.write_bytes((TOP/'device/openwrt_device_common/shared/network-startup.py').read_bytes())
             patch = runpy.run_path(str(installed))['patch_root']
             with self.assertRaisesRegex(ValueError, 'Missing shared'):
                 patch(root)
             helper = root/'usr/libexec/e5-mm-report-ports'
-            helper.write_bytes((TOP/'openwrt/overlay/usr/libexec/e5-mm-report-ports').read_bytes())
+            helper.write_bytes((TOP/'device/openwrt_device_common/overlay/usr/libexec/e5-mm-report-ports').read_bytes())
             before = helper.read_bytes()
             patch(root)
             self.assertEqual(before, helper.read_bytes())

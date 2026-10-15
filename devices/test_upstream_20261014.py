@@ -29,7 +29,7 @@ class UpstreamRegressions(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which('bash'), 'needs POSIX shell')
     def test_import_permissions_and_symlink_targets(self):
-        helper = TOP / ('rootfs/overlay/opt/e5/android-import-perms.sh' if E5 else
+        helper = TOP / ('device/linux_device_common/overlay/opt/e5/android-import-perms.sh' if E5 else
                         'rootfs/overlay/opt/mu300/lib/android-import-perms.sh')
         props = 'dev/__properties__' if E5 else 'dev-properties'
         root = self.root / 'android'
@@ -168,7 +168,7 @@ int thermal_zone_get_temp(struct thermal_zone_device *s,int *v){*v=s->value;retu
 
     @unittest.skipUnless(shutil.which('cc'), 'needs host C compiler')
     def test_virtual_sensor_partial_failure_and_all_failed(self):
-        path=TOP/('devices/m8/sprd_virtual_thermal.c' if E5 else 'upstream/modules/mu300_thermal/mu300_thermal.c')
+        path=TOP/('device/linux_device_m8/sprd_virtual_thermal.c' if E5 else 'upstream/modules/mu300_thermal/mu300_thermal.c')
         source=path.read_text();name='sprd' if E5 else 'mu300'
         start=source.index(f'static int {name}_virtual_temp(')
         body=source[start:source.index('\nstatic const',start)]

@@ -88,39 +88,94 @@ class StagedReference(unittest.TestCase):
 
 
 class RootAudit(unittest.TestCase):
-    def audit(self, files):
+    def audit(self, files, staged_vendor=None, kernel_out=None, nonexec=()):
         with tempfile.TemporaryDirectory() as temp:
             top = Path(temp)
             (top / 'work/openwrt').mkdir(parents=True)
             (top / 'upstream/out-release').mkdir(parents=True)
             (top / 'upstream/out-release/kernel.release').write_text('6.18-e5\n')
-            (top / 'rootfs/overlay/opt/e5').mkdir(parents=True)
+            (top / 'device/linux_device_common/overlay/opt/e5').mkdir(parents=True)
             for name in release.BLOCK_SOURCES:
                 target = top / 'openwrt' / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((TOP / 'openwrt' / name).read_bytes())
             for name in ('vendor-start.sh', 'e5-modem-coldboot'):
-                (top / 'rootfs/overlay/opt/e5' / name).write_bytes(b'startup fixture')
+                (top / 'device/linux_device_common/overlay/opt/e5' / name).write_bytes(b'startup fixture')
                 files = {**files, 'opt/e5/' + name: b'startup fixture'}
+            if staged_vendor is not None:
+                files.update({'etc/e5/feature-port.json': b'{"profile":"e5"}',
+                              'opt/e5/vendor-start.sh': staged_vendor})
+            if kernel_out:
+                (top / kernel_out).mkdir(parents=True)
+                (top / kernel_out / 'kernel.release').write_text('6.18-e5\n')
+                (top / 'upstream/out-release/kernel.release').write_text('wrong-default\n')
             path = top / 'work/openwrt/e5-openwrt-25.12.5-generic-rootfs.tar.gz'
             with tarfile.open(path, 'w:gz') as archive:
                 for name, data in files.items():
                     entry = tarfile.TarInfo(name); entry.size = len(data)
+                    if name in ('etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
+                                'usr/libexec/e5-infoscreen/plugin', 'usr/libexec/e5-infoscreen/update') and name not in nonexec:
+                        entry.mode = 0o755
                     archive.addfile(entry, io.BytesIO(data))
             info = {'openwrt_version': '25.12.5', 'build_epoch': 123}
-            with patch.object(release, 'TOP', top), patch.object(release.subprocess, 'check_output', return_value=''):
+            def stage_nv(root):
+                (root / 'opt/e5/vendor-start.sh').write_bytes(b'isolated NV fixture')
+            env = {'E5_UPSTREAM_OUT': str(top / kernel_out)} if kernel_out else {}
+            with patch.object(release, 'TOP', top), patch.object(release.subprocess, 'check_output', return_value=''), \
+                 patch.object(release.runpy, 'run_path', return_value={'stage_nv': stage_nv}), \
+                 patch.object(release, 'block_build_id', return_value='fixture-block-build'), \
+                 patch.dict(release.os.environ, env):
                 release.audit_root(info)
             return info
 
     def files(self):
-        return {'usr/share/e5-infoscreen/VERSION': b'1.6.3',
+        return {'etc/e5/block-mount.build-id': b'fixture-block-build\n',
+                'sbin/block': b'block fixture', 'lib/libblkid-tiny.so': b'probe fixture',
+                'etc/init.d/fstab': b'fstab fixture',
+                'etc/init.d/e5-infoscreen': b'#!/bin/sh\n',
+                'usr/libexec/e5-infoscreen/session': b'#!/bin/sh\n',
+                'usr/libexec/e5-infoscreen/plugin': b'#!/bin/sh\n',
+                'usr/libexec/e5-infoscreen/update': b'#!/bin/sh\n',
+                'usr/bin/openssl': b'OpenSSL fixture', 'usr/share/e5-infoscreen/VERSION': b'1.6.3',
                 'etc/e5-infoscreen/plugins/phone/manifest.json': json.dumps({'version': '1.4'}).encode(),
-                'etc/e5/build-time': b'123', 'lib/modules/6.18-e5/modem/sipc_wwan.ko': b'module',
-                'etc/e5/block-mount.build-id': (release.block_build_id() + '\n').encode(),
-                'sbin/block': b'block', 'lib/libblkid-tiny.so': b'library', 'etc/init.d/fstab': b'init'}
+                'etc/e5/build-time': b'123', 'lib/modules/6.18-e5/modem/sipc_wwan.ko': b'module'}
 
     def test_same_release_and_epoch_pass(self):
         self.assertEqual(self.audit(self.files())['phone_version'], '1.4')
+
+    def test_nonexecutable_screen_start_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'not executable.*e5-infoscreen'):
+            self.audit(self.files(), nonexec=('etc/init.d/e5-infoscreen',))
+
+    def test_nonexecutable_plugin_manager_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'not executable.*plugin'):
+            self.audit(self.files(), nonexec=('usr/libexec/e5-infoscreen/plugin',))
+
+    def test_stale_block_mount_build_rejected(self):
+        files = self.files(); files['etc/e5/block-mount.build-id'] = b'stale\n'
+        with self.assertRaisesRegex(ValueError, 'block-mount'):
+            self.audit(files)
+
+    def test_missing_block_mount_payload_rejected(self):
+        for name in ('sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab'):
+            files = self.files(); files.pop(name)
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'block-mount'):
+                self.audit(files)
+
+    def test_selected_kernel_output_pass(self):
+        self.assertEqual(self.audit(self.files(), kernel_out='out/e5/kernel')['kernel_release'], '6.18-e5')
+
+    def test_exact_nv_transformation_pass(self):
+        self.audit(self.files(), staged_vendor=b'isolated NV fixture')
+
+    def test_unexpected_nv_transformation_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'vendor-start'):
+            self.audit(self.files(), staged_vendor=b'unexpected vendor fixture')
+
+    def test_missing_openssl_rejected(self):
+        files = self.files(); files.pop('usr/bin/openssl')
+        with self.assertRaisesRegex(ValueError, 'openssl-util'):
+            self.audit(files)
 
     def test_wrong_kernel_modules_rejected(self):
         files = self.files(); files['lib/modules/5.15/audio/card.ko'] = b'wrong kernel'

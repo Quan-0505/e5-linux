@@ -8,7 +8,7 @@ MU=Path(os.environ.get('MU300_REPO',str(TOP.parent/'mu300-linux-clean-tf-7.2')))
 
 class BootDefault(unittest.TestCase):
     def run_case(self,repo,model,op='linux',bad_block=False,fail_write=False,fail_save=False):
-        original=repo/('rootfs/overlay/opt/e5/e5-next-boot' if model=='e5' else 'rootfs/overlay/opt/mu300/bin/mu300-next-boot')
+        original=repo/('openwrt/fork-compat/overlay/opt/e5/e5-next-boot' if model=='e5' else 'rootfs/overlay/opt/mu300/bin/mu300-next-boot')
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);conf=root/'etc';runtime=root/'run';runtime.mkdir();conf.mkdir()
             (conf/'default-boot').write_text('android\n')

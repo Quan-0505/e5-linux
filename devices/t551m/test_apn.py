@@ -177,14 +177,14 @@ class APN(unittest.TestCase):
                 self.assertIn('Keep me',config.read_text())
 
     def test_shared_auth_patch_applies_to_original_plugin(self):
-        original = (TOP / 'rootfs/deb-patches/modemmanager-01-unisoc-plugin.patch').read_text()
+        original = (TOP / 'device/debian_device_common/patches/modemmanager-01-unisoc-plugin.patch').read_text()
         section = original.split('diff -ruN a/src/plugins/unisoc/mm-broadband-bearer-unisoc.c',1)[1].split('\ndiff -ruN',1)[0]
         source = '\n'.join(l[1:] for l in section.splitlines() if l.startswith('+') and not l.startswith('+++')) + '\n'
         target = self.root / 'src/plugins/unisoc/mm-broadband-bearer-unisoc.c'
         target.parent.mkdir(parents=True)
         target.write_text(source)
         executable = 'C:/Program Files/Git/usr/bin/patch.exe' if os.name == 'nt' else 'patch'
-        result = subprocess.run([executable,'--batch','--fuzz=0','-p1','-i',str(TOP/'rootfs/deb-patches/modemmanager-13-unisoc-bearer-auth.patch')],cwd=self.root,capture_output=True,text=True)
+        result = subprocess.run([executable,'--batch','--fuzz=0','-p1','-i',str(TOP/'device/debian_device_common/patches/modemmanager-13-unisoc-bearer-auth.patch')],cwd=self.root,capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         patched = target.read_text()
         self.assertIn('mm_base_bearer_peek_config',patched)

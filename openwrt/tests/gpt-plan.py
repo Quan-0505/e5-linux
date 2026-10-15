@@ -10,7 +10,7 @@ import uuid
 import zlib
 
 TOP = Path(__file__).resolve().parents[2]
-TOOL = TOP / 'openwrt/overlay/usr/libexec/e5-gpt'
+TOOL = TOP / 'openwrt/fork-compat/overlay/usr/libexec/e5-gpt'
 SECTOR = 512
 MIB = 2048
 

@@ -3,7 +3,7 @@
 #
 #   openwrt/build-modemmanager.sh        -> out/openwrt/modemmanager-*.apk
 #
-# OpenWrt 25.12 ships ModemManager 1.24.0, the version rootfs/deb-patches/
+# OpenWrt 25.12 ships ModemManager 1.24.0, the version device/debian_device_common/patches/
 # modemmanager source patches are written against, so the Debian image and the
 # OpenWrt one run the same plugin (docs/FINDINGS.md 37).  The patches go into
 # the feed package's patches/ after OpenWrt's own (0001-0004, which they stack
@@ -54,7 +54,7 @@ set -euo pipefail
 # 18: standalone mask conversion and retry a rejected address update safely.
 # 20: isolate ambiguous dual-SIM CMTI indices and restore scoped SMS AT context.
 # 21: keep compound SMS prompt transactions out of context restoration.
-E5REV=21
+E5REV=22
 VER=${E5_WRT_VER:-25.12.5}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
@@ -69,19 +69,20 @@ done
 
 # the source patches, numbered after OpenWrt's own
 rm -rf "$WORK/patches" && mkdir -p "$WORK/patches/src" "$WORK/patches/pkg"
-cp "$HERE/tests/voice-identity.py" "$WORK/voice-identity.py"
-cp "$HERE/tests/sim-power.py" "$WORK/sim-power.py"
-cp "$HERE/tests/voice-urc.py" "$WORK/voice-urc.py"
-cp "$HERE/tests/voice-recovery.py" "$WORK/voice-recovery.py"
-cp "$HERE/tests/data-priority-hook.py" "$WORK/data-priority-hook.py"
+TESTS="$TOP/device/openwrt_device_common/tests"
+cp "$TESTS/voice-identity.py" "$WORK/voice-identity.py"
+cp "$TESTS/sim-power.py" "$WORK/sim-power.py"
+cp "$TESTS/voice-urc.py" "$WORK/voice-urc.py"
+cp "$TESTS/voice-recovery.py" "$WORK/voice-recovery.py"
+cp "$TESTS/data-priority-hook.py" "$WORK/data-priority-hook.py"
 cp "$HERE/tests/modem-mobility.py" "$WORK/modem-mobility.py"
 cp "$HERE/tests/sms-isolation.py" "$WORK/sms-isolation.py"
 cp "$HERE/files/modemmanager-unisoc-renew" "$WORK/modemmanager-unisoc-renew"
-mkdir -p "$WORK/devices/t551m" "$WORK/openwrt/overlay/usr/libexec"
-cp "$TOP/devices/t551m/network-startup.py" "$WORK/devices/t551m/network-startup.py"
-cp "$HERE/overlay/usr/libexec/e5-mm-report-ports" "$WORK/openwrt/overlay/usr/libexec/e5-mm-report-ports"
+mkdir -p "$WORK/device/openwrt_device_common/shared" "$WORK/device/openwrt_device_common/overlay/usr/libexec"
+cp "$TOP/device/openwrt_device_common/shared/network-startup.py" "$WORK/device/openwrt_device_common/shared/network-startup.py"
+cp "$TOP/device/openwrt_device_common/overlay/usr/libexec/e5-mm-report-ports" "$WORK/device/openwrt_device_common/overlay/usr/libexec/e5-mm-report-ports"
 n=900
-for p in "$TOP"/rootfs/deb-patches/modemmanager-[0-9][0-9]-*.patch; do
+for p in "$TOP"/device/debian_device_common/patches/modemmanager-[0-9][0-9]-*.patch "$HERE"/patches/modemmanager-[0-9][0-9]-*.patch; do
     cp "$p" "$WORK/patches/src/$n-e5-$(basename "$p" | sed 's/^modemmanager-//')"
     n=$((n + 1))
 done
@@ -127,7 +128,7 @@ for p in /work/patches/pkg/*.patch; do patch -p1 -d $P < "$p"; done
 # Match the rootfs stager: upgrading this APK must retain APN selection,
 # boot replay, port discovery, initial EPS preservation and PDP retries.
 # Package files have no board config, so only the shared glue is affected.
-python3 /work/devices/t551m/network-startup.py --root "$P/files" --profile e5
+python3 /work/device/openwrt_device_common/shared/network-startup.py --root "$P/files" --profile e5
 cp /work/patches/src/*.patch $P/patches/
 rel=$(sed -n "s/^PKG_RELEASE:=//p" $P/Makefile)
 sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=$((rel + 900 + E5REV))/" $P/Makefile

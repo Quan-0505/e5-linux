@@ -1,0 +1,40 @@
+name: E5 source checks
+
+on:
+  push:
+    branches: ['codex/e5-internal-kdae']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Install regression tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc pkg-config libglib2.0-dev busybox e2fsprogs
+      - name: Validate pinned layout and shell entrypoints
+        run: |
+          python3 tools/device-layout.py check --system openwrt --model e5
+          python3 tools/tests/device-layout.py
+          python3 tools/tests/e5-compat-stage.py
+          bash -n boot/init tools/build-e5-kernel.sh openwrt/build-modemmanager.sh openwrt/build-rootfs.sh openwrt/make-flash-bundle.sh magisk/build.sh
+      - name: Check installation, packaging and source gates
+        run: |
+          python3 tools/tests/openwrt-package-state.py
+          python3 tools/tests/ci-release.py
+          python3 openwrt/tests/install-entrypoints.py
+          python3 openwrt/tests/hybrid-package.py
+          python3 openwrt/tests/flash-diagnostics.py
+          python3 tools/tests/android-bootchain.py
+          python3 boot/tests/part-update.py
+          python3 tools/tests/modem-patch-stack.py --run-c-tests

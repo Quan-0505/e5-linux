@@ -2,7 +2,7 @@
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-source = (Path(__file__).resolve().parents[2] / 'openwrt/luci-app-t551m/htdocs/luci-static/resources/mu300/common.js').read_text(encoding='utf-8')
+source = (Path(__file__).resolve().parents[2] / 'device/openwrt_device_common/luci-app-t551m/htdocs/luci-static/resources/mu300/common.js').read_text(encoding='utf-8')
 with sync_playwright() as p:
     browser = p.chromium.launch(executable_path='C:/Program Files/Google/Chrome/Application/chrome.exe')
     page = browser.new_page()

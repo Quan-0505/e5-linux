@@ -58,13 +58,32 @@ def main():
         raise ValueError('Wrong kernel profile: ' + release)
     if b'e5.openwrt=' in (a.kernel / 'Image').read_bytes():
         raise ValueError('Trial kernel forces userdata boot; rebuild without e5.openwrt= for TF')
-    prepare = runpy.run_path(str(TOP / 'devices/m8/prepare-root.py'))['prepare']
-    prepare(a.base, root, a.defaults, profile=a.profile)
+    prepare = runpy.run_path(str(TOP / 'device/openwrt_device_m8/prepare-root.py'))['prepare']
+    if a.profile == 'e5':
+        compat = runpy.run_path(str(TOP / 'tools/stage-e5-compat.py'))['stage']
+        original_run_path = runpy.run_path
+        def compat_run_path(path, *args, **kwargs):
+            if Path(path).resolve() == TOP / 'device/openwrt_device_e5/stage.py':
+                def stage_compat(target):
+                    runpy.run_path = original_run_path
+                    try:
+                        compat(target)
+                    finally:
+                        runpy.run_path = compat_run_path
+                return {'stage': stage_compat}
+            return original_run_path(path, *args, **kwargs)
+        runpy.run_path = compat_run_path
+        try:
+            prepare(a.base, root, a.defaults, profile=a.profile)
+        finally:
+            runpy.run_path = original_run_path
+    else:
+        prepare(a.base, root, a.defaults, profile=a.profile)
     helpers = {}
     for n, target in (('logdw', 'opt/e5/bin/logdw'), ('e5-vibrate', 'usr/bin/e5-vibrate'),
                       ('e5-ctl-raw', 'opt/e5/e5-ctl-raw'), ('e5-modemd', 'usr/sbin/e5-modemd'),
                       ('e5-sim-probe', 'usr/libexec/e5-sim-probe')):
-        src = TOP / ('openwrt/src/' + n + '.c')
+        src = TOP / ('device/openwrt_device_common/src/' + n + '.c')
         run(a.cc, '-static', '-Os', '-s', '-Wall', '-o', root / target, src)
         helpers[target] = {'source_sha256': digest(src), 'binary_sha256': digest(root / target)}
     # Keep the pristine upstream first-boot hooks present in the clean base.
@@ -72,7 +91,7 @@ def main():
     for kind in ('storage', 'network'):
         target = root / ('etc/modules.d/55-usb-host-' + kind)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes((TOP / f'devices/t551m/usb-host-{kind}.modules').read_bytes().replace(b'\r\n', b'\n'))
+        target.write_bytes((TOP / f'device/openwrt_device_common/shared/usb-host-{kind}.modules').read_bytes().replace(b'\r\n', b'\n'))
         # Avoid loading the same list twice under old aliases.
         for old in (f'etc/modules.d/usb-host-{kind}', f'etc/modules.d/56-usb-host-{kind}'):
             (root / old).unlink(missing_ok=True)
@@ -150,7 +169,12 @@ def main():
     for n in sorted(set(names)):
         if n.startswith(('boot/', 'devices/', 'magisk/', 'openwrt/', 'rootfs/overlay/', 'tools/', 'upstream/')) and (TOP / n).is_file():
             sources[n] = digest(TOP / n)
-    info = {'name': name, 'profile': a.profile, 'source_commit': rev,
+    revisions = {}
+    for entry in subprocess.check_output(['git', '-C', str(TOP), 'submodule', 'status', '--recursive'], text=True).splitlines():
+        fields = entry.split()
+        if len(fields) >= 2:
+            revisions[fields[1]] = fields[0].lstrip('-+')
+    info = {'source_revisions': revisions, 'name': name, 'profile': a.profile, 'source_commit': rev,
             'build_epoch': epoch, 'kernel_release': release, 'openwrt': '25.12.5',
             'build_type': 'incremental assembly; tested package binaries, current sources, rebuilt initramfs',
             'docker_preinstalled': False, 'root_image_bytes': 2147483648,
@@ -183,7 +207,7 @@ def main():
     for n in ('device-install-image.sh', 'device-flash-boot.sh', 'device-install-part.sh', 'device-stage-part-update.sh'):
         shutil.copy2(TOP / 'openwrt' / n, files / n)
     (files / 'part-write.sh').write_bytes((TOP / 'openwrt/bundle/part-write.sh').read_bytes().replace(b'\r\n', b'\n'))
-    for src in ('openwrt/bundle/collect-device-files.sh', 'openwrt/overlay/usr/libexec/e5-gpt', 'tools/android-bootchain.sh'):
+    for src in ('openwrt/bundle/collect-device-files.sh', 'openwrt/fork-compat/overlay/usr/libexec/e5-gpt', 'tools/android-bootchain.sh'):
         target = files / Path(src).name
         target.write_bytes((TOP / src).read_bytes().replace(b'\r\n', b'\n'))
         target.chmod(0o755)

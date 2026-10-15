@@ -121,7 +121,7 @@ class PartRoot(unittest.TestCase):
         self.assertIn('[ -z "$rootdir" ] && [ -z "$e5_trial" ] && sd_wait 8', SOURCE)
         self.assertIn('openwrt-image userdata-boot-os sd-gen part-root', SOURCE)
         self.assertIn('part-root-dev', SOURCE)
-        boot_ok = (TOP / 'openwrt/overlay/etc/init.d/e5-boot-ok').read_text()
+        boot_ok = (TOP / 'openwrt/fork-compat/overlay/etc/init.d/e5-boot-ok').read_text()
         self.assertIn('rm -f /etc/e5/part-trial', boot_ok)
         # on-screen progress: a shared heartbeat names the step; the
         # framebuffer console font has no CJK, so console lines stay ASCII,

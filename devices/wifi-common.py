@@ -14,7 +14,7 @@ def stage(root):
     if root == Path('/').resolve():
         raise ValueError('Expected an offline root')
     name = 'etc/hotplug.d/ieee80211/90-sc2355-recovery'
-    source = Path(__file__).resolve().parents[1] / 'openwrt/overlay' / name
+    source = Path(__file__).resolve().parents[1] / 'device/openwrt_device_common/overlay' / name
     target = root / name
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(source.read_bytes().replace(b'\r\n', b'\n'))

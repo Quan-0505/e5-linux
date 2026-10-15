@@ -46,7 +46,7 @@ int main(void) {
  sprd_do_reset_delay_work(&p.reset_delay_work.work); assert(events==2);
 }
 '''
-hook = (top / 'openwrt/overlay/etc/hotplug.d/ieee80211/90-sc2355-recovery').read_text()
+hook = (top / 'device/openwrt_device_common/overlay/etc/hotplug.d/ieee80211/90-sc2355-recovery').read_text()
 function = hook[hook.index('recover_radio()'):hook.index('\n(\n')]
 with tempfile.TemporaryDirectory() as tmp:
     temp = Path(tmp)

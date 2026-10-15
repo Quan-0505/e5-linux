@@ -169,7 +169,7 @@ def main():
         'bin/sh': (b'busybox', stat.S_IFLNK | 0o777),
         'etc/misc-bc-slot-a.bin': (slot_a_bc, stat.S_IFREG | 0o644),
         'etc/misc-bc-slot-b-trial.bin': (slot_b_bc, stat.S_IFREG | 0o644),
-        'etc/sd-registry.sh': ((HERE.parent / 'rootfs/overlay/opt/e5/e5-sd-registry').read_bytes(), stat.S_IFREG | 0o644),
+        'etc/sd-registry.sh': ((HERE.parent / 'device/linux_device_common/overlay/opt/e5/e5-sd-registry').read_bytes(), stat.S_IFREG | 0o644),
         'etc/f2fs-repair.sh': ((HERE / 'f2fs-repair.sh').read_bytes(), stat.S_IFREG | 0o644),
     }
     dirs = {'bin', 'sbin', 'etc', 'proc', 'sys', 'dev', 'run', 'tmp', 'root', 'config', 'linux-modules'}
@@ -200,7 +200,7 @@ def main():
     files['etc/part-progress.sh'] = ((HERE / 'part-progress.sh').read_bytes(), stat.S_IFREG | 0o644)
     files['etc/part-prepare.sh'] = ((HERE / 'part-prepare.sh').read_bytes(), stat.S_IFREG | 0o644)
     files['etc/part-update.sh'] = ((HERE / 'part-update.sh').read_bytes(), stat.S_IFREG | 0o644)
-    files['usr/share/e5-gpt'] = ((HERE.parent / 'openwrt/overlay/usr/libexec/e5-gpt').read_bytes(),
+    files['usr/share/e5-gpt'] = ((HERE.parent / 'openwrt/fork-compat/overlay/usr/libexec/e5-gpt').read_bytes(),
                                  stat.S_IFREG | 0o755)
     dirs.update({'usr', 'usr/bin', 'usr/lib', 'usr/lib/ucode', 'usr/share', 'usr/sbin'})
 

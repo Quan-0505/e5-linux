@@ -10,7 +10,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-FILE = Path(__file__).resolve().parents[1] / 'openwrt/luci-app-t551m/root/usr/libexec/unisoc-modem/wifi-station-metrics'
+FILE = Path(__file__).resolve().parents[1] / 'device/openwrt_device_common/luci-app-t551m/root/usr/libexec/unisoc-modem/wifi-station-metrics'
 spec = importlib.util.spec_from_loader('metrics', importlib.machinery.SourceFileLoader('metrics', str(FILE)))
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)

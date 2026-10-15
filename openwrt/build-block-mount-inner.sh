@@ -17,6 +17,21 @@ if [ ! -d "$sdk" ]; then
 fi
 cd "$sdk"
 export FORCE_UNSAFE_CONFIGURE=1
+# The SDK freezes hidden defaults from the release configuration. A seed
+# .config cannot override them: it otherwise selects every shipped kmod.
+# Change package/work selection only; retain all pinned toolchain/ABI options.
+python3 - <<'PY'
+from pathlib import Path
+import re
+p = Path('Config-build.in')
+text = p.read_text()
+def selection(match):
+    name, body = match.group(1), match.group(2)
+    if name.startswith('PACKAGE_kmod-') or name in ('BUILDBOT', 'SDK_LLVM_BPF'):
+        body = re.sub(r'(?m)^(\s*default) [ym](\s*)$', r'\1 n\2', body)
+    return 'config ' + name + body
+p.write_text(re.sub(r'(?m)^config (\S+)([\s\S]*?)(?=^config |\Z)', selection, text))
+PY
 if [ ! -f package/feeds/base/fstools/Makefile ]; then
     ./scripts/feeds update base
     ./scripts/feeds install -p base fstools
@@ -34,7 +49,9 @@ cp /src/patches/fstools-probe-device-types.patch package/feeds/base/fstools/patc
     sed 's/^/+/' /src/block-probe-guard.h
 } > package/feeds/base/fstools/patches/901-e5-probe-guard-header.patch
 printf '%s\n' 'CONFIG_ALL_NONSHARED=n' 'CONFIG_ALL_KMODS=n' 'CONFIG_ALL=n' \
-    'CONFIG_PACKAGE_block-mount=m' 'CONFIG_SIGNED_PACKAGES=n' > .config
+    '# CONFIG_BUILDBOT is not set' '# CONFIG_SDK_LLVM_BPF is not set' \
+    'CONFIG_BPF_TOOLCHAIN_NONE=y' 'CONFIG_PACKAGE_block-mount=m' \
+    'CONFIG_SIGNED_PACKAGES=n' > .config
 make defconfig
 make package/fstools/clean
 make -j4 package/fstools/compile V=s

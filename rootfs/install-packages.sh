@@ -8,7 +8,7 @@ DEBIAN_FRONTEND=noninteractive bash "$HERE/e5-chroot.sh" \
   "export DEBIAN_FRONTEND=noninteractive; apt-get -o APT::Sandbox::User=root -y --no-install-recommends install $PKGS"
 echo "INSTALL-DONE rc=$?"
 
-# Debian packages rebuilt with fixes (rootfs/deb-patches/, built into
+# Debian packages rebuilt with fixes (device/debian_device_common/patches/, built into
 # out/debs-patched/ by build-patched-debs.sh), installed over the archive's and
 # held so a later apt upgrade does not undo them:
 #   network-manager 1.52.1+e5: trixie's computes the VHT80 centre of channels
