@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory(prefix='e5-unisoc-source-') as temp:
     for patch in patches:
         print('Checking', patch.name, flush=True)
         if args.real_source:
-            subprocess.run(['patch', '--batch', '--fuzz=0', '-p1'], cwd=source, input=patch.read_bytes().replace(b'\r\n', b'\n'), check=True)
+            subprocess.run(['git', 'apply', '--unidiff-zero', '--whitespace=nowarn', '-'], cwd=source, input=patch.read_bytes().replace(b'\r\n', b'\n'), check=True)
             continue
         subprocess.run(['git', 'apply', '--allow-empty', '--unidiff-zero', '--whitespace=nowarn',
                         '--include=src/plugins/unisoc/*', '-'],
