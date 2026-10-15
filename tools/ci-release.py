@@ -54,6 +54,77 @@ def outputs(values):
                 stream.write(f'{name}={value}\n')
 
 
+
+def release_description(info, addons=None):
+    """Use the verified manifest for versions; never invent device test results."""
+    if addons is None:
+        addons = json.loads((TOP / 'openwrt/network-addons/lock.json').read_text())
+    repo = info['sources']['e5-linux']['repository']
+    commit = info['sources']['e5-linux']['revision']
+    refs = '\n'.join(f'- {name}: [`{item["revision"][:12]}`](https://github.com/{item["repository"]}/commit/{item["revision"]})' for name, item in info['sources'].items())
+    downloads = []
+    for name, item in info['assets'].items():
+        kind = '系统切换模块（非完整固件）' if name.startswith('e5-linux-switch-') else '完整安装包'
+        downloads.append(f'| `{name}` | {kind} |')
+    files = '\n'.join(downloads)
+    kdae = addons['kdae_version']
+    nodebaby = addons['nodebaby_version']
+    title = f'E5 OpenWrt {info["openwrt_version"]} · Go KDAE {kdae.removeprefix("v").removesuffix("-kdae")} · {info["build_started_at"][:10]}'
+    notes = f'''## 荣悦 E5 OpenWrt
+
+**OpenWrt {info['openwrt_version']} · Go KDAE {kdae} · 节点小宝 {nodebaby}**
+
+适用于 **荣悦 E5（UMS9621 / ARM64）**。本仓库重点维护内置独立 `e5root` 的安装与更新；不要给 F50、U50/U60 Pro 或其他机型刷此包。
+
+### 本包包含
+
+- E5 专用 Linux 内核、原生 ModemManager、蜂窝与 Wi-Fi/USB 网络适配。
+- 信息屏、短信及 VoLTE/VoNR 等设备设置；具体功能与限制见 [项目首页](https://github.com/{repo}#features)。
+- Go KDAE 管理控制台及 LuCI 入口，首次自行创建账号并导入订阅。
+- 官方节点小宝客户端及 LuCI 入口，使用自己的账号登录绑定；路由转发和回程需按实际网段配置。
+- 内置更新保留 KDAE 数据及关联文件、CA 与节点小宝绑定状态。
+
+### 下载与文件选择
+
+| 文件 | 用途 |
+| --- | --- |
+{files}
+| `build.json` / `SHA256SUMS` | 构建来源及校验清单 |
+
+ZIP 与 tar.gz 是同次构建的完整包，任选一种解压即可。Windows 打开 `OpenWrt-Installer.exe`；其他环境按包内 **`START-HERE.md`** 运行 Python 或 shell 入口。下载后先核对同版 `SHA256SUMS`。
+
+### 安装、更新与系统切换
+
+- **内置首次安装**：按安装器选择容量，涉及 userdata 缩容与创建 `e5root`。加密 data 可能需要恢复出厂，先准备自己的可恢复备份。
+- **已有 OpenWrt 更新**：运行新包安装器，选择“更新 OpenWrt”（当前菜单第 6 项）。通过 SSH 上传、校验并离线更新；已有独立分区不重新缩容、不修改 GPT。
+- **TF 安装**：使用包内对应入口；完整 ZIP 在 Magisk 中的安装入口用于 TF 部署，**会清除所选 TF 卡上的数据**。
+- **系统切换**：单独的 `e5-linux-switch` ZIP 只切回已安装的 Linux，不负责首次安装。不要反复刷完整固件来切换系统。
+
+**内置安装不等于已删除全部 Android 分区。** 当前流程保留必要启动链及 Android 回退路径。单根内置更新没有另一套根分区自动回退，更新时保持供电；额外安装的软件及未列入保留清单的文件需另行备份。
+
+### 版本与验证范围
+
+- 编译开始时间（UTC+8）：**{info['build_started_at']}**
+- 实际内核：`{info['kernel_release']}`
+- 信息屏：`{info['infoscreen_version']}`；电话插件：`{info['phone_version']}`
+- 源码：[`{commit[:7]}`](https://github.com/{repo}/commit/{commit}) · [构建记录]({info.get('run_url')})
+
+构建检查覆盖文件来源、匹配模块、包内资产与校验和。**实机验证待维护者补充；CI 成功不代表所有硬件功能已经实测。**
+
+### 隐私与许可
+
+公开包不含个人订阅、节点、账号密码、JWT、数据库、SSH 私钥或组网身份。Wi-Fi/基带固件及 Android vendor 运行文件从接收设备自身提取，不使用他人的 NV、校准或备份。
+
+### 源码来源与致谢
+
+{refs}
+- KDAE: [`{addons['kdae_revision'][:12]}`]({addons['kdae_repository'].removesuffix('.git')}/commit/{addons['kdae_revision']})
+
+感谢 sprd-linux-devs / Enceka、kanoqwq、dikeckaan、OpenWrt、Linux、ModemManager、daeuniverse、kdae 与 daed 相关贡献者。完整 [开源致谢及许可](https://github.com/{repo}#credits) 见项目首页；节点小宝使用官方软件并遵循其服务条款。
+'''
+    return title, notes
+
+
 def prepare():
     epoch = int(time.time())
     started = datetime.fromtimestamp(epoch, UTC8)
@@ -274,19 +345,9 @@ def verify():
         os.link(path, destination)
     (RELEASE / 'SHA256SUMS').write_text(''.join(f'{item["sha256"]}  {name}\n' for name, item in info['assets'].items()))
     (RELEASE / 'build.json').write_text(json.dumps(info, indent=2) + '\n')
-    refs = '\n'.join(f'- {name}: `{item["repository"]}@{item["revision"]}`' for name, item in info['sources'].items())
-    (RELEASE / 'release-notes.md').write_text(
-        f'编译时间（UTC+8）：**{info["build_started_at"]}**\n\n'
-        f'OpenWrt {info["openwrt_version"]} · 内核 `{info["kernel_release"]}` · '
-        f'信息屏 {info["infoscreen_version"]} · 电话插件 {info["phone_version"]}\n\n'
-        '完整固件 ZIP 可在 Android Magisk 内安装到 TF 卡（清空整卡），'
-        '也可解压后运行 `OpenWrt-Installer.exe` 或 `launchers/start-installer.sh`。'
-        '详细使用指南在包内顶层 `START-HERE.md`，已安装系统用更新入口保留设置。\n\n'
-        '另附的小型 e5-linux-switch Magisk ZIP 仅用于手动切回已安装的 Linux，不负责首次部署。\n\n'
-        '镜像不含设备固件和 Android vendor 运行库；安装器从目标设备提取。'
-        'CI 已验证文件和模块一致性，硬件实测仍需在 E5 上进行。\n\n'
-        f'源码版本：\n\n{refs}\n\n[构建记录]({info.get("run_url")})\n')
-    outputs({'bundle_name': stem, 'release_title': 'E5 OpenWrt ' + info['build_started_at']})
+    title, notes = release_description(info)
+    (RELEASE / 'release-notes.md').write_text(notes, encoding='utf-8')
+    outputs({'bundle_name': stem, 'release_title': title})
     print('Verified release:', stem)
 
 
