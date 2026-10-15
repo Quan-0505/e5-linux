@@ -12,6 +12,9 @@ start_service() {
     chmod 700 "$config_dir"
     procd_open_instance
     procd_set_param command /bin/sh -c 'n=0; while ! ip -4 route show default | grep -q .; do n=$((n+1)); [ "$n" -ge 150 ] && break; sleep 1; done; exec /usr/bin/daed run -c "$1" -l 0.0.0.0:2023' daed "$config_dir"
+    if [ -s "$config_dir/trusted-ca.pem" ]; then
+        procd_set_param env SSL_CERT_FILE="$config_dir/trusted-ca.pem"
+    fi
     procd_set_param respawn 3600 5 0
     procd_set_param stdout 1
     procd_set_param stderr 1

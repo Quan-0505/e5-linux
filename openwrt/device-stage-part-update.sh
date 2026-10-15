@@ -48,7 +48,9 @@ tar -cf /.e5-update/firmware.tar $firmware
 settings=
 for name in etc/config etc/shadow etc/passwd etc/group etc/dropbear etc/e5 etc/e5linux \
     etc/uhttpd.crt etc/uhttpd.key etc/vnstat etc/e5-infoscreen etc/e5-sms etc/unisoc-modem \
-    etc/daed etc/daed-kdae usr/local/owjdxb; do
+    etc/daed etc/daed-kdae usr/local/owjdxb \
+    etc/init.d/daed-dns usr/libexec/e5-daed-dns \
+    etc/rc.d/S96daed-dns etc/rc.d/K9daed-dns; do
     [ ! -e "$name" ] || settings="$settings $name"
 done
 sh "$stage/e5-network-addons-snapshot" "$view" /.e5-update/settings.tar \
