@@ -21,7 +21,7 @@ jobs:
       - name: Install regression tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq gcc pkg-config libglib2.0-dev busybox e2fsprogs
+          sudo apt-get install -y -qq gcc pkg-config libglib2.0-dev busybox e2fsprogs zstd
       - name: Validate pinned layout and shell entrypoints
         run: |
           python3 tools/device-layout.py check --system openwrt --model e5
@@ -38,4 +38,4 @@ jobs:
           python3 openwrt/tests/flash-diagnostics.py
           python3 tools/tests/android-bootchain.py
           python3 boot/tests/part-update.py
-          python3 tools/tests/modem-patch-stack.py --run-c-tests
+          python3 tools/tests/modem-patch-stack.py --real-source --run-c-tests
