@@ -3,10 +3,12 @@
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import struct
 import tarfile
+import time
+import urllib.error
 import urllib.request
+from pathlib import Path
 
 TOP = Path(__file__).resolve().parents[1]
 BASE = TOP / 'openwrt/network-addons'
@@ -16,22 +18,45 @@ LOCK = json.loads((BASE / 'lock.json').read_text())
 def sha(data):
     return hashlib.sha256(data).hexdigest()
 
+def download_with_retry(urls, timeout=60, retries=3):
+    if isinstance(urls, str):
+        urls = [urls]
+    headers = {'User-Agent': 'Mozilla/5.0 (compatible; E5-Build/1.0)'}
+    last_err = None
+    for url in urls:
+        req = urllib.request.Request(url, headers=headers)
+        for attempt in range(1, retries + 1):
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as response:
+                    return response.read()
+            except (urllib.error.URLError, TimeoutError, OSError) as err:
+                last_err = err
+                print(f'Attempt {attempt}/{retries} failed for {url}: {err}', flush=True)
+                if attempt < retries:
+                    time.sleep(attempt * 2)
+    raise last_err
+
 def fetch():
     WORK.mkdir(parents=True, exist_ok=True)
     archive = WORK / 'nodebaby.tgz'
     if not archive.exists() or sha(archive.read_bytes()) != LOCK['nodebaby_sha256']:
         # No authorization is needed for this public software download.
-        with urllib.request.urlopen(LOCK['nodebaby_url'], timeout=120) as response:
-            archive.write_bytes(response.read())
+        urls = [
+            'https://github.com/Quan-0505/e5-linux/releases/download/build-inputs/owjdxb_openwrt_arm64_4.3.5-734.tgz',
+            LOCK['nodebaby_url'],
+        ]
+        archive.write_bytes(download_with_retry(urls))
     assert sha(archive.read_bytes()) == LOCK['nodebaby_sha256'], 'NodeBaby checksum mismatch'
     binary = (WORK / 'daed').read_bytes()
     assert binary[:4] == b'\x7fELF' and binary[4] == 2 and struct.unpack('<H', binary[18:20])[0] == 183, 'KDAE must be ARM64 ELF'
     assert LOCK['kdae_version'].encode() in binary, 'Wrong KDAE version'
     metadata = {**LOCK, 'kdae_binary_sha256': sha(binary), 'geo_sha256': {}}
     for name in ['geoip.dat', 'geosite.dat']:
-        url = 'https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/' + name
-        with urllib.request.urlopen(url, timeout=120) as response:
-            data = response.read()
+        urls = [
+            'https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/' + name,
+            'https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/' + name,
+        ]
+        data = download_with_retry(urls)
         assert len(data) > 100000 and not data.lstrip().startswith(b'<'), 'Invalid geo download'
         (WORK / name).write_bytes(data)
         metadata['geo_sha256'][name] = sha(data)
