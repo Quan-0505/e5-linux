@@ -52,7 +52,11 @@ KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | `e5-linux-switch-*.zip` | 已安装系统的 Android → Linux 切换模块，不是完整固件 |
 | `build.json` / `SHA256SUMS` | 构建来源、版本信息和文件校验 |
 
-**当前发布基线（2026-10-15）**：[`7046071`](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261015-114511-7046071)，OpenWrt 25.12.5、E5 Linux 6.18.54、Go KDAE 2.2.5、节点小宝 4.3.5-734。后续以相应 Release 的构建清单为准。
+**当前发布（2026-10-16）**：[`a504709`](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261016-121242-a504709)，OpenWrt 25.12.5、E5 Linux 6.18.54、Go KDAE 2.2.5、节点小宝 4.3.5-734。[更新内容、验证范围和已知限制](docs/RELEASE-20261016.zh-CN.md)。
+
+本次已同步上游设备仓库拆分、安装器布局与入口修正、E5 热管理源码检查、NFS 依赖及构建修复。现有内置 `e5root` 使用“更新 OpenWrt”，不重新缩容或改 GPT。实机升级采用同一系统镜像并有本地安装器调整；尚未完成 Wi-Fi 客户端和断电冷启动验收，详见上方发布记录。
+
+固件包内仍是 KDAE **2.2.5**，独立仓库的 **2.2.6** 尚未集成到此镜像。
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
 
@@ -115,6 +119,7 @@ CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂�
 ## 📚 更多资料
 
 - [内置分区原理与安装流程](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/INTERNAL-PARTITION-SYSTEM-20261012.zh-CN.md)
+- [2026-10-16 固件发布与验证范围](docs/RELEASE-20261016.zh-CN.md)
 - [2026-10-15 上游同步记录](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/UPSTREAM-20261015.zh-CN.md)
 - [KDAE 与节点小宝集成](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/KDAE-NODEBABY.zh-CN.md)
 - [上游技术说明（中文）](README.upstream.zh-CN.md) / [English](README.upstream.en.md)
