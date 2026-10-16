@@ -505,8 +505,6 @@ rm -rf /tmp/r && mkdir /tmp/r && tar -xzf /w/$NAME -C /tmp/r
 python3 /prepare-ext4-tools.py --root /tmp/r --out /out/ext4-tools.tar
 python3 /tools/boot/prepare-f2fs-tools.py --root /tmp/r --out /boot-out/f2fs-tools
 rm -f /w/$IMG
-python3 /prepare-ext4-tools.py --root /tmp/r --out /out/ext4-tools.tar
-python3 /prepare-f2fs-tools.py --root /tmp/r --out /boot-out/f2fs-tools
 mke2fs -q -t ext4 -L e5-openwrt -m 1 -d /tmp/r /w/$IMG ${MB}M
 e2fsck -fn /w/$IMG >/dev/null
 gzip -1 -c /w/$IMG > /out/$IMG.gz.part && mv /out/$IMG.gz.part /out/$IMG.gz
