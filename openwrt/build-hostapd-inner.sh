@@ -27,6 +27,10 @@ printf '%s\n' 'CONFIG_PACKAGE_wpad-basic-mbedtls=m' 'CONFIG_PACKAGE_hostapd-comm
     'CONFIG_PACKAGE_wifi-scripts=m' 'CONFIG_WIFI_SCRIPTS_UCODE=y' \
     'CONFIG_SIGNED_PACKAGES=n' >> .config
 make defconfig
+# A standalone native CI job starts with an empty build volume. Package targets
+# do not bootstrap host tools or the cross toolchain (openssl/libdeflate-gzip
+# were previously inherited from the ModemManager build).
+make tools/install toolchain/install -j"$JOBS" V=s
 # Out-of-tree Unisoc modules do not select OpenWrt kmod-mac80211 options.
 # Preserve the official daemon's AC/AX/BE config parser and PHY support.
 hostapd_make() {
