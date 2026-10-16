@@ -59,8 +59,35 @@ jobs:
           name: guarded-block-${{ github.run_id }}-${{ github.run_attempt }}
           path: out/openwrt/block-mount-guarded.apk*
           if-no-files-found: error
+  wifi-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source_ref || vars.E5_SOURCE_REF || 'main' }}
+          persist-credentials: false
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: work/wifi-sae
+          key: wifi-sae-native-${{ env.E5_WRT_VER }}-${{ hashFiles('openwrt/build-hostapd*.sh', 'openwrt/hostapd.Dockerfile', 'openwrt/patch-hostapd-sae.py', 'openwrt/hostapd-unisoc*', 'openwrt/wifi-sae-state.py') }}
+      - name: Build matching Wi-Fi SAE packages using native x86 tools
+        env:
+          UNISOC_WRT_VER: ${{ env.E5_WRT_VER }}
+        run: sh openwrt/build-hostapd.sh
+      - name: Verify Wi-Fi SAE package hashes and source build ID
+        run: python3 openwrt/wifi-sae-state.py work/wifi-sae
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wifi-sae-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            work/wifi-sae/*.apk
+            work/wifi-sae/build-id
+            work/wifi-sae/SHA256SUMS
+            work/wifi-sae/source-info
+          if-no-files-found: error
   build:
-    needs: block-package
+    needs: [block-package, wifi-package]
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     defaults:
@@ -250,6 +277,13 @@ jobs:
           "$RUNNER_TEMP/browser-tests/bin/python" ci/infoscreen/tests/device/test_screen_apn_browser.py
           "$RUNNER_TEMP/browser-tests/bin/python" device/openwrt_device_common/tests/screen-rpc.py
           "$RUNNER_TEMP/browser-tests/bin/python" ci/infoscreen/tests/device/test_screen_charger_wake.py --fixtures ci/infoscreen/tests/fixtures/browser-status.json --webroot ci/infoscreen/root/usr/share/e5-infoscreen/www
+      - name: Download native Wi-Fi SAE packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: wifi-sae-${{ github.run_id }}-${{ github.run_attempt }}
+          path: e5-linux/work/wifi-sae
+      - name: Verify transferred Wi-Fi SAE packages
+        run: python3 openwrt/wifi-sae-state.py work/wifi-sae
       - name: Assemble the generic mainline flash bundles
         env:
           E5_MAINLINE: '1'
