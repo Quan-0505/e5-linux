@@ -285,6 +285,17 @@ def audit_root(info):
         info['kernel_build_epoch'] = int(kernel_epoch.read_text())
 
 
+def verify_installer_entries(members):
+    with tempfile.TemporaryDirectory(prefix='e5-entry-reference-') as temp:
+        root = Path(temp)
+        runpy.run_path(str(TOP / 'openwrt/bundle/install-entrypoints.py'))['assemble'](root)
+        paths = list((root / 'launchers').iterdir()) + [root / 'files/userdata-image.sh', root / 'scripts/installer/part-two-stage.py']
+        for path in paths:
+            name = path.relative_to(root).as_posix()
+            if members.get(name) != file_digest(path):
+                raise ValueError('installer entry mismatch: ' + name)
+
+
 def verify():
     info = json.loads((RELEASE / 'build.json').read_text())
     audit_root(info)
@@ -349,9 +360,7 @@ def verify():
             with archive.open(prefix + name) as stream:
                 if digest(stream) != checksum:
                     raise ValueError('ZIP differs from tar: ' + name)
-    for name in ('install-userdata.cmd', 'install-userdata.sh'):
-        if members.get(name) != file_digest(TOP / 'openwrt/bundle' / name):
-            raise ValueError('userdata installer mismatch: ' + name)
+    verify_installer_entries(members)
     modules = list((TOP / 'out/magisk').glob(f'e5-linux-switch-*-{info["timestamp"]}.zip'))
     if len(modules) != 1:
         raise ValueError('expected one completed Magisk module for the build timestamp')

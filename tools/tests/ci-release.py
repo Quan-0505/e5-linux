@@ -87,6 +87,27 @@ class StagedReference(unittest.TestCase):
                 release.reconcile_staged_reference({'old.js': 'old'}, root, ('old.js',))
 
 
+class InstallerEntries(unittest.TestCase):
+    def packaged(self):
+        temp = tempfile.TemporaryDirectory(); self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        import runpy
+        runpy.run_path(str(TOP / 'openwrt/bundle/install-entrypoints.py'))['assemble'](root)
+        return {p.relative_to(root).as_posix(): release.file_digest(p) for p in root.rglob('*') if p.is_file()}
+
+    def test_current_packaged_launchers_are_verified(self):
+        release.verify_installer_entries(self.packaged())
+
+    def test_missing_or_stale_userdata_launcher_is_rejected(self):
+        members = self.packaged()
+        for replacement in (None, '0' * 64):
+            bad = dict(members)
+            if replacement is None: bad.pop('launchers/install-to-userdata-image.cmd')
+            else: bad['launchers/install-to-userdata-image.cmd'] = replacement
+            with self.assertRaisesRegex(ValueError, 'installer entry mismatch'):
+                release.verify_installer_entries(bad)
+
+
 class RootAudit(unittest.TestCase):
     def audit(self, files, staged_vendor=None, kernel_out=None, nonexec=()):
         with tempfile.TemporaryDirectory() as temp:
