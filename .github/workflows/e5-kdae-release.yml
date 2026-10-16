@@ -190,6 +190,10 @@ jobs:
           python3 tools/tests/ci-release.py
           python3 tools/tests/openwrt-package-state.py
           python3 tools/tests/rootfs-apk-retry.py
+          python3 openwrt/tests/part-root-boot.py
+          python3 boot/tests/part-install.py
+          python3 boot/tests/part-update.py
+          python3 tools/tests/network-addons-snapshot.py
           python3 ci/infoscreen-plugins/tools/check.py
           if [ -f ci/infoscreen/tests/network-checks.sh ]; then
             E5_TEST_IMAGE="e5-openwrt-base:$E5_WRT_VER" bash ci/infoscreen/tests/network-checks.sh
@@ -200,7 +204,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: Quan-0505/daed-kdae
-          ref: ba1e98402460c165e3269d5458d16aa171daa9f4
+          ref: 9fd53ad23972b1d5f77cdd8c683513d1b0d3445c
           path: kdae-source
           persist-credentials: false
       - uses: pnpm/action-setup@v4
@@ -225,7 +229,7 @@ jobs:
           make deps
           go test ./dae ./maintenance ./observability ./consoleapi ./graphql ./graphql/service/subscription
           mkdir -p "$GITHUB_WORKSPACE/e5-linux/work/network-addons"
-          CGO_ENABLED=0 make OUTPUT="$GITHUB_WORKSPACE/e5-linux/work/network-addons/daed" APPNAME=daed WEB_DIST="$GITHUB_WORKSPACE/kdae-source/dist" VERSION=v2.2.4-kdae-dnsfix bundle
+          CGO_ENABLED=0 make OUTPUT="$GITHUB_WORKSPACE/e5-linux/work/network-addons/daed" APPNAME=daed WEB_DIST="$GITHUB_WORKSPACE/kdae-source/dist" VERSION=v2.2.6-kdae bundle
           cd "$GITHUB_WORKSPACE/e5-linux"
           python3 tools/stage-network-addons.py --fetch
           python3 tools/tests/network-addons.py

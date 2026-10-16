@@ -175,6 +175,26 @@ def audit_root(info):
                  'phone_version': json.loads(versions['etc/e5-infoscreen/plugins/phone/manifest.json'])['version']})
 
 
+def internal_update_sources():
+    return {
+        'scripts/tools/e5-update.py': TOP / 'tools/e5-update.py',
+        'files/device-stage-part-update.sh': TOP / 'openwrt/device-stage-part-update.sh',
+        'files/device-flash-boot.sh': TOP / 'openwrt/device-flash-boot.sh',
+        'files/e5-network-addons-snapshot': TOP / 'openwrt/network-addons/overlay/usr/libexec/e5-network-addons-snapshot',
+    }
+
+
+def verify_internal_update(members, boot):
+    update = boot.get('part_update', {})
+    if update.get('version') != 1 or update.get('script_sha256') != file_digest(TOP / 'boot/part-update.sh'):
+        raise ValueError('missing or stale internal-partition boot updater')
+    for name, source in internal_update_sources().items():
+        if members.get(name) != file_digest(source):
+            raise ValueError('internal update helper missing or stale: ' + name)
+    if not members.get('files/network-addons-software.list'):
+        raise ValueError('missing internal update software exclusion list')
+
+
 def verify():
     info = json.loads((RELEASE / 'build.json').read_text())
     audit_root(info)
@@ -223,6 +243,7 @@ def verify():
         if members[name] != file_digest(path):
             raise ValueError('bundle uses a different build output: ' + name)
     boot = json.loads(data['files/boot.json'])
+    verify_internal_update(members, boot)
     if boot['overlay_files'] or boot['sha256'] != members['files/boot.img']:
         raise ValueError('boot image contains an overlay or mismatches its manifest')
     version = data['files/VERSION'].decode()

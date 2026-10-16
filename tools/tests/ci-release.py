@@ -174,5 +174,34 @@ class RootAudit(unittest.TestCase):
             self.audit(files)
 
 
+class InternalUpdatePackage(unittest.TestCase):
+    def fixture(self):
+        members = {name: release.file_digest(path) for name, path in release.internal_update_sources().items()}
+        members['files/network-addons-software.list'] = 'a' * 64
+        boot = {'part_update': {'version': 1, 'script_sha256': release.file_digest(TOP / 'boot/part-update.sh')}}
+        return members, boot
+
+    def test_complete_update_chain_passes(self):
+        release.verify_internal_update(*self.fixture())
+
+    def test_missing_upload_tool_rejected(self):
+        members, boot = self.fixture()
+        del members['scripts/tools/e5-update.py']
+        with self.assertRaisesRegex(ValueError, 'helper missing'):
+            release.verify_internal_update(members, boot)
+
+    def test_stale_boot_updater_rejected(self):
+        members, boot = self.fixture()
+        boot['part_update']['script_sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'boot updater'):
+            release.verify_internal_update(members, boot)
+
+    def test_missing_software_exclusions_rejected(self):
+        members, boot = self.fixture()
+        del members['files/network-addons-software.list']
+        with self.assertRaisesRegex(ValueError, 'exclusion list'):
+            release.verify_internal_update(members, boot)
+
+
 if __name__ == '__main__':
     unittest.main()
