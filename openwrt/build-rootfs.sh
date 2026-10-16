@@ -522,6 +522,15 @@ docker run --rm --platform linux/arm64 -v "$WORK":/w -v "$OUT":/out \
     -v "$HERE/prepare-ext4-tools.py":/prepare-ext4-tools.py:ro \
     -v "$TOP/boot/prepare-f2fs-tools.py":/prepare-f2fs-tools.py:ro -v "$TOP/out/boot":/boot-out \
     -e NAME="$NAME" -e IMG="$IMG" -e MB="$IMAGE_MB" alpine:3.22 sh -euc '
+apk_retry() {
+    n=0
+    until apk "$@"; do
+        n=$((n + 1))
+        [ "$n" -lt 4 ] || return 1
+        echo "Retrying required OpenWrt package installation ($n/3)" >&2
+        sleep $((n * 2))
+    done
+}
 apk_retry add -q e2fsprogs python3 binutils >/dev/null
 rm -rf /tmp/r && mkdir /tmp/r && tar -xzf /w/$NAME -C /tmp/r
 rm -f /w/$IMG
