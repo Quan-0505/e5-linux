@@ -318,7 +318,7 @@ until apk update >/dev/null; do
     sleep $((attempt * 2))
     attempt=$((attempt + 1))
 done
-apk_retry add --allow-untrusted /in/block-mount-guarded.apk >/dev/null
+apk add --allow-untrusted /in/block-mount-guarded.apk >/dev/null
 apk_retry add e2fsprogs resize2fs f2fs-tools >/dev/null
 # ModemManager first, from its local file (unsigned): its release is above the
 # repository one, so what depends on it takes this one and apk upgrade keeps it
