@@ -3,11 +3,12 @@
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import struct
 import tarfile
 import time
+import urllib.error
 import urllib.request
+from pathlib import Path
 
 TOP = Path(__file__).resolve().parents[1]
 BASE = TOP / 'openwrt/network-addons'
@@ -28,7 +29,7 @@ def download_with_retry(urls, timeout=60, retries=3):
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as response:
                     return response.read()
-            except Exception as err:
+            except (urllib.error.URLError, TimeoutError, OSError) as err:
                 last_err = err
                 print(f'Attempt {attempt}/{retries} failed for {url}: {err}', flush=True)
                 if attempt < retries:
