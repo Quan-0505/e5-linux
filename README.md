@@ -36,21 +36,20 @@
 | **蜂窝与热点** | ModemManager Unisoc 适配，提供 SIM/APN、蜂窝数据、Wi-Fi 热点和 USB 网络管理 |
 | **屏幕与短信** | 信息屏、未读短信提示、双卡短信、VoLTE/VoNR 设置及锁屏唤醒修正 |
 | **升级保留设置** | 专门保存 KDAE 数据库及关联文件、CA 和节点小宝绑定状态，避免更新时丢失账号与配置 |
-| **公开构建** | GitHub Actions 构建，发布包附 `build.json`、`SHA256SUMS` 与安装指南 |
+| **公开构建** | GitHub Actions 构建，Release 提供固件安装包及切换模块 |
 
 KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按自己的网络配置。软件预装不代表已配置订阅或已获得第三方服务权限；跨站点 UDP 单播也不等同于广播或 mDNS 自动发现。
 
 <a id="download"></a>
 ## 📦 固件下载
 
-前往 **[Releases](https://github.com/Quan-0505/e5-linux/releases)** 下载完整 E5 安装包，核对同一版本的 `SHA256SUMS`，解压后先看 **`START-HERE.md`**。
+前往 **[Releases](https://github.com/Quan-0505/e5-linux/releases)** 下载完整 E5 安装包，解压后先看 **`START-HERE.md`**；当前发布文件的 SHA-256 摘要见对应发布说明。
 
 | 文件 | 用途 |
 | --- | --- |
 | `e5-openwrt-flash-*.zip` | 完整安装包，包含电脑安装器、系统镜像、工具及详细指南 |
 | `e5-openwrt-flash-*.tar.gz` | 同次构建提供的另一种完整归档格式 |
 | `e5-linux-switch-*.zip` | 已安装系统的 Android → Linux 切换模块，不是完整固件 |
-| `build.json` / `SHA256SUMS` | 构建来源、版本信息和文件校验 |
 
 **当前发布（2026-10-17）**：[`build-20261017-112714-fb5722c`](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261017-112714-fb5722c)，OpenWrt 25.12.5、E5 Linux 6.18.54、Go KDAE 2.2.6-e5fix1、节点小宝 4.3.5-734。[变更、构建来源和验证范围](docs/RELEASE-20261017.zh-CN.md)。
 
