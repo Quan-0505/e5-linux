@@ -20,12 +20,12 @@ with tempfile.TemporaryDirectory() as directory:
         for name, text in {
             'etc/config/network': 'user network', 'etc/shadow': 'user password',
             'etc/e5/contacts.json': 'user contacts', 'etc/e5/image-version': 'old',
-            'etc/e5/sim-radio': '0 1\n',
+            'etc/e5/sim-radio': '0 1\n', 'etc/e5/release.json': 'old release',
             'etc/e5-infoscreen/plugins/other/user.json': 'other app data',
             phone + 'phone.js': 'old phone', phone + 'manifest.json': 'old manifest',
         }.items():
             put(old, name, text)
-        for name in ('image-version', 'image-form', 'build-time'):
+        for name in ('image-version', 'image-form', 'build-time', 'release.json'):
             put(new, 'etc/e5/' + name, 'new ' + name)
         if bundled:
             put(new, phone + 'phone.js', 'new phone')
@@ -40,5 +40,6 @@ with tempfile.TemporaryDirectory() as directory:
         assert (new / 'etc/shadow').read_text() == 'user password'
         assert (new / 'etc/e5-infoscreen/plugins/other/user.json').read_text() == 'other app data'
         assert (new / 'etc/e5/image-version').read_text() == 'new image-version'
+        assert (new / 'etc/e5/release.json').read_text() == 'new release.json'
         assert not list(base.glob('e5-img.phone.*'))
 print('PASS: bundled phone upgraded; contacts, credentials, settings and other apps preserved; legacy image fallback')

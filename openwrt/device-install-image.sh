@@ -68,7 +68,7 @@ keep_config() {
     if [ -f "$N/etc/e5-infoscreen/plugins/phone/manifest.json" ]; then
         cp -a "$N/etc/e5-infoscreen/plugins/phone/." "$phone/"
     fi
-    for f in image-version image-form build-time; do
+    for f in image-version image-form build-time release.json; do
         cp "$N/etc/e5/$f" "/tmp/e5-img.$f" 2>/dev/null || rm -f "/tmp/e5-img.$f"
     done
     for p in etc/config etc/shadow etc/passwd etc/group etc/dropbear etc/e5 etc/e5linux \
@@ -81,7 +81,7 @@ keep_config() {
             cp -a "$from/$p" "$N/$p"
         fi
     done
-    for f in image-version image-form build-time; do
+    for f in image-version image-form build-time release.json; do
         rm -f "$N/etc/e5/$f"
         [ -f "/tmp/e5-img.$f" ] && mv "/tmp/e5-img.$f" "$N/etc/e5/$f"
     done

@@ -43,6 +43,7 @@ def main():
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--apk-image', default='mu300-openwrt-base:25.12.5')
     p.add_argument('--wifi-apks', type=Path, default=TOP / 'work/wifi-sae')
+    p.add_argument('--release-version', help='Optional explicit private release version')
     p.add_argument('--cc', default='aarch64-linux-gnu-gcc')
     a = p.parse_args()
     runpy.run_path(str(TOP / 'openwrt/bundle/flash.py'))['validate_installer_busybox'](a.busybox)
@@ -161,7 +162,9 @@ def main():
             child.unlink()
     epoch = int(time.time())
     rev = subprocess.check_output(['git', '-c', 'safe.directory=' + str(TOP), '-C', str(TOP), 'rev-parse', 'HEAD'], text=True).strip()
-    name = f'{a.profile}-openwrt-25.12.5-tf-' + time.strftime('%Y%m%d-%H%M%S')
+    release_info = runpy.run_path(str(TOP / 'tools/release-identity.py'))['identify'](
+        TOP, a.profile, release, epoch=epoch, version=a.release_version)
+    name = release_info['package_name']
     package = a.work / name
     files = package / 'files'
     files.mkdir(parents=True)
@@ -185,7 +188,10 @@ def main():
     for n in sorted(set(names)):
         if n.startswith(('boot/', 'devices/', 'magisk/', 'openwrt/', 'rootfs/overlay/', 'tools/', 'upstream/')) and (TOP / n).is_file():
             sources[n] = digest(TOP / n)
-    info = {'name': name, 'profile': a.profile, 'source_commit': rev,
+    (files / 'RELEASE.json').write_text(json.dumps(release_info, indent=2) + '\n')
+    (root / 'etc/e5/release.json').write_text(json.dumps(release_info, indent=2) + '\n')
+    info = {'private_version': release_info['private_version'], 'source_fingerprint': release_info['source_fingerprint'],
+            'name': name, 'profile': a.profile, 'source_commit': rev,
             'build_epoch': epoch, 'kernel_release': release, 'openwrt': '25.12.5',
             'build_type': 'incremental assembly; tested package binaries, current sources, rebuilt initramfs',
             'docker_preinstalled': False, 'root_image_bytes': 2147483648,
@@ -200,7 +206,7 @@ def main():
             'sources': sources}
     for dest in (root / 'etc/e5/build.json', files / 'BUILD.json'):
         dest.write_text(json.dumps(info, ensure_ascii=False, indent=2) + '\n')
-    (root / 'etc/e5/image-version').write_text(name + '\n')
+    (root / 'etc/e5/image-version').write_text(release_info['image_version'] + '\n')
     (root / 'etc/e5/build-time').write_text(str(epoch) + '\n')
     feature = root / 'etc/e5/feature-port.json'
     if feature.exists():

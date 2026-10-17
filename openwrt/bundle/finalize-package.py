@@ -73,9 +73,13 @@ def finalize(package, profile, bootctl):
     target.chmod(0o755)
     (package / 'customize.sh').write_bytes((HERE / 'magisk-customize.sh').read_bytes().replace(b'\r\n', b'\n'))
     (package / 'skip_mount').touch()
+    release_path = files / 'RELEASE.json'
+    private = json.loads(release_path.read_text()) if release_path.is_file() else {}
+    module_version = private.get('image_version', '1.0')
+    module_code = int(private.get('build_epoch', 1))
     (package / 'module.prop').write_text(
         f'id=e5_openwrt_tf_{profile}\nname={MODELS[profile]} OpenWrt TF Installer\n'
-        'version=1.0\nversionCode=1\nauthor=e5-linux contributors\n'
+        f'version={module_version}\nversionCode={module_code}\nauthor=e5-linux contributors\n'
         'description=ERASES THE SELECTED TF PARTITION (or unpartitioned card) and deploys OpenWrt. Android userdata is preserved. Reboot manually.\n',
         encoding='utf-8', newline='\n')
     values = {'PROFILE': profile, 'ANDROID_MODEL': MODELS[profile],

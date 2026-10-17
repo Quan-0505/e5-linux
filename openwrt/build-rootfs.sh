@@ -272,10 +272,13 @@ mkdir -p "$TP"
 # (an empty directory stands for no info screen)
 mkdir -p "$WORK/no-infoscreen"
 echo "info screen: ${INFOSCREEN:-(none)}"
-VERSION=$(git -C "$TOP" describe --always --dirty 2>/dev/null || echo dev)
+VERSION=$(python3 "$TOP/tools/release-identity.py" --profile e5 \
+    --kernel "$(cat "$SA/audio/release")" --openwrt "$VER" \
+    --epoch "${E5_BUILD_EPOCH:-$(date +%s)}" --output "$WORK/release.json" --field image_version)
 
 docker run --rm --platform linux/arm64 \
     -v "$HERE/overlay":/in/overlay:ro -v "$TOP/rootfs/overlay/opt/e5":/in/opt-e5:ro \
+    -v "$WORK/release.json":/in/release.json:ro \
     -v "$TOP":/in/feature-source:ro -e E5_FEATURES="$FEATURES" -e E5_UI_CACHE=/tmp/e5-ui-cache \
     -v "$OUT":/in/apk:ro -v "$BUSYBOX":/in/busybox:ro -v "$WORK/logdw":/in/logdw:ro \
     -v "$WORK/e5-vibrate":/in/e5-vibrate:ro -v "${INFOSCREEN:-$WORK/no-infoscreen}":/in/infoscreen:ro \
@@ -464,6 +467,7 @@ if [ -n "$STANDALONE" ]; then
     mkdir -p $R/etc/e5 && printf "standalone\n" > $R/etc/e5/image-form
 fi
 mkdir -p $R/etc/e5 && printf "%s\n" "$VERSION" > $R/etc/e5/image-version
+cp /in/release.json $R/etc/e5/release.json
 # when the image was built (seconds since 1970, UTC): 高级 -> 系统 shows it
 if [ -n "$E5_BUILD_EPOCH" ]; then printf "%s\n" "$E5_BUILD_EPOCH" > $R/etc/e5/build-time
 else date -u +%s > $R/etc/e5/build-time; fi
