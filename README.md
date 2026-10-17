@@ -48,7 +48,6 @@ KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | 文件 | 用途 |
 | --- | --- |
 | `e5-openwrt-flash-*.zip` | 完整安装包，包含电脑安装器、系统镜像、工具及详细指南 |
-| `e5-openwrt-flash-*.tar.gz` | 同次构建提供的另一种完整归档格式 |
 | `e5-linux-switch-*.zip` | 已安装系统的 Android → Linux 切换模块，不是完整固件 |
 | [`e5-openwrt-installer-windows.zip`](https://github.com/Quan-0505/e5-linux/releases/download/build-20261017-112714-fb5722c/e5-openwrt-installer-windows.zip) | Windows 便携图形安装器与 ADB 工具；不含固件载荷 |
 
