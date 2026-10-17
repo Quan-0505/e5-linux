@@ -2,13 +2,13 @@
 
 # 老头乐 E5 · OpenWrt
 
-**把 E5 变成随身 5G 路由器 · 内置存储安装 · Go KDAE · 节点小宝 · GitHub Actions 构建**
+**把 E5 变成随身 5G 路由器 · 内置存储安装 · Rust daed 候选集成 · 节点小宝 · GitHub Actions 构建**
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Quan-0505/e5-linux/e5-kdae-release.yml?branch=codex%2Fe5-internal-kdae&label=Build&style=flat-square)](https://github.com/Quan-0505/e5-linux/actions/workflows/e5-kdae-release.yml)
 [![Release](https://img.shields.io/github/v/release/Quan-0505/e5-linux?style=flat-square&label=Release)](https://github.com/Quan-0505/e5-linux/releases/latest)
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-25.12.5-00b5e2?style=flat-square)](https://openwrt.org/)
 [![Kernel](https://img.shields.io/badge/Linux-6.18_LTS-orange?style=flat-square)](https://github.com/sprd-linux-devs/linux/tree/e5-6.18)
-[![KDAE](https://img.shields.io/badge/Go_KDAE-2.2.6--e5fix1-0b5?style=flat-square)](https://github.com/Quan-0505/daed-kdae)
+[![Rust daed](https://img.shields.io/badge/Rust_daed-3.2.1_candidate-805ad5?style=flat-square)](https://github.com/Quan-0505/rust-daed)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 **面向老头乐 E5（Unisoc UMS9621 / ARM64）的 OpenWrt 定制构建**
@@ -19,7 +19,7 @@
 
 ---
 
-在 E5 原生 Linux 适配的基础上，整合 **OpenWrt、Go KDAE 管理控制台和节点小宝**，保留蜂窝上网、Wi-Fi 热点、USB 网络、信息屏以及短信等设备功能。
+在 E5 原生 Linux 适配的基础上，整合 **OpenWrt、daed 管理控制台和节点小宝**，保留蜂窝上网、Wi-Fi 热点、USB 网络、信息屏以及短信等设备功能。
 
 本仓库维护的定制构建位于 [`codex/e5-internal-kdae`](https://github.com/Quan-0505/e5-linux/tree/codex/e5-internal-kdae) 分支，重点维护内置 eMMC 的独立 `e5root` 安装与更新。上游 Debian、TF 卡及其他机型的资料继续保留；其他设备请使用其专用安装包。
 
@@ -30,12 +30,12 @@
 | --- | --- |
 | **内置 OpenWrt** | OpenWrt 25.12.5，安装到独立 `e5root` 分区；已有内置安装通过更新入口升级 |
 | **E5 原生内核** | Linux 6.18 LTS，保留 E5 充电、触屏、背光、音频和蜂窝硬件适配 |
-| **Go KDAE** | 预装 daed-kdae 2.2.6-e5fix1，提供订阅、节点、群组、DNS、路由、实时日志及热重载管理 |
+| **daed 管理界面** | 当前公开固件仍为 Go KDAE；Rust daed 3.2.1 为候选集成，提供订阅、节点、群组、DNS、路由、实时日志及热重载管理 |
 | **eBPF 数据面** | 构建时核对 BTF、BPF、veth、TC/clsact 等能力及匹配的内核模块 |
 | **节点小宝** | 预装官方 ARM64 4.3.5-734 客户端，提供 LuCI 服务入口，使用者自行登录绑定 |
 | **蜂窝与热点** | ModemManager Unisoc 适配，提供 SIM/APN、蜂窝数据、Wi-Fi 热点和 USB 网络管理 |
 | **屏幕与短信** | 信息屏、未读短信提示、双卡短信、VoLTE/VoNR 设置及锁屏唤醒修正 |
-| **升级保留设置** | 专门保存 KDAE 数据库及关联文件、CA 和节点小宝绑定状态，避免更新时丢失账号与配置 |
+| **升级保留设置** | 保留本机代理数据库及关联文件、CA 和节点小宝绑定状态；Rust 候选用非破坏性副本迁移保留 Go 账号和配置 |
 | **公开构建** | GitHub Actions 构建，Release 提供固件安装包及切换模块 |
 
 KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按自己的网络配置。软件预装不代表已配置订阅或已获得第三方服务权限；跨站点 UDP 单播也不等同于广播或 mDNS 自动发现。
@@ -54,6 +54,8 @@ KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 **当前发布（2026-10-17）**：[`build-20261017-112714-fb5722c`](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261017-112714-fb5722c)，OpenWrt 25.12.5、E5 Linux 6.18.54、Go KDAE 2.2.6-e5fix1、节点小宝 4.3.5-734。[变更、构建来源和验证范围](docs/RELEASE-20261017.zh-CN.md)。
 
 此版修复 E5 启动确认脚本的可执行权限，并集成针对 E5 内存限制的 Go KDAE 兼容修复。内核仍基于 E5 `e5-6.18` 分支提交 `020b970e`；本次没有新的内核源码提交。内置分区升级元数据指向已有 `e5root` 的离线更新入口，不会重新缩容或修改 GPT。
+
+**Rust daed 集成候选**：当前工作分支将 Go KDAE 替换为锁定提交构建的 Rust daed，使用 `NETNS_LINK=veth`，首次启动从本机 `wing.db` 非破坏性迁移到 `daed.db`。此候选尚未形成新的公开固件 Release，需等构建、数据库副本迁移和 E5 实机流量验收完成后再更新“当前发布”信息。
 
 本次 Actions 构建和发布包完整性检查通过；此构建产物尚未在设备上实刷，不能把 CI 成功当成此包的硬件验收。
 
@@ -93,7 +95,7 @@ KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | 入口 | 默认地址 / 使用方式 |
 | --- | --- |
 | LuCI | `http://192.168.9.1/`，使用自己的设备管理账号 |
-| KDAE | `http://192.168.9.1:2023/`；首次创建管理员、导入自己的订阅 |
+| daed（Rust 候选） | `http://192.168.9.1:2023/`；首次创建管理员、导入自己的订阅 |
 | 节点小宝 | `http://192.168.9.1:9118/`；使用自己的账号登录绑定 |
 | LuCI 快捷入口 | **服务 → daed / 节点小宝**，随设备当前管理地址打开 |
 
@@ -111,7 +113,7 @@ git clone --recurse-submodules --branch codex/e5-internal-kdae https://github.co
 cd e5-linux
 ```
 
-工作流构建 E5 内核、匹配模块、原生 ModemManager、信息屏、Go KDAE 和完整安装包；校验软件来源、镜像元数据、模块能力及最终包哈希。KDAE 与节点小宝来源见 [软件锁定清单](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/openwrt/network-addons/lock.json)。
+候选工作流构建 E5 内核、匹配模块、原生 ModemManager、信息屏、Rust daed、DaedNext 页面、公开 Geodata、节点小宝和完整安装包；校验软件来源、镜像元数据、模块能力及最终包哈希。Rust daed 与节点小宝来源见 [软件锁定清单](openwrt/network-addons/lock.json)。Go `wing.db` 由设备本地首次启动迁移到新的 Rust 数据库，源库不覆盖；配置迁移必须在设备上验收。
 
 CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂窝、通话、充电、Wi-Fi、代理或断电重启测试。发布说明应分别记录源码变化、打包结果和实机验证范围。
 
@@ -133,7 +135,7 @@ CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂�
 - **[dikeckaan/mu300-linux](https://github.com/dikeckaan/mu300-linux)**：随身 Wi-Fi Linux 项目及可复用的安装、管理和修复思路。
 - **[OpenWrt](https://openwrt.org/)**、**[Linux](https://www.kernel.org/)**、**[ModemManager](https://modemmanager.org/)**：路由系统、内核和蜂窝连接管理基础。
 - **[Enceka/infoscreen](https://github.com/Enceka/infoscreen)** 与 **[infoscreen-plugins](https://github.com/Enceka/infoscreen-plugins)**：设备信息屏和应用框架。
-- **[daeuniverse](https://github.com/daeuniverse)**、**[olicesx/kdae](https://github.com/olicesx/dae/tree/kdae)**、**[ksong008/daed](https://github.com/ksong008/daed)**：eBPF 透明代理、控制器和管理界面的基础工作；本仓库通过 [daed-kdae](https://github.com/Quan-0505/daed-kdae) 集成。
+- **[daeuniverse](https://github.com/daeuniverse)**、**[ksong008/DaeNext](https://github.com/ksong008/DaeNext)**、**[ksong008/DaedNext](https://github.com/ksong008/DaedNext)**：eBPF 透明代理引擎和管理界面的基础工作；本仓库通过 [rust-daed](https://github.com/Quan-0505/rust-daed) 集成。
 - 所有提交修复、文档、测试结果及问题反馈的贡献者。
 
 本仓库脚本沿用 [MIT 许可](LICENSE)；Linux、KDAE 及其他组件分别遵循各自原有许可，版权与致谢均予以保留。节点小宝采用[官方软件](https://iepose.com/)，按其官方授权与服务条款使用，不将其列为本仓库的开源组件。

@@ -103,8 +103,106 @@ jobs:
             work/wifi-sae/SHA256SUMS
             work/wifi-sae/source-info
           if-no-files-found: error
+  rust-engine:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: e5-linux
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Quan-0505/e5-linux
+          ref: ${{ inputs.source_ref || vars.E5_SOURCE_REF || 'main' }}
+          path: e5-linux
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Quan-0505/rust-daed
+          ref: 7b1d18772789be988c933dc5e18fdb5411a00857
+          path: e5-linux/rust-daed
+          persist-credentials: false
+      - name: Verify pinned Rust source
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          lock=json.loads(Path('openwrt/network-addons/lock.json').read_text())
+          actual=subprocess.check_output(['git','-C','rust-daed','rev-parse','HEAD'],text=True).strip()
+          assert actual == lock['rust_daed_revision'], (actual, lock['rust_daed_revision'])
+          PY
+      - name: Install Rust release dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y build-essential clang llvm libclang-dev libelf-dev cmake libssl-dev perl pkg-config gcc-aarch64-linux-gnu g++-aarch64-linux-gnu dpkg-dev curl file zstd
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.24.0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu
+          components: rust-src
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - name: Keep stable as the top-level compiler
+        run: rustup default stable
+      - name: Install pinned BPF linker release
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/bpf-linker-v0.12.0.tar.zst"
+          curl --fail --location --retry 3 --output "$archive" \
+            https://github.com/aya-rs/bpf-linker/releases/download/v0.12.0/bpf-linker-x86_64-unknown-linux-musl.tar.zst
+          echo "6789717c8cb6a2a5d920f3b6bfac2bd7efc00f6228ecd149108a99699a75c679  $archive" | sha256sum --check --strict
+          mkdir -p "$RUNNER_TEMP/bpf-linker"
+          tar --zstd --extract --file "$archive" --directory "$RUNNER_TEMP/bpf-linker"
+          linker="$(find "$RUNNER_TEMP/bpf-linker" -type f -name bpf-linker -print -quit)"
+          test -n "$linker"
+          install -m 0755 "$linker" "$HOME/.cargo/bin/bpf-linker"
+          bpf-linker --version
+      - name: Build Rust daemon and verify the public ARM64 payload
+        run: |
+          RUST_RELEASE_CACHE="$RUNNER_TEMP/rust-cache" bash rust-daed/scripts/build-release.sh "$RUNNER_TEMP/rust-daed-release"
+          python3 - <<'PY'
+          import hashlib, json, pathlib, tarfile
+          from pathlib import Path
+          out=Path(__import__('os').environ['RUNNER_TEMP'])/'rust-daed-release'
+          work=Path('work/network-addons'); work.mkdir(parents=True,exist_ok=True)
+          with tarfile.open(out/'assets/rust-daed-r2s.apk','r:gz') as package:
+              members={m.name.removeprefix('./'):m for m in package.getmembers()}
+              for name in ['usr/bin/daed','usr/share/daed/geoip.dat','usr/share/daed/geosite.dat','usr/share/daed/web/index.html']:
+                  assert name in members and members[name].isfile(), name
+              binary=package.extractfile(members['usr/bin/daed']).read()
+              assert binary[:5] == b'\x7fELF\x02' and int.from_bytes(binary[18:20],'little')==183
+              assert b'version=v3.2.1' in binary
+              (work/'daed').write_bytes(binary)
+              for name in ['geoip.dat','geosite.dat']:
+                  (work/name).write_bytes(package.extractfile(members['usr/share/daed/'+name]).read())
+              web=work/'web'; web.mkdir(exist_ok=True)
+              for name,member in members.items():
+                  prefix='usr/share/daed/web/'
+                  if name.startswith(prefix) and member.isfile():
+                      rel=Path(name[len(prefix):])
+                      assert not rel.is_absolute() and '..' not in rel.parts
+                      target=web/rel; target.parent.mkdir(parents=True,exist_ok=True)
+                      target.write_bytes(package.extractfile(member).read())
+          assert (work/'web/index.html').is_file()
+          print('Rust daed ARM64 ELF, geodata and UI extracted from the pinned package')
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rust-daed-e5-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            e5-linux/work/network-addons/daed
+            e5-linux/work/network-addons/geoip.dat
+            e5-linux/work/network-addons/geosite.dat
+            e5-linux/work/network-addons/web/**
+          if-no-files-found: error
   build:
-    needs: [block-package, wifi-package]
+    needs: [block-package, wifi-package, rust-engine]
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     defaults:
@@ -218,36 +316,12 @@ jobs:
           fi
       - name: Build ARM64 toolchain container
         run: docker build -t e5-mainline-build upstream/
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          repository: Quan-0505/daed-kdae
-          ref: 367936c1ce02db221fb89e6fe6874f902d4c8163
-          path: kdae-source
-          persist-credentials: false
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.24.0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26.x'
-          cache: false
-      - name: Build pinned Go KDAE and stage public NodeBaby inputs
+          name: rust-daed-e5-${{ github.run_id }}-${{ github.run_attempt }}
+          path: e5-linux/work/network-addons
+      - name: Stage pinned Rust daed and public NodeBaby inputs
         run: |
-          sudo apt-get install -y clang llvm libelf-dev
-          cd "$GITHUB_WORKSPACE/kdae-source"
-          pnpm --dir console install --frozen-lockfile
-          npm run build
-          python3 -m unittest discover -s backend/tests -p 'test_*.py'
-          python3 backend/prepare-wing.py "$RUNNER_TEMP/kdae-wing" --clone
-          cd "$RUNNER_TEMP/kdae-wing"
-          make deps
-          go test ./dae ./maintenance ./observability ./consoleapi ./graphql ./graphql/service/subscription
-          mkdir -p "$GITHUB_WORKSPACE/e5-linux/work/network-addons"
-          CGO_ENABLED=0 make OUTPUT="$GITHUB_WORKSPACE/e5-linux/work/network-addons/daed" APPNAME=daed WEB_DIST="$GITHUB_WORKSPACE/kdae-source/dist" VERSION=v2.2.6-kdae-e5fix1 bundle
-          cd "$GITHUB_WORKSPACE/e5-linux"
           python3 tools/stage-network-addons.py --fetch
           python3 tools/tests/network-addons.py
       - name: Compile the release kernel

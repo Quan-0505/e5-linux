@@ -48,18 +48,14 @@ def fetch():
         archive.write_bytes(download_with_retry(urls))
     assert sha(archive.read_bytes()) == LOCK['nodebaby_sha256'], 'NodeBaby checksum mismatch'
     binary = (WORK / 'daed').read_bytes()
-    assert binary[:4] == b'\x7fELF' and binary[4] == 2 and struct.unpack('<H', binary[18:20])[0] == 183, 'KDAE must be ARM64 ELF'
-    assert LOCK['kdae_version'].encode() in binary, 'Wrong KDAE version'
-    metadata = {**LOCK, 'kdae_binary_sha256': sha(binary), 'geo_sha256': {}}
+    assert binary[:4] == b'\x7fELF' and binary[4] == 2 and struct.unpack('<H', binary[18:20])[0] == 183, 'Rust daed must be ARM64 ELF'
+    assert f"version=v{LOCK['rust_daed_version']}".encode() in binary, 'Wrong Rust daed version'
+    metadata = {**LOCK, 'rust_daed_binary_sha256': sha(binary), 'geo_sha256': {}}
     for name in ['geoip.dat', 'geosite.dat']:
-        urls = [
-            'https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/' + name,
-            'https://raw.githubusercontent.com/Loyalsoldier/v2ray-rules-dat/release/' + name,
-        ]
-        data = download_with_retry(urls)
-        assert len(data) > 100000 and not data.lstrip().startswith(b'<'), 'Invalid geo download'
-        (WORK / name).write_bytes(data)
+        data = (WORK / name).read_bytes()
+        assert len(data) > 100000 and not data.lstrip().startswith(b'<'), 'Invalid bundled public geodata'
         metadata['geo_sha256'][name] = sha(data)
+    assert (WORK / 'web/index.html').is_file(), 'Rust DaedNext web UI missing'
     metadata['nodebaby_software_files'] = [name for name, _, _ in nodebaby_files()]
     (WORK / 'software.list').write_text('\n'.join(metadata['nodebaby_software_files']) + '\n')
     (WORK / 'build.json').write_text(json.dumps(metadata, indent=2) + '\n')
@@ -85,7 +81,7 @@ def payload():
     metadata = json.loads((WORK / 'build.json').read_text())
     assert all(metadata[key] == value for key, value in LOCK.items()), 'Build metadata does not match source lock'
     binary = (WORK / 'daed').read_bytes()
-    assert sha(binary) == metadata['kdae_binary_sha256'], 'KDAE changed after provenance recording'
+    assert sha(binary) == metadata['rust_daed_binary_sha256'], 'Rust daed changed after provenance recording'
     yield 'usr/bin/daed', binary, 0o755
     # Public data, never a user's config directory.
     for name in ['geoip.dat', 'geosite.dat']:
@@ -93,6 +89,10 @@ def payload():
         assert len(data) > 100000, 'Missing public geo data'
         assert sha(data) == metadata['geo_sha256'][name], 'Geo data changed after download'
         yield 'usr/share/daed/' + name, data, 0o644
+    web = WORK / 'web'
+    for path in sorted(web.rglob('*')):
+        if path.is_file():
+            yield 'usr/share/daed/web/' + path.relative_to(web).as_posix(), path.read_bytes(), 0o644
     yield from nodebaby_files()
     for path in sorted((BASE / 'overlay').rglob('*')):
         if path.is_file():
@@ -135,10 +135,11 @@ def verify(archive):
             assert Path(name).name not in {'wing.db', 'daed.db', '.dmac', '.dmacv1', 'id_rsa', 'id_ed25519'}, 'Private state found: ' + name
         for program in ['tc', 'ip']:
             assert any(prefix + program in members for prefix in ['usr/sbin/', 'sbin/', 'usr/bin/', 'bin/']), 'Missing networking dependency: ' + program
+        assert 'usr/share/daed/web/index.html' in members, 'Missing Rust DaedNext UI'
     cfg = (TOP / 'upstream/out-release/config').read_text()
     for option in ['NETKIT', 'VETH', 'BPF_SYSCALL', 'BPF_JIT', 'DEBUG_INFO_BTF', 'NET_CLS_ACT', 'NET_CLS_BPF', 'NET_SCH_INGRESS', 'NET_ACT_BPF', 'TUN']:
         assert f'CONFIG_{option}=y' in cfg.splitlines(), 'Required kernel capability dropped: ' + option
-    print('Verified actual rootfs: ARM64 KDAE, NodeBaby, services, LuCI entries, dependencies, privacy, kernel capabilities')
+    print('Verified actual rootfs: Rust ARM64 daed, DaedNext UI, NodeBaby, services, LuCI entries, dependencies, privacy, kernel capabilities')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)

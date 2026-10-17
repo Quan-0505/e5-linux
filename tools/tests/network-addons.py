@@ -15,6 +15,14 @@ spec = importlib.util.spec_from_file_location('addons', TOP / 'tools/stage-netwo
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+service = (TOP / 'openwrt/network-addons/overlay/etc/init.d/daed').read_text()
+assert 'state migrate --from-wing-db' in service
+assert '--to "$state_db"' in service
+assert 'state check --state "$state_db"' in service
+assert 'validate -c "$config_dir/" --state "$state_db" --json' in service
+assert 'procd_set_param env NETNS_LINK=veth' in service
+assert 'wing.db' in service and 'daed.db' in service
+
 with tempfile.TemporaryDirectory() as temp:
     tmp = Path(temp)
     root = tmp / 'root'
