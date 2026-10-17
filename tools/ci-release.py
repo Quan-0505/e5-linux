@@ -113,7 +113,7 @@ def audit_root(info):
         expected['opt/e5/' + name] = file_digest(TOP / 'device/linux_device_common/overlay/opt/e5' / name)
     expected['etc/e5/block-mount.build-id'] = hashlib.sha256((block_build_id() + '\n').encode()).hexdigest()
     found, versions, modules = {}, {}, set()
-    required_exec = {'etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
+    required_exec = {'etc/init.d/e5-boot-ok', 'etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
                      'usr/libexec/e5-infoscreen/plugin', 'usr/libexec/e5-infoscreen/update'}
     executable = set()
     rootfs = TOP / 'work/openwrt' / f'e5-openwrt-{info["openwrt_version"]}-generic-rootfs.tar.gz'
@@ -142,7 +142,7 @@ def audit_root(info):
                 else:
                     found[name] = digest(stream)
     if required_exec - executable:
-        raise ValueError('required screen scripts are not executable: ' + ', '.join(sorted(required_exec - executable)))
+        raise ValueError('required startup/screen scripts are not executable: ' + ', '.join(sorted(required_exec - executable)))
     if 'etc/e5/feature-port.json' in versions:
         # Feature staging deliberately rewrites vendor-start to preserve the
         # isolated NV loops. Reproduce that exact transformation for the gate.
@@ -173,6 +173,26 @@ def audit_root(info):
         raise ValueError('generic image has a machine ID')
     info.update({'kernel_release': kernel, 'infoscreen_version': versions['usr/share/e5-infoscreen/VERSION'].decode().strip(),
                  'phone_version': json.loads(versions['etc/e5-infoscreen/plugins/phone/manifest.json'])['version']})
+
+
+def internal_update_sources():
+    return {
+        'scripts/tools/e5-update.py': TOP / 'tools/e5-update.py',
+        'files/device-stage-part-update.sh': TOP / 'openwrt/device-stage-part-update.sh',
+        'files/device-flash-boot.sh': TOP / 'openwrt/device-flash-boot.sh',
+        'files/e5-network-addons-snapshot': TOP / 'openwrt/network-addons/overlay/usr/libexec/e5-network-addons-snapshot',
+    }
+
+
+def verify_internal_update(members, boot):
+    update = boot.get('part_update', {})
+    if update.get('version') != 1 or update.get('script_sha256') != file_digest(TOP / 'boot/part-update.sh'):
+        raise ValueError('missing or stale internal-partition boot updater')
+    for name, source in internal_update_sources().items():
+        if members.get(name) != file_digest(source):
+            raise ValueError('internal update helper missing or stale: ' + name)
+    if not members.get('files/network-addons-software.list'):
+        raise ValueError('missing internal update software exclusion list')
 
 
 def verify():
@@ -223,6 +243,7 @@ def verify():
         if members[name] != file_digest(path):
             raise ValueError('bundle uses a different build output: ' + name)
     boot = json.loads(data['files/boot.json'])
+    verify_internal_update(members, boot)
     if boot['overlay_files'] or boot['sha256'] != members['files/boot.img']:
         raise ValueError('boot image contains an overlay or mismatches its manifest')
     version = data['files/VERSION'].decode()

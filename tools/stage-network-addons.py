@@ -61,6 +61,7 @@ def fetch():
         (WORK / name).write_bytes(data)
         metadata['geo_sha256'][name] = sha(data)
     metadata['nodebaby_software_files'] = [name for name, _, _ in nodebaby_files()]
+    (WORK / 'software.list').write_text('\n'.join(metadata['nodebaby_software_files']) + '\n')
     (WORK / 'build.json').write_text(json.dumps(metadata, indent=2) + '\n')
 
 def nodebaby_files():

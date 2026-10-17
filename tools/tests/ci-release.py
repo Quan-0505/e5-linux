@@ -94,7 +94,7 @@ class RootAudit(unittest.TestCase):
             with tarfile.open(path, 'w:gz') as archive:
                 for name, data in files.items():
                     entry = tarfile.TarInfo(name); entry.size = len(data)
-                    if name in ('etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
+                    if name in ('etc/init.d/e5-boot-ok', 'etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
                                 'usr/libexec/e5-infoscreen/plugin', 'usr/libexec/e5-infoscreen/update') and name not in nonexec:
                         entry.mode = 0o755
                     archive.addfile(entry, io.BytesIO(data))
@@ -113,6 +113,7 @@ class RootAudit(unittest.TestCase):
         return {'etc/e5/block-mount.build-id': b'fixture-block-build\n',
                 'sbin/block': b'block fixture', 'lib/libblkid-tiny.so': b'probe fixture',
                 'etc/init.d/fstab': b'fstab fixture',
+                'etc/init.d/e5-boot-ok': b'#!/bin/sh\n',
                 'etc/init.d/e5-infoscreen': b'#!/bin/sh\n',
                 'usr/libexec/e5-infoscreen/session': b'#!/bin/sh\n',
                 'usr/libexec/e5-infoscreen/plugin': b'#!/bin/sh\n',
@@ -127,6 +128,10 @@ class RootAudit(unittest.TestCase):
     def test_nonexecutable_screen_start_rejected(self):
         with self.assertRaisesRegex(ValueError, 'not executable.*e5-infoscreen'):
             self.audit(self.files(), nonexec=('etc/init.d/e5-infoscreen',))
+
+    def test_nonexecutable_boot_confirmation_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'not executable.*e5-boot-ok'):
+            self.audit(self.files(), nonexec=('etc/init.d/e5-boot-ok',))
 
     def test_nonexecutable_plugin_manager_rejected(self):
         with self.assertRaisesRegex(ValueError, 'not executable.*plugin'):
@@ -172,6 +177,35 @@ class RootAudit(unittest.TestCase):
         files = self.files(); files['lib/firmware/wcnmodem.bin'] = b'device firmware'
         with self.assertRaisesRegex(ValueError, 'device-specific'):
             self.audit(files)
+
+
+class InternalUpdatePackage(unittest.TestCase):
+    def fixture(self):
+        members = {name: release.file_digest(path) for name, path in release.internal_update_sources().items()}
+        members['files/network-addons-software.list'] = 'a' * 64
+        boot = {'part_update': {'version': 1, 'script_sha256': release.file_digest(TOP / 'boot/part-update.sh')}}
+        return members, boot
+
+    def test_complete_update_chain_passes(self):
+        release.verify_internal_update(*self.fixture())
+
+    def test_missing_upload_tool_rejected(self):
+        members, boot = self.fixture()
+        del members['scripts/tools/e5-update.py']
+        with self.assertRaisesRegex(ValueError, 'helper missing'):
+            release.verify_internal_update(members, boot)
+
+    def test_stale_boot_updater_rejected(self):
+        members, boot = self.fixture()
+        boot['part_update']['script_sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'boot updater'):
+            release.verify_internal_update(members, boot)
+
+    def test_missing_software_exclusions_rejected(self):
+        members, boot = self.fixture()
+        del members['files/network-addons-software.list']
+        with self.assertRaisesRegex(ValueError, 'exclusion list'):
+            release.verify_internal_update(members, boot)
 
 
 if __name__ == '__main__':

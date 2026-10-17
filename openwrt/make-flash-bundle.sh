@@ -146,6 +146,10 @@ cp "$BOOT.json" "$P/files/boot.json"
 cp "$BOOT.misc-slot-b-trial.bin" "$P/files/boot-misc-slot-b.bin"
 cp "$HERE/device-install-image.sh" "$HERE/device-flash-boot.sh" "$HERE/bundle/collect-device-files.sh" \
    "$TOP/device/openwrt_device_common/overlay/usr/libexec/e5-gpt" "$P/files/"
+cp "$TOP/tools/e5-update.py" "$P/scripts/tools/"
+cp "$HERE/device-stage-part-update.sh" \
+   "$HERE/network-addons/overlay/usr/libexec/e5-network-addons-snapshot" "$P/files/"
+cp "$TOP/work/network-addons/software.list" "$P/files/network-addons-software.list"
 cp "$TOP/tools/e5-telnet.py" "$TOP/tools/sprd-bt-config.py" "$P/scripts/tools/"
 cp -R "$TOP/tools/vbc-profile" "$P/scripts/tools/"
 find "$P" \( -name .DS_Store -o -name __pycache__ \) -prune -exec rm -rf {} +
