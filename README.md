@@ -50,7 +50,7 @@ KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | `e5-openwrt-flash-*.zip` | 完整安装包，包含电脑安装器、系统镜像、工具及详细指南 |
 | `e5-openwrt-flash-*.tar.gz` | 同次构建提供的另一种完整归档格式 |
 | `e5-linux-switch-*.zip` | 已安装系统的 Android → Linux 切换模块，不是完整固件 |
-| [`e5-openwrt-installer-windows-60867c0.zip`](https://github.com/Quan-0505/e5-linux/releases/download/build-20261017-112714-fb5722c/e5-openwrt-installer-windows-60867c0.zip) | Windows 便携图形安装器与 ADB 工具；不含固件载荷 |
+| [`e5-openwrt-installer-windows.zip`](https://github.com/Quan-0505/e5-linux/releases/download/build-20261017-112714-fb5722c/e5-openwrt-installer-windows.zip) | Windows 便携图形安装器与 ADB 工具；不含固件载荷 |
 
 **当前发布（2026-10-17）**：[`build-20261017-112714-fb5722c`](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261017-112714-fb5722c)，OpenWrt 25.12.5、E5 Linux 6.18.54、Go KDAE 2.2.6-e5fix1、节点小宝 4.3.5-734。[变更、构建来源和验证范围](docs/RELEASE-20261017.zh-CN.md)。
 
