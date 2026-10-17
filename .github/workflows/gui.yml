@@ -2,6 +2,11 @@ name: Portable Windows installer
 
 on:
   workflow_call:
+    inputs:
+      source_ref:
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
   push:
     paths: ['installer/**', 'openwrt/bundle/flash.py', 'openwrt/bundle/part-two-stage.py', '.github/workflows/gui.yml']
@@ -16,6 +21,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
