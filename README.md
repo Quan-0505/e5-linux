@@ -1,6 +1,6 @@
 <div align="center">
 
-# 荣悦 E5 · OpenWrt
+# 老头乐 E5 · OpenWrt
 
 **把 E5 变成随身 5G 路由器 · 内置存储安装 · Go KDAE · 节点小宝 · GitHub Actions 构建**
 
@@ -11,7 +11,7 @@
 [![KDAE](https://img.shields.io/badge/Go_KDAE-2.2.5-0b5?style=flat-square)](https://github.com/Quan-0505/daed-kdae)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
-**面向荣悦 E5（Unisoc UMS9621 / ARM64）的 OpenWrt 定制构建**
+**面向老头乐 E5（Unisoc UMS9621 / ARM64）的 OpenWrt 定制构建**
 
 [📦 固件下载](#download) · [✨ 功能介绍](#features) · [🚀 安装与升级](#install) · [🔧 自行编译](#build) · [❤️ 开源致谢](#credits)
 
@@ -65,7 +65,7 @@ KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 
 ### 首次安装
 
-1. 核对设备确为荣悦 E5，准备可恢复的原机备份、稳定供电及可靠数据线。
+1. 核对设备确为老头乐 E5，准备可恢复的原机备份、稳定供电及可靠数据线。
 2. Android 侧准备好包内指南要求的 Root、ADB 和启动条件；Shell 超级用户请求需要在本机允许。
 3. 解压完整 E5 安装包，Windows 打开 `OpenWrt-Installer.exe`；也可在具备依赖的电脑运行 `python3 OpenWrt-Installer.py`。
 4. 按安装器选择存储位置、容量与热点设置，以该包的 `START-HERE.md` 为操作依据。
@@ -127,7 +127,7 @@ CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂�
 <a id="credits"></a>
 ## ❤️ 开源致谢
 
-感谢以下项目和作者提供的基础工作，让荣悦 E5 从 Android 设备走到可使用的 Linux / OpenWrt：
+感谢以下项目和作者提供的基础工作，让老头乐 E5 从 Android 设备走到可使用的 Linux / OpenWrt：
 
 - **[sprd-linux-devs / Enceka](https://github.com/sprd-linux-devs/e5-linux)**：E5 Linux 基础适配、启动流程、内核与用户空间支持，以及持续的硬件研究。
 - **[kanoqwq/e5-linux](https://github.com/kanoqwq/e5-linux)**：安装器、共享设备服务、信息屏、蜂窝与存储等改进；感谢作者长期维护和分享。
