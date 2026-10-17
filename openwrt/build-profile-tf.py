@@ -108,7 +108,7 @@ def main():
         'ucode /target/usr/libexec/unisoc-modem/disable-channel-analysis /target && '
         # Incremental builds must also add newly mandatory packages to old bases.
         'apk --root /target update >/dev/null && '
-        'apk --root /target --no-scripts add ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn luci-i18n-ttyd-tr && '
+        'apk --root /target --no-scripts add ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn luci-i18n-ttyd-tr iw-full && '
         'sh /target/usr/libexec/e5-ttyd-bind /target && '
         'ln -sf ../init.d/ttyd /target/etc/rc.d/S99ttyd && '
         'ln -sf ../init.d/ttyd /target/etc/rc.d/K50ttyd')
@@ -267,11 +267,16 @@ def audit(root, profile, release):
         assert not any((root / directory).iterdir()), directory
     for name in ('etc/e5/install.conf', 'etc/e5/sd-root', 'etc/e5/contacts.json', 'etc/e5-sms',
                  'etc/unisoc-modem', 'etc/uhttpd.key', 'etc/uhttpd.crt', 'usr/bin/dockerd',
-                 'usr/bin/docker', 'usr/bin/containerd', 'usr/bin/runc'):
+                 'usr/bin/docker', 'usr/bin/containerd', 'usr/bin/runc',
+                 'usr/bin/xray', 'usr/bin/sing-box', 'usr/sbin/openvpn', 'usr/bin/tailscaled'):
         assert not (root / name).exists(), name
     assert all(p.name in ('regulatory.db', 'regulatory.db.p7s', 'rtl_nic') for p in (root / 'lib/firmware').iterdir())
     assert (root / 'etc/shadow').read_text().startswith('root::')
     assert (root / 'etc/machine-id').read_text() == ''
+    # Sanitized incremental bases can still carry the reduced iw package.
+    # That binary omits Supported Ciphers, so capability filtering stays inert.
+    packages = (root / 'lib/apk/db/installed').read_text()
+    assert re.search(r'^P:iw-full$', packages, re.M), 'Full iw capabilities are required'
     for name in ('sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab',
                  'lib/netifd/hostapd-unisoc.sh', 'usr/share/ucode/wifi/unisoc-sae.uc',
                  'etc/e5/wifi-sae.build-id',
