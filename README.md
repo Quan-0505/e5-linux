@@ -1,6 +1,6 @@
 <div align="center">
 
-# 荣悦 E5 · OpenWrt
+# 老头乐 E5 · OpenWrt
 
 **把 E5 变成随身 5G 路由器 · 内置存储安装 · Go KDAE · 节点小宝 · GitHub Actions 构建**
 
@@ -8,10 +8,10 @@
 [![Release](https://img.shields.io/github/v/release/Quan-0505/e5-linux?style=flat-square&label=Release)](https://github.com/Quan-0505/e5-linux/releases/latest)
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-25.12.5-00b5e2?style=flat-square)](https://openwrt.org/)
 [![Kernel](https://img.shields.io/badge/Linux-6.18_LTS-orange?style=flat-square)](https://github.com/sprd-linux-devs/linux/tree/e5-6.18)
-[![KDAE](https://img.shields.io/badge/Go_KDAE-2.2.5-0b5?style=flat-square)](https://github.com/Quan-0505/daed-kdae)
+[![KDAE](https://img.shields.io/badge/Go_KDAE-2.2.6--e5fix1-0b5?style=flat-square)](https://github.com/Quan-0505/daed-kdae)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
-**面向荣悦 E5（Unisoc UMS9621 / ARM64）的 OpenWrt 定制构建**
+**面向老头乐 E5（Unisoc UMS9621 / ARM64）的 OpenWrt 定制构建**
 
 [📦 固件下载](#download) · [✨ 功能介绍](#features) · [🚀 安装与升级](#install) · [🔧 自行编译](#build) · [❤️ 开源致谢](#credits)
 
@@ -30,33 +30,32 @@
 | --- | --- |
 | **内置 OpenWrt** | OpenWrt 25.12.5，安装到独立 `e5root` 分区；已有内置安装通过更新入口升级 |
 | **E5 原生内核** | Linux 6.18 LTS，保留 E5 充电、触屏、背光、音频和蜂窝硬件适配 |
-| **Go KDAE** | 预装 daed-kdae 2.2.5，提供订阅、节点、群组、DNS、路由、实时日志及热重载管理 |
+| **Go KDAE** | 预装 daed-kdae 2.2.6-e5fix1，提供订阅、节点、群组、DNS、路由、实时日志及热重载管理 |
 | **eBPF 数据面** | 构建时核对 BTF、BPF、veth、TC/clsact 等能力及匹配的内核模块 |
 | **节点小宝** | 预装官方 ARM64 4.3.5-734 客户端，提供 LuCI 服务入口，使用者自行登录绑定 |
 | **蜂窝与热点** | ModemManager Unisoc 适配，提供 SIM/APN、蜂窝数据、Wi-Fi 热点和 USB 网络管理 |
 | **屏幕与短信** | 信息屏、未读短信提示、双卡短信、VoLTE/VoNR 设置及锁屏唤醒修正 |
 | **升级保留设置** | 专门保存 KDAE 数据库及关联文件、CA 和节点小宝绑定状态，避免更新时丢失账号与配置 |
-| **公开构建** | GitHub Actions 构建，发布包附 `build.json`、`SHA256SUMS` 与安装指南 |
+| **公开构建** | GitHub Actions 构建，Release 提供固件安装包及切换模块 |
 
 KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按自己的网络配置。软件预装不代表已配置订阅或已获得第三方服务权限；跨站点 UDP 单播也不等同于广播或 mDNS 自动发现。
 
 <a id="download"></a>
 ## 📦 固件下载
 
-前往 **[Releases](https://github.com/Quan-0505/e5-linux/releases)** 下载完整 E5 安装包，核对同一版本的 `SHA256SUMS`，解压后先看 **`START-HERE.md`**。
+前往 **[Releases](https://github.com/Quan-0505/e5-linux/releases)** 下载完整 E5 安装包，解压后先看 **`START-HERE.md`**；当前发布文件的 SHA-256 摘要见对应发布说明。
 
 | 文件 | 用途 |
 | --- | --- |
 | `e5-openwrt-flash-*.zip` | 完整安装包，包含电脑安装器、系统镜像、工具及详细指南 |
-| `e5-openwrt-flash-*.tar.gz` | 同次构建提供的另一种完整归档格式 |
 | `e5-linux-switch-*.zip` | 已安装系统的 Android → Linux 切换模块，不是完整固件 |
-| `build.json` / `SHA256SUMS` | 构建来源、版本信息和文件校验 |
+| [`e5-openwrt-installer-windows.zip`](https://github.com/Quan-0505/e5-linux/releases/download/build-20261017-112714-fb5722c/e5-openwrt-installer-windows.zip) | Windows 便携图形安装器与 ADB 工具；不含固件载荷 |
 
-**当前发布（2026-10-16）**：[`a504709`](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261016-121242-a504709)，OpenWrt 25.12.5、E5 Linux 6.18.54、Go KDAE 2.2.5、节点小宝 4.3.5-734。[更新内容、验证范围和已知限制](docs/RELEASE-20261016.zh-CN.md)。
+**当前发布（2026-10-17）**：[`build-20261017-112714-fb5722c`](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261017-112714-fb5722c)，OpenWrt 25.12.5、E5 Linux 6.18.54、Go KDAE 2.2.6-e5fix1、节点小宝 4.3.5-734。[变更、构建来源和验证范围](docs/RELEASE-20261017.zh-CN.md)。
 
-本次已同步上游设备仓库拆分、安装器布局与入口修正、E5 热管理源码检查、NFS 依赖及构建修复。现有内置 `e5root` 使用“更新 OpenWrt”，不重新缩容或改 GPT。实机升级采用同一系统镜像并有本地安装器调整；尚未完成 Wi-Fi 客户端和断电冷启动验收，详见上方发布记录。
+此版修复 E5 启动确认脚本的可执行权限，并集成针对 E5 内存限制的 Go KDAE 兼容修复。内核仍基于 E5 `e5-6.18` 分支提交 `020b970e`；本次没有新的内核源码提交。内置分区升级元数据指向已有 `e5root` 的离线更新入口，不会重新缩容或修改 GPT。
 
-固件包内仍是 KDAE **2.2.5**，独立仓库的 **2.2.6** 尚未集成到此镜像。
+本次 Actions 构建和发布包完整性检查通过；此构建产物尚未在设备上实刷，不能把 CI 成功当成此包的硬件验收。
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
 
@@ -65,7 +64,7 @@ KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 
 ### 首次安装
 
-1. 核对设备确为荣悦 E5，准备可恢复的原机备份、稳定供电及可靠数据线。
+1. 核对设备确为老头乐 E5，准备可恢复的原机备份、稳定供电及可靠数据线。
 2. Android 侧准备好包内指南要求的 Root、ADB 和启动条件；Shell 超级用户请求需要在本机允许。
 3. 解压完整 E5 安装包，Windows 打开 `OpenWrt-Installer.exe`；也可在具备依赖的电脑运行 `python3 OpenWrt-Installer.py`。
 4. 按安装器选择存储位置、容量与热点设置，以该包的 `START-HERE.md` 为操作依据。
@@ -127,7 +126,7 @@ CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂�
 <a id="credits"></a>
 ## ❤️ 开源致谢
 
-感谢以下项目和作者提供的基础工作，让荣悦 E5 从 Android 设备走到可使用的 Linux / OpenWrt：
+感谢以下项目和作者提供的基础工作，让老头乐 E5 从 Android 设备走到可使用的 Linux / OpenWrt：
 
 - **[sprd-linux-devs / Enceka](https://github.com/sprd-linux-devs/e5-linux)**：E5 Linux 基础适配、启动流程、内核与用户空间支持，以及持续的硬件研究。
 - **[kanoqwq/e5-linux](https://github.com/kanoqwq/e5-linux)**：安装器、共享设备服务、信息屏、蜂窝与存储等改进；感谢作者长期维护和分享。
