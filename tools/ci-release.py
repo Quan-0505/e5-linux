@@ -289,7 +289,7 @@ def verify():
         f'编译时间（UTC+8）：**{info["build_started_at"]}**\n\n'
         f'OpenWrt {info["openwrt_version"]} · 内核 `{info["kernel_release"]}` · '
         f'信息屏 {info["infoscreen_version"]} · 电话插件 {info["phone_version"]}\n\n'
-        '下载 ZIP 或 TAR.GZ，解压后运行 `flash.cmd`（Windows）或 `./flash.sh`（macOS/Linux）。'
+        '下载固件 ZIP，解压后运行 `flash.cmd`（Windows）或 `./flash.sh`（macOS/Linux）。'
         '已安装 OpenWrt 使用 `--update` 保留设置。刷入说明在包内 README。\n\n'
         'Magisk ZIP 用于已 root Android 手动切回已安装的 Linux，在模块列表点击「操作」。\n\n'
         '镜像不含设备固件和 Android vendor 运行库；安装器从目标设备提取。'

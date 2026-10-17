@@ -426,7 +426,7 @@ jobs:
           else
             gh release create "$tag" --target "$RELEASE_COMMIT" --title "$TITLE" --notes-file release-notes.md --draft
           fi
-          gh release upload "$tag" ./*.tar.gz ./*.zip --clobber
+          gh release upload "$tag" ./*.zip --clobber
           args=(--draft=false --title "$TITLE" --notes-file release-notes.md)
           if [ "$PRERELEASE" = true ]; then args+=(--prerelease --latest=false); else args+=(--prerelease=false --latest); fi
           gh release edit "$tag" "${args[@]}"
