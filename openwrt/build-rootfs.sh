@@ -508,6 +508,7 @@ elif [ -n "$screen" ]; then
 fi
 # Complete a successful internal-root trial before the next reboot.
 cp /in/feature-source/openwrt/overlay/etc/init.d/e5-boot-ok $R/etc/init.d/e5-boot-ok
+chmod 755 $R/etc/init.d/e5-boot-ok
 if [ -f $R/usr/libexec/unisoc-modem/disable-channel-analysis ]; then
     ucode $R/usr/libexec/unisoc-modem/disable-channel-analysis $R
 fi

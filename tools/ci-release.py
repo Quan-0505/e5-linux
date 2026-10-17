@@ -113,7 +113,7 @@ def audit_root(info):
         expected['opt/e5/' + name] = file_digest(TOP / 'device/linux_device_common/overlay/opt/e5' / name)
     expected['etc/e5/block-mount.build-id'] = hashlib.sha256((block_build_id() + '\n').encode()).hexdigest()
     found, versions, modules = {}, {}, set()
-    required_exec = {'etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
+    required_exec = {'etc/init.d/e5-boot-ok', 'etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
                      'usr/libexec/e5-infoscreen/plugin', 'usr/libexec/e5-infoscreen/update'}
     executable = set()
     rootfs = TOP / 'work/openwrt' / f'e5-openwrt-{info["openwrt_version"]}-generic-rootfs.tar.gz'
@@ -142,7 +142,7 @@ def audit_root(info):
                 else:
                     found[name] = digest(stream)
     if required_exec - executable:
-        raise ValueError('required screen scripts are not executable: ' + ', '.join(sorted(required_exec - executable)))
+        raise ValueError('required startup/screen scripts are not executable: ' + ', '.join(sorted(required_exec - executable)))
     if 'etc/e5/feature-port.json' in versions:
         # Feature staging deliberately rewrites vendor-start to preserve the
         # isolated NV loops. Reproduce that exact transformation for the gate.

@@ -1,7 +1,7 @@
 {
   "kdae_repository": "https://github.com/Quan-0505/daed-kdae.git",
-  "kdae_revision": "9fd53ad23972b1d5f77cdd8c683513d1b0d3445c",
-  "kdae_version": "v2.2.6-kdae",
+  "kdae_revision": "367936c1ce02db221fb89e6fe6874f902d4c8163",
+  "kdae_version": "v2.2.6-kdae-e5fix1",
   "nodebaby_url": "https://cdn.ionewu.com/upgrade/jdxb/owjdxb_openwrt_arm64_4.3.5-734.tgz",
   "nodebaby_sha256": "c2c1853eac004ae3699a8f3beba3331afc42aca1878acd2c7945a5658deea702",
   "nodebaby_version": "4.3.5-734"
