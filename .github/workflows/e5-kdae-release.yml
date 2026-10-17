@@ -323,17 +323,66 @@ jobs:
             e5-linux/upstream/out-release/config
           if-no-files-found: ignore
 
-  publish:
+  windows-installer:
     needs: build
+    uses: ./.github/workflows/gui.yml
+    with:
+      source_ref: ${{ needs.build.outputs.source }}
+
+  publish:
+    needs: [build, windows-installer]
     if: github.event_name == 'push' || inputs.publish
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.build.outputs.source }}
+          path: installer-source
+          persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: flash-release-${{ github.run_id }}-${{ github.run_attempt }}
           path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: openwrt-installer-windows
+          path: installer-artifact
+      - name: Verify and package the portable Windows installer
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, sys, zipfile
+          from pathlib import Path, PurePosixPath
+          sys.path.insert(0, 'installer-source/installer')
+          from package_gui import digest, sources
+          root = Path('installer-artifact').resolve()
+          meta = json.loads((root / 'build.json').read_text(encoding='utf-8'))
+          if meta.get('source') != sources():
+              raise SystemExit('Windows installer source fingerprint does not match the firmware source commit')
+          for name, wanted in meta.get('files', {}).items():
+              rel = PurePosixPath(name)
+              path = (root / Path(*rel.parts)).resolve()
+              if rel.is_absolute() or '..' in rel.parts or not path.is_relative_to(root) or digest(path) != wanted:
+                  raise SystemExit(f'Windows installer artifact failed its manifest check: {name}')
+          if not (root / 'OpenWrt-Installer.exe').is_file():
+              raise SystemExit('Windows installer executable is missing')
+          target = Path('release/e5-openwrt-installer-windows.zip')
+          with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file():
+                      archive.write(path, path.relative_to(root).as_posix())
+          print('Windows installer ZIP SHA-256:', digest(target))
+          PY
+          installer_sha="$(sha256sum release/e5-openwrt-installer-windows.zip | cut -d' ' -f1)"
+          {
+            cat release/release-notes.md
+            printf '\n\n## Windows portable installer\n\n'
+            printf '%s\n' 'Download `e5-openwrt-installer-windows.zip` for the standalone Windows GUI installer. Extract it and run `OpenWrt-Installer.exe`, keeping the adjacent `tools/` directory. This ZIP does not include firmware; use it with the complete E5 firmware package.'
+            printf '\n\nInstaller SHA-256: `%s`\n' "$installer_sha"
+          } > release/release-notes.updated.md
+          mv release/release-notes.updated.md release/release-notes.md
       - name: Publish validated files through a draft release
         working-directory: release
         env:
@@ -356,7 +405,7 @@ jobs:
           else
             gh release create "$tag" --target "$RELEASE_COMMIT" --title "$TITLE" --notes-file release-notes.md --draft
           fi
-          gh release upload "$tag" ./*.tar.gz ./*.zip SHA256SUMS build.json --clobber
+          gh release upload "$tag" ./*.tar.gz ./*.zip --clobber
           args=(--draft=false --title "$TITLE" --notes-file release-notes.md)
           if [ "$PRERELEASE" = true ]; then args+=(--prerelease --latest=false); else args+=(--prerelease=false --latest); fi
           gh release edit "$tag" "${args[@]}"
