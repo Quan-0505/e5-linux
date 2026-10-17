@@ -57,7 +57,11 @@ def fetch():
         metadata['geo_sha256'][name] = sha(data)
     assert (WORK / 'web/index.html').is_file(), 'Rust DaedNext web UI missing'
     metadata['nodebaby_software_files'] = [name for name, _, _ in nodebaby_files()]
-    (WORK / 'software.list').write_text('\n'.join(metadata['nodebaby_software_files']) + '\n')
+    # The internal updater snapshots selected settings from the running image.
+    # Preserve NodeBaby identity/state, but never restore the old Go daemon's
+    # init script over the Rust service shipped in the new root filesystem.
+    snapshot_excludes = metadata['nodebaby_software_files'] + ['etc/init.d/daed']
+    (WORK / 'software.list').write_text('\n'.join(snapshot_excludes) + '\n')
     (WORK / 'build.json').write_text(json.dumps(metadata, indent=2) + '\n')
 
 def nodebaby_files():
