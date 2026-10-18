@@ -6,7 +6,7 @@
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Quan-0505/e5-linux/e5-kdae-release.yml?branch=main&label=Build&style=flat-square)](https://github.com/Quan-0505/e5-linux/actions/workflows/e5-kdae-release.yml)
 [![Release](https://img.shields.io/github/v/release/Quan-0505/e5-linux?style=flat-square&label=Release)](https://github.com/Quan-0505/e5-linux/releases/latest)
-[![OpenWrt](https://img.shields.io/badge/OpenWrt-25.12.5-00b5e2?style=flat-square)](https://openwrt.org/)
+[![OpenWrt](https://img.shields.io/badge/OpenWrt-25.12.6-00b5e2?style=flat-square)](https://openwrt.org/)
 [![Kernel](https://img.shields.io/badge/Linux-6.18_LTS-orange?style=flat-square)](https://github.com/sprd-linux-devs/linux/tree/e5-6.18)
 [![Rust daed](https://img.shields.io/badge/Rust_daed-3.2.1-805ad5?style=flat-square)](https://github.com/Quan-0505/rust-daed)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
@@ -28,7 +28,7 @@
 
 | 功能 | 说明 |
 | --- | --- |
-| **内置 OpenWrt** | OpenWrt 25.12.5，安装到独立 `e5root` 分区；已有内置安装通过更新入口升级 |
+| **内置 OpenWrt** | OpenWrt 25.12.6，安装到独立 `e5root` 分区；已有内置安装通过更新入口升级 |
 | **E5 原生内核** | Linux 6.18 LTS，保留 E5 充电、触屏、背光、音频和蜂窝硬件适配 |
 | **daed 管理界面** | Rust daed 3.2.1，提供订阅、节点、群组、DNS、路由、实时日志及热重载管理 |
 | **eBPF 数据面** | 构建时核对 BTF、BPF、veth、TC/clsact 等能力及匹配的内核模块 |
@@ -50,9 +50,11 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | `e5-openwrt-flash-*.zip` | 完整安装包，包含电脑安装器、系统镜像、工具及详细指南 |
 | `e5-linux-switch-*.zip` | 已安装系统的 Android → Linux 切换模块，不是完整固件 |
 
-**当前发布（2026-10-18）**：[build-20261018-204830-7bae97b](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261018-204830-7bae97b)，OpenWrt 25.12.5、E5 Linux 6.18.54、Rust daed 3.2.1、节点小宝 4.3.5-734。源码来自 `main`，提交 `7bae97bf593d9e8e193ecb11a5263c66359cfaaf`；Rust daed 锁定提交 `90fc9c13ecec9d434c93f7d0f4a20bd742008dca`。
+**当前发布（2026-10-19）**：[build-20261019-054337-592059b](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261019-054337-592059b)，OpenWrt 25.12.6、E5 Linux 6.18.54、Rust daed 3.2.1、节点小宝 4.3.5-734、DAED 信息屏插件 1.3.0。固件源码为 `codex/e5-daed-qr-login-20261019@592059be5702e61a6454c3ee11a020dc9664b3f0`；Rust daed 锁定提交 `90fc9c13ecec9d434c93f7d0f4a20bd742008dca`。
 
-本次 Release 提供完整固件 ZIP、Android/Linux 切换 ZIP 和独立 Windows 安装器 ZIP；三份资产均通过 GitHub SHA-256 校验，固件归档内部完整性检查也通过。完整构建包含 Rust ARM64 引擎、E5 内核编译及生成 rootfs 的附加软件验收。此次为构建与发布验证，未进行新的设备刷写或实机升级。发布资产摘要和验证范围见[本次发布记录](docs/RELEASE-20261018-204830.zh-CN.md)。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
+Release 提供完整固件 ZIP、Android/Linux 切换 ZIP 和独立 Windows 安装器 ZIP；每项 SHA-256 见发布说明。固件归档检查通过，并已在 E5 上完成现有内置 `e5root` 保数据升级：GPT 未改、daed 数据库和节点小宝身份保留，DAED/管理页/节点小宝入口、5G 状态与 Wi-Fi AP 启动检查通过。更新器同时修复了旧设置恢复覆盖新 DAED 信息屏插件的问题，升级后的插件版本和七个文件均与固件镜像匹配。
+
+未验证 Wi-Fi 客户端实际连接，以及代理流量的客户端端到端路径；这两项不作为本次发布的实测结论。详细范围、资产摘要和限制见[本次发布记录](docs/RELEASE-20261019-054337.zh-CN.md)。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
 
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
