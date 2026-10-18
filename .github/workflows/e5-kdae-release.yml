@@ -119,7 +119,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Quan-0505/rust-daed
-          ref: 7b1d18772789be988c933dc5e18fdb5411a00857
+          ref: 90fc9c13ecec9d434c93f7d0f4a20bd742008dca
           path: e5-linux/rust-daed
           persist-credentials: false
       - name: Verify pinned Rust source
