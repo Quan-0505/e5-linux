@@ -22,6 +22,7 @@ def stage(root, persistent=True):
     top = Path(__file__).resolve().parents[2]
     runpy.run_path(str(top / 'devices/wifi-common.py'))['stage'](root)
     runpy.run_path(str(top / 'devices/modem-recovery.py'))['stage'](root)
+    runpy.run_path(str(top / 'devices/battery-guard.py'))['stage'](root)
     from types import SimpleNamespace
     a = SimpleNamespace(persistent=persistent)
     for name in ('vendor-start.sh', 'android-import-perms.sh', 'android-run', 'e5-modem-coldboot'):
