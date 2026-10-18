@@ -4,7 +4,7 @@
 
 **把 E5 变成随身 5G 路由器 · 内置存储安装 · Rust daed · 节点小宝 · GitHub Actions 构建**
 
-[![Build](https://img.shields.io/github/actions/workflow/status/Quan-0505/e5-linux/e5-kdae-release.yml?branch=codex%2Fe5-internal-kdae&label=Build&style=flat-square)](https://github.com/Quan-0505/e5-linux/actions/workflows/e5-kdae-release.yml)
+[![Build](https://img.shields.io/github/actions/workflow/status/Quan-0505/e5-linux/e5-kdae-release.yml?branch=main&label=Build&style=flat-square)](https://github.com/Quan-0505/e5-linux/actions/workflows/e5-kdae-release.yml)
 [![Release](https://img.shields.io/github/v/release/Quan-0505/e5-linux?style=flat-square&label=Release)](https://github.com/Quan-0505/e5-linux/releases/latest)
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-25.12.5-00b5e2?style=flat-square)](https://openwrt.org/)
 [![Kernel](https://img.shields.io/badge/Linux-6.18_LTS-orange?style=flat-square)](https://github.com/sprd-linux-devs/linux/tree/e5-6.18)
@@ -21,7 +21,7 @@
 
 在 E5 原生 Linux 适配的基础上，整合 **OpenWrt、daed 管理控制台和节点小宝**，保留蜂窝上网、Wi-Fi 热点、USB 网络、信息屏以及短信等设备功能。
 
-本仓库维护内置 eMMC 的独立 e5root 安装与更新。本次公开 Rust 固件从 codex/e5-rust-daed-20261018 构建；原 codex/e5-internal-kdae 分支保留为 Go 版本维护线。
+本仓库主分支维护内置 eMMC 的独立 e5root 安装与更新，并集成 Rust daed；原 codex/e5-internal-kdae 分支保留为 Go 版本维护线。
 
 <a id="features"></a>
 ## ✨ 功能介绍
@@ -35,10 +35,10 @@
 | **节点小宝** | 预装官方 ARM64 4.3.5-734 客户端，提供 LuCI 服务入口，使用者自行登录绑定 |
 | **蜂窝与热点** | ModemManager Unisoc 适配，提供 SIM/APN、蜂窝数据、Wi-Fi 热点和 USB 网络管理 |
 | **屏幕与短信** | 信息屏提供独立代理开关面板，可启动、停止和重载；订阅更新仍由 daed 登录保护 |
-| **升级保留设置** | 保留本机代理数据库及关联文件、CA 和节点小宝绑定状态；首次启动以非破坏性副本迁移保留 Go 账号和配置 |
+| **升级保留设置** | 保留本机 Rust daed 数据库及关联文件、CA 和节点小宝绑定状态；首次启动以非破坏性副本迁移保留 Go 账号和配置 |
 | **公开构建** | GitHub Actions 构建，Release 提供固件安装包及切换模块 |
 
-KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按自己的网络配置。软件预装不代表已配置订阅或已获得第三方服务权限；跨站点 UDP 单播也不等同于广播或 mDNS 自动发现。
+daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按自己的网络配置。软件预装不代表已配置订阅或已获得第三方服务权限；跨站点 UDP 单播也不等同于广播或 mDNS 自动发现。
 
 <a id="download"></a>
 ## 📦 固件下载
@@ -83,10 +83,10 @@ KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 
 - 电脑通过 SSH 主动上传，检查机型、现有布局、容量和载荷哈希。
 - 重启进入 initramfs，将校验后的载荷复制到内存，卸载系统分区后更新内核与系统。
-- 保持原分区容量，恢复设备自己的配置及运行文件；本定制分支额外保留 KDAE 与节点小宝数据。
+- 保持原分区容量，恢复设备自己的配置及运行文件；本定制分支额外保留 daed 与节点小宝数据。
 - 已有独立分区更新不重新缩容、不修改 GPT；自行安装的其他软件包和未列入保留清单的文件需要另外备份。
 
-单根内置系统更新没有 TF 双系统分区的自动回退能力，写入期间应保持供电。详见 [SSH 与内置更新说明](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/UPDATE-SSH-PART-20261013.zh-CN.md) 和 [插件保留说明](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/KDAE-NODEBABY.zh-CN.md)。
+单根内置系统更新没有 TF 双系统分区的自动回退能力，写入期间应保持供电。详见[内置升级与恢复说明](docs/INTERNAL-UPGRADE-RESTORE.zh-CN.md)和[代理及节点小宝数据保留说明](docs/KDAE-NODEBABY.zh-CN.md)。
 
 ### 登录与系统切换
 
@@ -104,10 +104,10 @@ Linux 中可通过屏幕的系统切换入口，或 `e5-next-boot android && reb
 <a id="build"></a>
 ## 🔧 自行编译
 
-本次 Rust 固件由 **Actions → Build and publish OpenWrt** 从 codex/e5-rust-daed-20261018 构建。要复现本次发布，请检出对应源码提交；其他分支的引擎版本可能不同。Fork 后请核对工作流中的依赖与权限。
+Rust 固件由 **Actions → Build and publish OpenWrt** 从 `main` 构建。要复现某次发布，请检出其发布说明记录的源码提交。Fork 后请核对工作流中的依赖与权限。
 
 ```sh
-git clone --recurse-submodules --branch codex/e5-rust-daed-20261018 https://github.com/Quan-0505/e5-linux.git
+git clone --recurse-submodules --branch main https://github.com/Quan-0505/e5-linux.git
 cd e5-linux
 ```
 
