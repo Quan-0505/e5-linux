@@ -429,6 +429,13 @@ if [ -n "$screen" ] && [ -f /in/infoscreen-plugins/plugins/phone/manifest.json ]
     cp -a /in/infoscreen-plugins/plugins/phone $R/etc/e5-infoscreen/plugins/
     chown -R 0:0 $R/etc/e5-infoscreen/plugins/phone
 fi
+# Expose the existing local Daed web console as a standalone info-screen app.
+# Keep it as static UI only: no credentials, subscriptions, or proxy state are copied.
+if [ -n "$screen" ] && [ -f /in/feature-source/openwrt/infoscreen-plugins/daed/manifest.json ]; then
+    mkdir -p $R/etc/e5-infoscreen/plugins
+    cp -a /in/feature-source/openwrt/infoscreen-plugins/daed $R/etc/e5-infoscreen/plugins/
+    chown -R 0:0 $R/etc/e5-infoscreen/plugins/daed
+fi
 for f in vendor-start.sh android-import-perms.sh e5-modem-coldboot android-run node-perms.sh regdb-load.sh gadget-guard.sh usb-watch.sh e5-next-boot e5-os e5-sd-registry e5-at e5-data-priority e5-audio-dsp e5-call-audio.py; do
     cp /in/opt-e5/$f $R/opt/e5/$f; chmod 755 $R/opt/e5/$f
 done

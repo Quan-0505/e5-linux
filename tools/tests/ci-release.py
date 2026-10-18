@@ -120,10 +120,13 @@ class RootAudit(unittest.TestCase):
                 'usr/libexec/e5-infoscreen/update': b'#!/bin/sh\n',
                 'usr/bin/openssl': b'OpenSSL fixture', 'usr/share/e5-infoscreen/VERSION': b'1.6.3',
                 'etc/e5-infoscreen/plugins/phone/manifest.json': json.dumps({'version': '1.4'}).encode(),
+                'etc/e5-infoscreen/plugins/daed/manifest.json': json.dumps({'version': '1.0.0'}).encode(),
                 'etc/e5/build-time': b'123', 'lib/modules/6.18-e5/modem/sipc_wwan.ko': b'module'}
 
     def test_same_release_and_epoch_pass(self):
-        self.assertEqual(self.audit(self.files())['phone_version'], '1.4')
+        info = self.audit(self.files())
+        self.assertEqual(info['phone_version'], '1.4')
+        self.assertEqual(info['daed_screen_app_version'], '1.0.0')
 
     def test_nonexecutable_screen_start_rejected(self):
         with self.assertRaisesRegex(ValueError, 'not executable.*e5-infoscreen'):

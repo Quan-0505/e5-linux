@@ -303,6 +303,7 @@ jobs:
           python3 rootfs/tests/voice-state.py
           python3 rootfs/tests/modem-coldboot.py
           python3 tools/tests/ci-release.py
+          python3 tools/tests/infoscreen-daed-app.py
           python3 tools/tests/openwrt-package-state.py
           python3 tools/tests/rootfs-apk-retry.py
           python3 openwrt/tests/part-root-boot.py

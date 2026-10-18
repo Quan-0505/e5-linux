@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="color-scheme" content="light dark">
+  <title>代理管理</title>
+  <link rel="stylesheet" href="daed.css">
+  <script src="/sdk/e5.js"></script>
+  <script defer src="daed.js"></script>
+</head>
+<body>
+  <header class="toolbar">
+    <div class="heading">
+      <strong>代理管理</strong>
+      <span>daed</span>
+    </div>
+    <div class="actions">
+      <button id="refresh" type="button" aria-label="刷新管理界面">刷新</button>
+      <button id="exit" type="button">返回</button>
+    </div>
+  </header>
+  <main>
+    <iframe id="console" title="daed 管理界面" referrerpolicy="no-referrer"></iframe>
+    <p class="hint">此页面连接设备本机的 daed。若无法显示，请检查 daed 服务是否正在运行。</p>
+  </main>
+</body>
+</html>

@@ -60,14 +60,17 @@ flock -n 9 || { echo 'another system upgrade is running' >&2; exit 1; }
 # passwords, SSH keys, /etc/e5, the traffic records, the info screen's apps),
 # the new image's own version files kept.
 keep_config() {
-    local from=$1 N=$2 f p phone
+    local from=$1 N=$2 f p appstash app
     echo "== keeping the configuration of $from"
-    # Keep installed apps and their data, but retain this image's bundled phone
-    # code. Otherwise an update silently restores the previous voice fixes/UI.
-    phone=$(mktemp -d /tmp/e5-img.phone.XXXXXX)
-    if [ -f "$N/etc/e5-infoscreen/plugins/phone/manifest.json" ]; then
-        cp -a "$N/etc/e5-infoscreen/plugins/phone/." "$phone/"
-    fi
+    # Keep installed apps and their data, but restore the bundled phone and
+    # daed launcher after the existing app directory is copied over the image.
+    appstash=$(mktemp -d /tmp/e5-img.plugins.XXXXXX)
+    for app in phone daed; do
+        if [ -f "$N/etc/e5-infoscreen/plugins/$app/manifest.json" ]; then
+            mkdir -p "$appstash/$app"
+            cp -a "$N/etc/e5-infoscreen/plugins/$app/." "$appstash/$app/"
+        fi
+    done
     for f in image-version image-form build-time network-addons.json; do
         cp "$N/etc/e5/$f" "/tmp/e5-img.$f" 2>/dev/null || rm -f "/tmp/e5-img.$f"
     done
@@ -85,11 +88,13 @@ keep_config() {
         rm -f "$N/etc/e5/$f"
         [ -f "/tmp/e5-img.$f" ] && mv "/tmp/e5-img.$f" "$N/etc/e5/$f"
     done
-    if [ -f "$phone/manifest.json" ]; then
-        mkdir -p "$N/etc/e5-infoscreen/plugins/phone"
-        cp -a "$phone/." "$N/etc/e5-infoscreen/plugins/phone/"
-    fi
-    rm -rf "$phone"
+    for app in phone daed; do
+        if [ -f "$appstash/$app/manifest.json" ]; then
+            mkdir -p "$N/etc/e5-infoscreen/plugins/$app"
+            cp -a "$appstash/$app/." "$N/etc/e5-infoscreen/plugins/$app/"
+        fi
+    done
+    rm -rf "$appstash"
     sh "$N/usr/libexec/e5-network-addons-preserve-run" "$from" "$N"
 }
 

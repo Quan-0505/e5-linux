@@ -1,0 +1,15 @@
+{
+  "id": "daed",
+  "api_version": 2,
+  "version": "1.0.0",
+  "name": {
+    "zh": "代理管理",
+    "en": "Proxy management"
+  },
+  "description": {
+    "zh": "打开本机 daed 管理界面",
+    "en": "Open the local daed management interface"
+  },
+  "entry": "index.html",
+  "order": 6
+}

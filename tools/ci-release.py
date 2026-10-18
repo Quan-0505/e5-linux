@@ -107,6 +107,14 @@ def audit_root(info):
                 # build-rootfs.sh installs this safety guard at /sbin/sysupgrade.
                 tail = 'sbin/sysupgrade'
             expected[prefix + tail] = file_digest(root / item)
+    # The Daed info-screen launcher is maintained in this repository (rather
+    # than the upstream plugin-store submodule) and copied into the rootfs.
+    daed_plugin = TOP / 'openwrt/infoscreen-plugins/daed'
+    if daed_plugin.is_dir():
+        for item in sorted(daed_plugin.rglob('*')):
+            if item.is_symlink() or not item.is_file():
+                continue
+            expected['etc/e5-infoscreen/plugins/daed/' + item.relative_to(daed_plugin).as_posix()] = file_digest(item)
     # These shared startup files are copied from the Debian overlay, rather
     # than device/openwrt_device_common/overlay. Verify the selective cold-start adapter as well.
     for name in ('vendor-start.sh', 'e5-modem-coldboot'):
@@ -122,6 +130,7 @@ def audit_root(info):
     forbidden = re.compile(r'^(?:lib/firmware/(?:wcnmodem|gnssmodem|l_agdsp|wifi_board|sprd/)|'
                            r'opt/e5/android/.+|etc/e5/install\.conf|etc/dropbear/dropbear_.+_host_key|etc/ssh/ssh_host_)')
     wanted = {'usr/share/e5-infoscreen/VERSION', 'etc/e5-infoscreen/plugins/phone/manifest.json',
+              'etc/e5-infoscreen/plugins/daed/manifest.json',
               'etc/e5/build-time', 'etc/machine-id', 'usr/bin/openssl', 'etc/e5/feature-port.json',
               'sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab'}
     with tarfile.open(rootfs, 'r|gz') as archive:
@@ -172,7 +181,8 @@ def audit_root(info):
     if versions.get('etc/machine-id', b'').strip():
         raise ValueError('generic image has a machine ID')
     info.update({'kernel_release': kernel, 'infoscreen_version': versions['usr/share/e5-infoscreen/VERSION'].decode().strip(),
-                 'phone_version': json.loads(versions['etc/e5-infoscreen/plugins/phone/manifest.json'])['version']})
+                 'phone_version': json.loads(versions['etc/e5-infoscreen/plugins/phone/manifest.json'])['version'],
+                 'daed_screen_app_version': json.loads(versions['etc/e5-infoscreen/plugins/daed/manifest.json'])['version']})
 
 
 def internal_update_sources():
