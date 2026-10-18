@@ -1,14 +1,14 @@
 {
   "id": "daed",
   "api_version": 2,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": {
-    "zh": "代理管理",
-    "en": "Proxy management"
+    "zh": "代理开关",
+    "en": "Proxy controls"
   },
   "description": {
-    "zh": "打开本机 daed 管理界面",
-    "en": "Open the local daed management interface"
+    "zh": "E5 小屏代理开关与重载控制",
+    "en": "Proxy controls for the E5 info screen"
   },
   "entry": "index.html",
   "order": 6

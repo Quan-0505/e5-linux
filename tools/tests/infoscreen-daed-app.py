@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep the static daed info-screen launcher packaged and state-free."""
+"""Audit the E5 screen's small, allowlisted daed control panel."""
 import json
 from pathlib import Path
 import shutil
@@ -10,16 +10,28 @@ TOP = Path(__file__).resolve().parents[2]
 APP = TOP / 'openwrt/infoscreen-plugins/daed'
 manifest = json.loads((APP / 'manifest.json').read_text(encoding='utf-8'))
 assert manifest['id'] == 'daed' and manifest['api_version'] == 2
-assert manifest['entry'] == 'index.html' and manifest['version']
-assert {'index.html', 'daed.css', 'daed.js', 'manifest.json'} == {p.name for p in APP.iterdir()}
-assert not (APP / 'backend.uc').exists(), 'launcher must not add a root backend'
+assert manifest['entry'] == 'index.html' and manifest['version'] == '1.1.0'
+assert {'index.html', 'daed.css', 'daed.js', 'manifest.json', 'backend.uc'} == {p.name for p in APP.iterdir()}
 
 page = (APP / 'index.html').read_text(encoding='utf-8')
 script = (APP / 'daed.js').read_text(encoding='utf-8')
-assert '/sdk/e5.js' in page and 'iframe' in page
-assert 'http://${host}:2023/' in script, 'management UI must resolve to this device only'
-assert "window.e5?.exit()" in script and 'onBack(() => false)' in script
-assert 'fetch(' not in script and 'backend.uc' not in script
+backend = (APP / 'backend.uc').read_text(encoding='utf-8')
+for label in ('启动', '停止', '重载', '更新订阅'):
+    assert label in page
+assert '/sdk/e5.js' in page and 'iframe' not in page
+assert '2023' not in script and 'window.e5?.exit()' in script
+assert "window.e5?.onBack(() => false)" in script
+assert "window.e5?.onKey" in script and "window.e5?.press" in script
+assert "window.e5.api('/status')" in script and "window.e5.api('/action'" in script
+assert "订阅更新需要 daed 账号验证" in script
+assert "订阅更新需要 daed 账号验证" in backend
+assert "ctx.sh_json('/usr/bin/daed wait-ready --timeout 1s --json 2>/dev/null')" in backend
+assert "'/etc/init.d/daed start'" in backend
+assert "'/etc/init.d/daed stop'" in backend
+assert "'/usr/bin/daed reload --timeout 20s --json >/dev/null 2>&1'" in backend
+assert "req.body?.action" in backend and "index([ 'start', 'stop', 'reload' ], action)" in backend
+assert "req.body" in backend and "ctx.run(req" not in backend
+assert "password" not in backend.lower() and "token" not in backend.lower()
 
 builder = (TOP / 'openwrt/build-rootfs.sh').read_text(encoding='utf-8')
 auditor = (TOP / 'tools/ci-release.py').read_text(encoding='utf-8')
@@ -34,10 +46,11 @@ for path in APP.iterdir():
     assert path.is_file() and not path.is_symlink()
     data = path.read_bytes()
     assert b'\r' not in data and data.endswith(b'\n')
-    if path.suffix in {'.html', '.js', '.css', '.json'}:
+    if path.suffix in {'.html', '.js', '.css', '.json', '.uc'}:
         data.decode('utf-8')
 
-# Exercise the actual keep_config() function against temporary old/new images.
+# Exercise keep_config() against temporary images. It must ship the new built-in
+# control panel while retaining unrelated installed apps and device settings.
 installer = (TOP / 'openwrt/device-install-image.sh').read_text(encoding='utf-8')
 start = installer.index('keep_config() {')
 end = installer.index('\n}\n\n# The device\'s own files', start) + 2
@@ -66,4 +79,4 @@ if shell:
         assert (new / 'etc/e5-infoscreen/plugins/other/index.html').read_text() == 'user-installed app'
         assert (new / 'etc/config/network').read_text() == 'user config'
 
-print('daed info-screen app: local UI route, SDK return handling, rootfs staging, CI audit, and state-free payload: PASS')
+print('daed info-screen controls: allowlisted local actions, SDK navigation, auth boundary, package staging and preserve-config contract: PASS')
