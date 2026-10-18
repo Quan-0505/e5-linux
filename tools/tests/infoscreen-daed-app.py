@@ -32,6 +32,9 @@ assert 'https://' in backend and 'qrencode -t SVG' in backend
 assert "'POST /pair-login'" in backend and "'POST /pairing'" in backend
 assert "'auth/token'" in backend and "Authorization: Bearer " in backend
 assert "ctx.ubus('network.interface.lan', 'status', {})" in backend
+assert 'MAX_PAIRING_SVG_BYTES = 65536' in backend
+assert 'length(svg) < MAX_PAIRING_SVG_BYTES' in backend
+assert '.trim()' not in backend and 'trim(pipe.read' in backend
 assert "expiresAt: time() + 30 * 86400" in backend and "fs.chmod(TOKEN_FILE, 0o600)" in backend
 assert "'DAED 已经运行。'" in backend and "'DAED 已经停止。'" in backend
 assert 'REQUEST_SCHEME' in cgi and 'HTTP_ORIGIN' in cgi and 'REMOTE_ADDR' in cgi

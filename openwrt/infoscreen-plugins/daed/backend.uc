@@ -4,6 +4,9 @@ import * as fs from 'fs';
 
 const TOKEN_FILE = '/etc/e5-infoscreen/daed-token.json';
 const PAIR_STATE = 'daed-pairing';
+// A 48-character pairing URL produces an SVG around 42 KiB with qrencode.
+// Leave headroom for encoder/version differences while keeping the response bounded.
+const MAX_PAIRING_SVG_BYTES = 65536;
 
 return function(ctx) {
 	function failure(message, status) {
@@ -41,11 +44,11 @@ return function(ctx) {
 	function request_daed(method, path, token, body) {
 		let pipe = fs.popen('mktemp -d /tmp/e5-daed-auth.XXXXXX', 'r');
 		if (!pipe) return { error: '无法创建临时请求目录。' };
-		let dir = pipe.read('all').trim();
+		let dir = trim(pipe.read('all'));
 		if (pipe.close() != 0 || !match(dir, /^\/tmp\/e5-daed-auth\.[A-Za-z0-9]+$/))
 			return { error: '无法创建临时请求目录。' };
 		if (fs.chmod(dir, 0o700) == null) { fs.rmdir(dir); return { error: '无法保护临时认证数据。' }; }
-		let page_id = fs.readfile('/proc/sys/kernel/random/uuid')?.trim();
+		let page_id = trim(fs.readfile('/proc/sys/kernel/random/uuid') ?? '');
 		if (!page_id || !match(page_id, /^[0-9a-f-]{36}$/i)) { clean(dir); return { error: '无法建立 daed 页面会话。' }; }
 		let headers = [ 'Content-Type: application/json', 'x-daed-page-id: ' + page_id ];
 		if (token) headers.push('Authorization: Bearer ' + token);
@@ -62,7 +65,7 @@ return function(ctx) {
 		command += ' --output ' + dir + '/response --write-out "%{http_code}" http://127.0.0.1:2023/api/' + path + ' 2>/dev/null';
 		let request = fs.popen(command, 'r');
 		if (!request) { clean(dir); return { error: '无法连接 daed。' }; }
-		let status_text = request.read('all').trim(), exit_code = request.close(), response_text = fs.readfile(dir + '/response');
+		let status_text = trim(request.read('all')), exit_code = request.close(), response_text = fs.readfile(dir + '/response');
 		clean(dir);
 		if (exit_code != 0 || !match(status_text, /^[0-9]{3}$/) || response_text == null)
 			return { error: 'daed 暂时无法响应，请稍后重试。' };
@@ -94,7 +97,7 @@ return function(ctx) {
 	function random_code() {
 		let pipe = fs.popen('/usr/bin/openssl rand -hex 24 2>/dev/null', 'r');
 		if (!pipe) return null;
-		let code = pipe.read('all').trim();
+		let code = trim(pipe.read('all'));
 		if (pipe.close() != 0 || !match(code, /^[a-f0-9]{48}$/)) return null;
 		return code;
 	}
@@ -107,12 +110,12 @@ return function(ctx) {
 		let url = 'https://' + ip + '/e5-daed-login/#' + code;
 		let dirpipe = fs.popen('mktemp -d /tmp/e5-daed-qr.XXXXXX', 'r');
 		if (!dirpipe) return failure('无法生成二维码。', 500);
-		let dir = dirpipe.read('all').trim(); dirpipe.close();
+		let dir = trim(dirpipe.read('all')); dirpipe.close();
 		if (!match(dir, /^\/tmp\/e5-daed-qr\.[A-Za-z0-9]+$/) || fs.chmod(dir, 0o700) == null) return failure('无法生成二维码。', 500);
 		fs.writefile(dir + '/url', url); fs.chmod(dir + '/url', 0o600);
 		let pipe = fs.popen('/usr/bin/qrencode -t SVG -m 2 -l M -r ' + dir + '/url -o - 2>/dev/null', 'r');
 		let svg = pipe ? pipe.read('all') : null;
-		let ok = pipe && pipe.close() == 0 && type(svg) == 'string' && length(svg) < 32768;
+		let ok = pipe && pipe.close() == 0 && type(svg) == 'string' && length(svg) < MAX_PAIRING_SVG_BYTES;
 		if (fs.stat(dir + '/url')) fs.unlink(dir + '/url'); fs.rmdir(dir);
 		if (!ok) return failure('二维码生成失败；请连接 E5 Wi-Fi 并检查设备 HTTPS 服务。', 503);
 		ctx.state_put(PAIR_STATE, { code, expires: time() + 300 });
