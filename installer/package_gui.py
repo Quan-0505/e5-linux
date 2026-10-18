@@ -17,13 +17,24 @@ def digest(path):
     return h.hexdigest()
 
 
+def source_digest_bytes(data):
+    """Hash source text identically on Windows (CRLF) and Unix (LF)."""
+    if b'\0' not in data:
+        data = data.replace(b'\r\n', b'\n')
+    return hashlib.sha256(data).hexdigest()
+
+
+def source_digest(path):
+    return source_digest_bytes(Path(path).read_bytes())
+
+
 def sources():
     paths = [HERE/'backend_entry.py', HERE/'package_gui.py', HERE/'platform-tools.json', HERE/'GUIDE.md']
     paths += list((HERE/'backend').glob('*.py'))
     paths += [p for p in (HERE/'ui/src').rglob('*') if p.is_file()]
     paths += [HERE/'ui'/n for n in ('package.json','package-lock.json','vite.config.ts','tailwind.config.js','postcss.config.js','tsconfig.json','index.html','rust-toolchain.toml')]
     paths += [HERE/'ui/src-tauri'/n for n in ('Cargo.toml','Cargo.lock','build.rs','tauri.conf.json','src/main.rs','capabilities/default.json','icons/icon.ico')]
-    return {p.relative_to(HERE).as_posix(): digest(p) for p in sorted(paths)}
+    return {p.relative_to(HERE).as_posix(): source_digest(p) for p in sorted(paths)}
 
 
 def attach(package, artifact=None, required=True):
