@@ -50,11 +50,9 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | `e5-openwrt-flash-*.zip` | 完整安装包，包含电脑安装器、系统镜像、工具及详细指南 |
 | `e5-linux-switch-*.zip` | 已安装系统的 Android → Linux 切换模块，不是完整固件 |
 
-**当前发布（2026-10-18）**：[build-20261018-080713-a616610](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261018-080713-a616610)，OpenWrt 25.12.5、E5 Linux 6.18.54、Rust daed 3.2.1、节点小宝 4.3.5-734。源码来自 [codex/e5-rust-daed-20261018](https://github.com/Quan-0505/e5-linux/tree/codex/e5-rust-daed-20261018)，提交 a6166106d22406255de9b449095f7d17e9be14d8；Rust daed 锁定提交 7b1d18772789be988c933dc5e18fdb5411a00857。
+**当前发布（2026-10-18）**：[build-20261018-204830-7bae97b](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261018-204830-7bae97b)，OpenWrt 25.12.5、E5 Linux 6.18.54、Rust daed 3.2.1、节点小宝 4.3.5-734。源码来自 `main`，提交 `7bae97bf593d9e8e193ecb11a5263c66359cfaaf`；Rust daed 锁定提交 `90fc9c13ecec9d434c93f7d0f4a20bd742008dca`。
 
-本版修复内置更新时误将旧 Go 服务启动脚本覆盖 Rust 服务脚本的问题。Actions 全量构建、包哈希、目标 E5 的既有 e5root 保数据升级及升级后服务验收均通过；GPT 与分区布局保持不变。实机确认 Rust daed 数据库迁移和控制台可用，原账号、DNS、路由与有效群组策略保留，订阅刷新成功，节点小宝服务可达。个别外部 HTTPS/UDP DNS 探测超时，详见 docs/RELEASE-20261018.zh-CN.md，这些探测不作为所有网络环境的保证。
-
-本次 Release 仅提供完整固件 ZIP 与 Android/Linux 切换 ZIP；不附带重复 tar.gz、build.json 或 SHA256SUMS。Windows 图形安装器包的源文件指纹与本次候选源码不匹配，因此未发布。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
+本次 Release 提供完整固件 ZIP、Android/Linux 切换 ZIP 和独立 Windows 安装器 ZIP；三份资产均通过 GitHub SHA-256 校验，固件归档内部完整性检查也通过。完整构建包含 Rust ARM64 引擎、E5 内核编译及生成 rootfs 的附加软件验收。此次为构建与发布验证，未进行新的设备刷写或实机升级。发布资产摘要和验证范围见[本次发布记录](docs/RELEASE-20261018-204830.zh-CN.md)。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
 
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
@@ -118,7 +116,7 @@ CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂�
 ## 📚 更多资料
 
 - [内置分区原理与安装流程](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/INTERNAL-PARTITION-SYSTEM-20261012.zh-CN.md)
-- [2026-10-18 固件发布与验证范围](docs/RELEASE-20261018.zh-CN.md)
+- [2026-10-18 最新固件发布与验证范围](docs/RELEASE-20261018-204830.zh-CN.md)
 - [2026-10-15 上游同步记录](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/UPSTREAM-20261015.zh-CN.md)
 - [KDAE 与节点小宝集成](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/KDAE-NODEBABY.zh-CN.md)
 - [上游技术说明（中文）](README.upstream.zh-CN.md) / [English](README.upstream.en.md)
