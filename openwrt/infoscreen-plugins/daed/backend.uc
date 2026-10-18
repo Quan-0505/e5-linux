@@ -24,7 +24,8 @@ return function(ctx) {
 		if (fs.stat(dir)) fs.rmdir(dir);
 	}
 	function valid_token(token) {
-		return type(token) == 'string' && match(token, /^[A-Za-z0-9._~+\/=\-]{16,4096}$/);
+		return type(token) == 'string' && length(token) >= 16 && length(token) <= 4096 &&
+			match(token, /^[A-Za-z0-9._~+\/=\-]+$/);
 	}
 	function load_token() {
 		let value = fs.readfile(TOKEN_FILE);
@@ -51,7 +52,7 @@ return function(ctx) {
 		let page_id = trim(fs.readfile('/proc/sys/kernel/random/uuid') ?? '');
 		if (!page_id || !match(page_id, /^[0-9a-f-]{36}$/i)) { clean(dir); return { error: '无法建立 daed 页面会话。' }; }
 		let headers = [ 'Content-Type: application/json', 'x-daed-page-id: ' + page_id ];
-		if (token) headers.push('Authorization: Bearer ' + token);
+		if (token) push(headers, 'Authorization: Bearer ' + token);
 		if (fs.writefile(dir + '/headers', join('\n', headers) + '\n') == null || fs.chmod(dir + '/headers', 0o600) == null) {
 			clean(dir); return { error: '无法保护临时认证数据。' };
 		}
@@ -84,7 +85,7 @@ return function(ctx) {
 			if (type(item.id) != 'int' && type(item.id) != 'string') continue;
 			let id = '' + item.id;
 			if (!match(id, /^[0-9]{1,12}$/)) continue;
-			items.push({ id, name: type(item.tag) == 'string' && item.tag != '' ? item.tag : '订阅 ' + id,
+			push(items, { id, name: type(item.tag) == 'string' && item.tag != '' ? item.tag : '订阅 ' + id,
 				nodeCount: int(item.nodeCount ?? 0), status: type(item.status) == 'string' ? item.status : '' });
 		}
 		return { subscriptions: items };
