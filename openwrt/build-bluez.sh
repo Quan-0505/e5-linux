@@ -34,7 +34,9 @@ for p in "$TOP"/rootfs/deb-patches/bluez-0*.patch; do
     n=$((n + 1))
 done
 
-docker run --rm --platform linux/arm64 -v e5-openwrt-src:/build \
+# This volume shares host tools with ModemManager and hostapd.
+case "$(uname -m)" in x86_64) PLAT=linux/amd64;; aarch64|arm64) PLAT=linux/arm64;; *) echo 'Unsupported build host architecture' >&2; exit 1;; esac
+docker run --rm --platform "$PLAT" -v e5-openwrt-src:/build \
     -v "$WORK":/work:ro -v "$OUT":/out -e E5REV="$E5REV" \
     -e JOBS="${E5_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc)}" \
     debian:trixie bash -euc '

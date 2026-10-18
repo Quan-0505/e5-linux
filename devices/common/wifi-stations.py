@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Expose SC2355 AP peers without pretending STA-wide data is per-client data."""
 from pathlib import Path
+import runpy
 
 HELPERS = '''/* AP peers are authoritative; GET_STATION firmware data is STA-wide. */
 static bool sprd_ap_peer(struct sprd_vif *vif, const u8 *mac)
@@ -58,6 +59,7 @@ static int sprd_cfg80211_get_channel(struct wiphy *wiphy, struct wireless_dev *w
 
 
 def apply(kernel):
+    runpy.run_path(str(Path(__file__).with_name('wifi-events.py')))['apply'](kernel)
     path = Path(kernel) / 'drivers/unisoc_platform/sprd_wlan_combo/common/cfg80211.c'
     source = path.read_text()
     marker = '/* AP peers are authoritative; GET_STATION firmware data is STA-wide. */'

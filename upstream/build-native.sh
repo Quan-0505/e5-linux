@@ -38,6 +38,7 @@ python3 "$TOP/devices/common/wifi-stations.py" .
 KV=$(make -s kernelversion)
 O="${E5_OUTDIR:-$TOP/work/build/$KV}"
 mkdir -p "$O"
+O=$(cd "$O" && pwd)
 echo "== linux-lts-e5 $KV, $(git log --oneline -1)"
 [ -z "$(git status --porcelain --untracked-files=no)" ] || echo "   (the tree has uncommitted changes: the release gets -dirty)"
 
@@ -50,7 +51,8 @@ if [ -n "${E5_RELEASE:-}" ]; then
     echo "   (release: no e5.openwrt=, into out-release/)"
 fi
 make O="$O" ARCH=arm64 CROSS_COMPILE="$X" allnoconfig >/dev/null
-./scripts/kconfig/merge_config.sh -m -O "$O" "$O/.config" "$CFG" >/dev/null
+kernel_merge_config="$PWD/scripts/kconfig/merge_config.sh"
+(cd "$O" && "$kernel_merge_config" -m -O "$O" "$O/.config" "$CFG" >/dev/null)
 # PR #228: NFSv4.1 is a separate prerequisite only on kernels exposing it.
 if grep -q '^config NFS_V4_1$' fs/nfs/Kconfig; then
     scripts/config --file "$O/.config" --enable NFS_V4_1
