@@ -4,30 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <meta name="color-scheme" content="dark">
-  <title>代理开关</title>
+  <title>DAED开关</title>
   <link rel="stylesheet" href="daed.css">
   <script src="/sdk/e5.js"></script>
   <script defer src="daed.js"></script>
 </head>
 <body>
-  <header>
-    <div class="title">代理开关</div>
-    <button class="back" id="exit" type="button">返回</button>
-  </header>
+  <header><div class="title">DAED开关</div><button class="back" id="exit" type="button">返回</button></header>
   <main>
-    <section class="status" aria-live="polite">
-      <span class="dot" id="status-dot"></span>
-      <span id="status-text">正在读取状态…</span>
-      <button class="refresh" id="refresh" type="button" aria-label="刷新状态">刷新</button>
+    <section id="controls-view">
+      <section class="status" aria-live="polite"><span class="dot" id="status-dot"></span><span id="status-text">正在读取状态…</span><button class="refresh" id="refresh" type="button">刷新</button></section>
+      <section class="controls" aria-label="DAED控制">
+        <button class="control start" data-action="start" type="button"><span class="symbol">▶</span><span>启动</span></button>
+        <button class="control stop" data-action="stop" type="button"><span class="symbol">■</span><span>停止</span></button>
+        <button class="control reload" data-action="reload" type="button"><span class="symbol">↻</span><span>重载</span></button>
+        <button class="control subscriptions" data-action="subscriptions" type="button"><span class="symbol">⇩</span><span>更新订阅</span></button>
+      </section>
+      <p id="message" class="message" aria-live="assertive">选择要执行的操作。</p>
+      <p class="hint">停止和重载会影响当前代理连接。</p>
     </section>
-    <section class="controls" aria-label="代理控制">
-      <button class="control start" data-action="start" type="button"><span class="symbol">▶</span><span>启动</span></button>
-      <button class="control stop" data-action="stop" type="button"><span class="symbol">■</span><span>停止</span></button>
-      <button class="control reload" data-action="reload" type="button"><span class="symbol">↻</span><span>重载</span></button>
-      <button class="control subscriptions" data-action="subscriptions" type="button"><span class="symbol">⇩</span><span>更新订阅</span></button>
+    <section id="subscriptions-view" class="sub-view" hidden aria-label="选择订阅">
+      <div class="view-heading"><strong>选择要更新的订阅</strong><button class="small-button" id="logout" type="button">退出登录</button></div>
+      <div id="pairing" class="pairing" hidden>
+        <p>手机连接 E5 Wi-Fi 后扫码登录 daed</p><div id="qr-code" class="qr-code" aria-label="登录二维码"></div>
+        <p id="pair-message" class="message">二维码有效期 5 分钟</p><button class="small-button" id="new-qr" type="button">刷新二维码</button>
+      </div>
+      <div id="subscription-list" class="subscription-list" data-nav-grid></div>
+      <p id="subscription-message" class="message" aria-live="assertive">选择一个订阅开始更新。</p>
+      <button class="small-button" data-close-view type="button">返回</button>
     </section>
-    <p id="message" class="message" aria-live="assertive">选择要执行的操作。</p>
-    <p class="hint">停止和重载会影响当前代理连接。</p>
   </main>
 </body>
 </html>

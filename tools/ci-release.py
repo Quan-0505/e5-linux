@@ -115,6 +115,8 @@ def audit_root(info):
             if item.is_symlink() or not item.is_file():
                 continue
             expected['etc/e5-infoscreen/plugins/daed/' + item.relative_to(daed_plugin).as_posix()] = file_digest(item)
+        expected['www/e5-daed-login/index.html'] = file_digest(daed_plugin / 'phone-login.html')
+        expected['www/cgi-bin/e5-daed-pair'] = file_digest(daed_plugin / 'pair-cgi.py')
     # These shared startup files are copied from the Debian overlay, rather
     # than device/openwrt_device_common/overlay. Verify the selective cold-start adapter as well.
     for name in ('vendor-start.sh', 'e5-modem-coldboot'):
@@ -131,6 +133,7 @@ def audit_root(info):
                            r'opt/e5/android/.+|etc/e5/install\.conf|etc/dropbear/dropbear_.+_host_key|etc/ssh/ssh_host_)')
     wanted = {'usr/share/e5-infoscreen/VERSION', 'etc/e5-infoscreen/plugins/phone/manifest.json',
               'etc/e5-infoscreen/plugins/daed/manifest.json',
+              'www/e5-daed-login/index.html', 'www/cgi-bin/e5-daed-pair',
               'etc/e5/build-time', 'etc/machine-id', 'usr/bin/openssl', 'etc/e5/feature-port.json',
               'sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab'}
     with tarfile.open(rootfs, 'r|gz') as archive:
