@@ -332,7 +332,7 @@ if [ -d /in/wifi-sae ]; then
     apk_retry add --allow-untrusted /in/wifi-sae/*.apk >/dev/null || apk add --allow-untrusted /in/wifi-sae/*.apk >/dev/null || true
 fi
 apk_retry add $(sed -e "s/#.*//" -e "/^[[:space:]]*$/d" /in/packages.list) >/dev/null
-# The E5 screen's authenticated Daed adapter uses ucode's filesystem module
+# The E5 screen authenticated Daed adapter uses the ucode filesystem module
 # for short-lived, permission-restricted curl request files.
 apk_retry add ucode-mod-fs >/dev/null
 # SMS email encoding and DingTalk signatures need the OpenSSL command itself.
@@ -356,16 +356,16 @@ apk del luci-app-attendedsysupgrade attendedsysupgrade-common owut >/dev/null 2>
 if grep -q "^P:luci-app-attendedsysupgrade$" /lib/apk/db/installed; then
     echo "luci-app-attendedsysupgrade is still installed" >&2; exit 1
 fi
-# LuCI in Chinese: the base and each installed application'"'"'s translation
+# LuCI in Chinese: the base and each installed application translation
 # (the language is chosen at first boot, 93-e5-luci)
 apk_retry add luci-i18n-base-zh-cn >/dev/null
 for p in $(sed -En "s/^P:luci-(app|proto)-//p" /lib/apk/db/installed); do
     apk add "luci-i18n-$p-zh-cn" >/dev/null 2>&1 && echo "zh-cn: luci-i18n-$p-zh-cn"
 done
-# the Argon theme (its release'"'"'s packages, unsigned)
+# the Argon theme (release packages, unsigned)
 apk_retry add --allow-untrusted $EXTRA_LIST >/dev/null
 echo "argon: $(sed -n "/^P:luci-theme-argon$/{n;s/^V://p}" /lib/apk/db/installed)"
-# the info screen'"'"'s packages (cage, cog, Mesa, ...), when there is one
+# info screen packages (cage, cog, Mesa, ...), when there is one
 if [ -f /in/infoscreen/packages.txt ]; then
     # (the transplant above: used when the repository has none of those packages)
     : > /tmp/tp
@@ -390,7 +390,7 @@ if [ -f /in/infoscreen/packages.txt ]; then
         grep -qx "P:$p" /lib/apk/db/installed || { echo "the image has no $p: the info screen would not start" >&2; exit 1; }
     done
 fi
-# (apk info <name> describes the repository'"'"'s package; the installed one is here)
+# (apk info <name> describes the repository package; the installed one is here)
 echo "modemmanager $(sed -n "/^P:modemmanager$/{n;s/^V://p}" /lib/apk/db/installed) installed"
 
 R=/build/root; mkdir -p $R
@@ -452,10 +452,10 @@ cp /in/e5-vibrate $R/usr/bin/e5-vibrate && chmod 755 $R/usr/bin/e5-vibrate
 cp /in/e5-ctl-raw $R/opt/e5/e5-ctl-raw && chmod 755 $R/opt/e5/e5-ctl-raw
 cp /in/e5-modemd $R/usr/sbin/e5-modemd && chmod 755 $R/usr/sbin/e5-modemd
 cp /in/e5-sim-probe $R/usr/libexec/e5-sim-probe && chmod 755 $R/usr/libexec/e5-sim-probe
-# the card'"'"'s UCM profile: applied by e5-audio-dsp with amixer (OpenWrt has no alsaucm)
+# the card UCM profile: applied by e5-audio-dsp with amixer (OpenWrt has no alsaucm)
 mkdir -p $R/usr/share/alsa && cp -a /in/alsa/ucm2 $R/usr/share/alsa/
 cp /in/busybox $R/opt/e5/bin/busybox && chmod 755 $R/opt/e5/bin/busybox
-# the applets the shared scripts use that OpenWrt'"'"'s busybox leaves out --
+# the applets the shared scripts use that OpenWrt busybox leaves out --
 # the ones the full busybox really has
 have=$(/in/busybox --list)
 for a in mountpoint timeout setsid flock seq stat chroot od losetup telnetd cut tr basename dirname \
@@ -473,7 +473,7 @@ done
 # modem_control failed on /dev/chsys and the CP never booted.
 sed -i "s|\[ \"makedev\", \"/dev/%DEVNAME%\", \"0600\" \]|[ \"makedev\", \"/dev/%DEVNAME%\", \"0660\" ]|" $R/etc/hotplug.json
 grep -q "\"/dev/%DEVNAME%\", \"0660\" \]" $R/etc/hotplug.json || { echo "hotplug.json: default node mode not found" >&2; exit 1; }
-# LuCI: the modem'"'"'s revision one row per line (again at boot, /etc/init.d/e5-luci)
+# LuCI: the modem revision one row per line (again at boot, /etc/init.d/e5-luci)
 sh $R/usr/libexec/e5-luci-revision $R
 sh $R/usr/libexec/e5-ttyd-bind $R
 for c in e5-os e5-next-boot e5-at; do ln -sf /opt/e5/$c $R/usr/bin/$c; done
@@ -486,8 +486,8 @@ mv $R/sbin/sysupgrade $R/sbin/sysupgrade.openwrt
 mv $R/usr/libexec/e5-sysupgrade $R/sbin/sysupgrade
 # enable the services ("rc.common enable" wants ubus, which is not running here)
 rm -f $R/etc/rc.d/*pulseaudio
-# (the cage package'"'"'s own kiosk service: cog on http://localhost/, which is LuCI,
-# shown at every boot before the info screen'"'"'s session takes the panel)
+# (the cage package kiosk service: cog on http://localhost/, which is LuCI,
+# shown at every boot before the info screen session takes the panel)
 rm -f $R/etc/rc.d/*cage
 for s in e5-hw e5-vendor e5-modemd e5-sipc-wwan e5-telnetd e5-boot-ok e5-sms-notify e5-charge e5-apn-auto e5-network-recovery e5-luci e5-audio e5-voice-audio e5-hfp e5-bt bluetoothd dbus modemmanager e5-usb-watch ttyd $screen; do
     n=$(sed -n "s/^START=//p" $R/etc/init.d/$s)
@@ -500,10 +500,10 @@ arel=$(cat /in/sa/audio/release)
 mkdir -p $R/lib/modules/$arel/audio && cp /in/sa/audio/*.ko $R/lib/modules/$arel/audio/
 cp -a /in/root-modules/. $R/ && chown -R 0:0 $R/lib/modules
 if [ -n "$STANDALONE" ]; then
-    # the device'"'"'s own files, where the directory form binds the Debian root'"'"'s
+    # the device files, where the directory form binds the Debian root
     cp -a /in/sa/firmware/. $R/lib/firmware/
     mkdir -p $R/opt/e5/android && cp -a /in/sa/android/. $R/opt/e5/android/
-    # (bionic refuses a property area that is not root'"'"'s: docs/FINDINGS.md 13)
+    # (bionic refuses a property area that is not root: docs/FINDINGS.md 13)
     chown -R 0:0 $R/opt/e5/android $R/lib/firmware
     rel=$(cat /in/sa/modem/release)
     mkdir -p $R/lib/modules/$rel/modem && cp /in/sa/modem/*.ko $R/lib/modules/$rel/modem/

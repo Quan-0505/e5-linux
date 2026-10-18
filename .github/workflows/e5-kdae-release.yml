@@ -305,6 +305,7 @@ jobs:
           python3 tools/tests/ci-release.py
           python3 tools/tests/infoscreen-daed-app.py
           python3 tools/tests/openwrt-package-state.py
+          python3 tools/tests/rootfs-inline-script.py
           python3 tools/tests/rootfs-apk-retry.py
           python3 openwrt/tests/part-root-boot.py
           python3 boot/tests/part-install.py
