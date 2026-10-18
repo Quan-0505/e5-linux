@@ -8,6 +8,7 @@ import tempfile
 
 TOP = Path(__file__).resolve().parents[2]
 APP = TOP / 'openwrt/infoscreen-plugins/daed'
+shell = shutil.which('sh')
 manifest = json.loads((APP / 'manifest.json').read_text(encoding='utf-8'))
 assert manifest['id'] == 'daed' and manifest['api_version'] == 2
 assert manifest['entry'] == 'index.html' and manifest['version'] == '1.3.0'
@@ -47,6 +48,49 @@ updater = (TOP / 'openwrt/device-install-image.sh').read_text(encoding='utf-8')
 assert 'for app in phone daed' in updater and 'appstash' in updater
 assert 'apk_retry add ucode-mod-fs' in builder
 
+# The offline existing-root updater restores /etc/e5-infoscreen from the old
+# root. Keep the new firmware's bundled DAED plugin over that restore while
+# retaining the pairing token and unrelated user-installed plugins.
+part_update = (TOP / 'boot/part-update.sh').read_text(encoding='utf-8')
+save_daed = 'cp -a "$new/etc/e5-infoscreen/plugins/daed/." "$ram/new-daed/"'
+restore_daed = 'part_update_restore_bundled_daed_plugin "$new" "$ram/new-daed"'
+restore_settings = 'tar -xf firmware.tar -C "$new" && tar -xf settings.tar -C "$new"'
+assert save_daed in part_update and part_update.index(save_daed) < part_update.index(restore_settings)
+assert restore_daed in part_update and part_update.index(restore_daed) > part_update.index(restore_settings)
+start = part_update.index('part_update_restore_bundled_daed_plugin() {')
+end = part_update.index('\n}\n', start) + 2
+restore_function = part_update[start:end]
+if shell:
+    with tempfile.TemporaryDirectory(prefix='e5-part-update-screen-test-') as temp:
+        base = Path(temp)
+        new, saved = base / 'new', base / 'saved-daed'
+        bundled = new / 'etc/e5-infoscreen/plugins/daed'
+        bundled.mkdir(parents=True)
+        saved.mkdir(parents=True)
+        (bundled / 'manifest.json').write_text('{"version":"1.3.0"}', encoding='utf-8')
+        (bundled / 'index.html').write_text('bundled DAED app', encoding='utf-8')
+        for file in bundled.iterdir():
+            (saved / file.name).write_bytes(file.read_bytes())
+        # Model the old settings archive overlaying the newly built root.
+        (bundled / 'manifest.json').write_text('{"version":"1.1.0"}', encoding='utf-8')
+        (bundled / 'index.html').write_text('old installed DAED app', encoding='utf-8')
+        (bundled / 'removed-in-new-version.js').write_text('stale old file', encoding='utf-8')
+        phone = new / 'etc/e5-infoscreen/plugins/phone'
+        phone.mkdir(parents=True)
+        (phone / 'index.html').write_text('user-installed phone app', encoding='utf-8')
+        token = new / 'etc/e5-infoscreen/daed-token.json'
+        token.parent.mkdir(parents=True, exist_ok=True)
+        token.write_text('{"token":"retained-test-token"}', encoding='utf-8')
+        completed = subprocess.run(
+            [shell, '-c', restore_function + '\npart_update_restore_bundled_daed_plugin "$1" "$2"\n', 'test', str(new), str(saved)],
+            capture_output=True, text=True)
+        assert completed.returncode == 0, completed.stderr or completed.stdout
+        assert json.loads((bundled / 'manifest.json').read_text())['version'] == '1.3.0'
+        assert (bundled / 'index.html').read_text() == 'bundled DAED app'
+        assert not (bundled / 'removed-in-new-version.js').exists()
+        assert (phone / 'index.html').read_text() == 'user-installed phone app'
+        assert token.read_text() == '{"token":"retained-test-token"}'
+
 for path in APP.iterdir():
     assert path.is_file() and not path.is_symlink()
     data = path.read_bytes()
@@ -68,7 +112,6 @@ installer = (TOP / 'openwrt/device-install-image.sh').read_text(encoding='utf-8'
 start = installer.index('keep_config() {')
 end = installer.index('\n}\n\n# The device\'s own files', start) + 2
 function = installer[start:end]
-shell = shutil.which('sh')
 if shell:
     with tempfile.TemporaryDirectory(prefix='e5-screen-app-test-') as temp:
         old, new = Path(temp) / 'old', Path(temp) / 'new'
