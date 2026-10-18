@@ -440,9 +440,11 @@ if [ -n "$screen" ] && [ -f /in/feature-source/openwrt/infoscreen-plugins/daed/m
     mkdir -p $R/etc/e5-infoscreen/plugins
     cp -a /in/feature-source/openwrt/infoscreen-plugins/daed $R/etc/e5-infoscreen/plugins/
     chown -R 0:0 $R/etc/e5-infoscreen/plugins/daed
-    install -d -m 755 $R/www/e5-daed-login $R/www/cgi-bin
-    install -m 644 /in/feature-source/openwrt/infoscreen-plugins/daed/phone-login.html $R/www/e5-daed-login/index.html
-    install -m 755 /in/feature-source/openwrt/infoscreen-plugins/daed/pair-cgi.py $R/www/cgi-bin/e5-daed-pair
+    mkdir -p $R/www/e5-daed-login $R/www/cgi-bin
+    cp /in/feature-source/openwrt/infoscreen-plugins/daed/phone-login.html $R/www/e5-daed-login/index.html
+    chmod 644 $R/www/e5-daed-login/index.html
+    cp /in/feature-source/openwrt/infoscreen-plugins/daed/pair-cgi.py $R/www/cgi-bin/e5-daed-pair
+    chmod 755 $R/www/cgi-bin/e5-daed-pair
 fi
 for f in vendor-start.sh android-import-perms.sh e5-modem-coldboot android-run node-perms.sh regdb-load.sh gadget-guard.sh usb-watch.sh e5-next-boot e5-os e5-sd-registry e5-at e5-data-priority e5-audio-dsp e5-call-audio.py; do
     cp /in/opt-e5/$f $R/opt/e5/$f; chmod 755 $R/opt/e5/$f

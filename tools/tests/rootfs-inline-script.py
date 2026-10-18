@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 root = Path(__file__).resolve().parents[2]
@@ -11,6 +12,8 @@ script = source[start:end]
 
 if "'" in script:
     raise SystemExit("the single-quoted inline container script contains an apostrophe")
+if re.search(r"^\s*install\s", script, flags=re.MULTILINE):
+    raise SystemExit("the OpenWrt rootfs build script must not require coreutils-install")
 if "tar -czf /out/$NAME ." not in script:
     raise SystemExit("the rootfs archive creation step is missing")
 
