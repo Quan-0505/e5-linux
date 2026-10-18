@@ -531,7 +531,23 @@ cd $R && tar -czf /out/$NAME .
 ls -la /out/$NAME
 '
 
-[ -n "$STANDALONE" ] || exit 0
+if [ -n "$STANDALONE" ]; then
+    # The ext4 stage below reads the standalone archive from WORK.  Keep that
+    # contract explicit even when a caller or a stale environment routes the
+    # first-stage archive to OUT instead.
+    if [ ! -s "$WORK/$NAME" ] && [ -s "$OUT/$NAME" ]; then
+        echo "moving standalone rootfs archive from $OUT to $WORK"
+        mv "$OUT/$NAME" "$WORK/$NAME"
+    fi
+    [ -s "$WORK/$NAME" ] || {
+        echo "standalone rootfs archive missing: $WORK/$NAME" >&2
+        echo "rootfs output directory: $TAROUT" >&2
+        ls -lah "$WORK" "$OUT" >&2 || true
+        exit 1
+    }
+else
+    exit 0
+fi
 # the tree as an ext4 image (mke2fs -d: no loop device, no root on the host)
 IMG=e5-openwrt-$VER.ext4
 [ "$DEVICE_FILES" != 0 ] || IMG=e5-openwrt-$VER-generic.ext4
