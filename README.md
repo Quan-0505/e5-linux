@@ -50,7 +50,7 @@ KDAE 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | `e5-openwrt-flash-*.zip` | 完整安装包，包含电脑安装器、系统镜像、工具及详细指南 |
 | `e5-linux-switch-*.zip` | 已安装系统的 Android → Linux 切换模块，不是完整固件 |
 
-**当前发布（2026-10-18）**：build-20261018-080713-a616610（https://github.com/Quan-0505/e5-linux/releases/tag/build-20261018-080713-a616610），OpenWrt 25.12.5、E5 Linux 6.18.54、Rust daed 3.2.1、节点小宝 4.3.5-734。源码来自 codex/e5-rust-daed-20261018（https://github.com/Quan-0505/e5-linux/tree/codex/e5-rust-daed-20261018），提交 a616610d22406255de9b449095f7d17e9be14d8；Rust daed 锁定提交 7b1d18772789be988c933dc5e18fdb5411a00857。
+**当前发布（2026-10-18）**：build-20261018-080713-a616610（https://github.com/Quan-0505/e5-linux/releases/tag/build-20261018-080713-a616610），OpenWrt 25.12.5、E5 Linux 6.18.54、Rust daed 3.2.1、节点小宝 4.3.5-734。源码来自 codex/e5-rust-daed-20261018（https://github.com/Quan-0505/e5-linux/tree/codex/e5-rust-daed-20261018），提交 a6166106d22406255de9b449095f7d17e9be14d8；Rust daed 锁定提交 7b1d18772789be988c933dc5e18fdb5411a00857。
 
 本版修复内置更新时误将旧 Go 服务启动脚本覆盖 Rust 服务脚本的问题。Actions 全量构建、包哈希、目标 E5 的既有 e5root 保数据升级及升级后服务验收均通过；GPT 与分区布局保持不变。实机确认 Rust daed 数据库迁移和控制台可用，原账号、DNS、路由与有效群组策略保留，订阅刷新成功，节点小宝服务可达。个别外部 HTTPS/UDP DNS 探测超时，详见 docs/RELEASE-20261018.zh-CN.md，这些探测不作为所有网络环境的保证。
 
