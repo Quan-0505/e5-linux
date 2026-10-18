@@ -11,7 +11,7 @@ APP = TOP / 'openwrt/infoscreen-plugins/daed'
 shell = shutil.which('sh')
 manifest = json.loads((APP / 'manifest.json').read_text(encoding='utf-8'))
 assert manifest['id'] == 'daed' and manifest['api_version'] == 2
-assert manifest['entry'] == 'index.html' and manifest['version'] == '1.3.0'
+assert manifest['entry'] == 'index.html' and manifest['version'] == '1.3.1'
 assert {'index.html', 'daed.css', 'daed.js', 'manifest.json', 'backend.uc', 'phone-login.html', 'pair-cgi.py'} == {p.name for p in APP.iterdir()}
 
 page = (APP / 'index.html').read_text(encoding='utf-8')
@@ -73,7 +73,7 @@ if shell:
         bundled = new / 'etc/e5-infoscreen/plugins/daed'
         bundled.mkdir(parents=True)
         saved.mkdir(parents=True)
-        (bundled / 'manifest.json').write_text('{"version":"1.3.0"}', encoding='utf-8')
+        (bundled / 'manifest.json').write_text('{"version":"1.3.1"}', encoding='utf-8')
         (bundled / 'index.html').write_text('bundled DAED app', encoding='utf-8')
         for file in bundled.iterdir():
             (saved / file.name).write_bytes(file.read_bytes())
@@ -91,7 +91,7 @@ if shell:
             [shell, '-c', restore_function + '\npart_update_restore_bundled_daed_plugin "$1" "$2"\n', 'test', str(new), str(saved)],
             capture_output=True, text=True)
         assert completed.returncode == 0, completed.stderr or completed.stdout
-        assert json.loads((bundled / 'manifest.json').read_text())['version'] == '1.3.0'
+        assert json.loads((bundled / 'manifest.json').read_text())['version'] == '1.3.1'
         assert (bundled / 'index.html').read_text() == 'bundled DAED app'
         assert not (bundled / 'removed-in-new-version.js').exists()
         assert (phone / 'index.html').read_text() == 'user-installed phone app'
