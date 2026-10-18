@@ -4,7 +4,7 @@
 set -eu
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:-$TOP/out/openwrt/block-mount-guarded.apk}
-[ "${E5_WRT_VER:-25.12.5}" = 25.12.5 ] || {
+[ "${E5_WRT_VER:-25.12.6}" = 25.12.6 ] || {
     echo 'block-mount guard: SDK/fstools pins must be updated for this OpenWrt version' >&2; exit 1;
 }
 mkdir -p "$(dirname "$OUT")"
@@ -21,7 +21,7 @@ fi
 docker build --platform linux/amd64 -t e5-block-sdk-build -f "$TOP/openwrt/block-mount.Dockerfile" "$TOP/openwrt"
 # A named volume keeps SDK builds off slow Windows bind mounts. An explicit
 # cache directory can also be supplied by Linux/WSL developers.
-cache=${E5_BLOCK_SDK_CACHE:-e5-block-sdk-25.12.5}
+cache=${E5_BLOCK_SDK_CACHE:-e5-block-sdk-25.12.6}
 docker run --rm --platform linux/amd64 -v "$cache:/cache" -v "$TOP/openwrt:/src:ro" \
-    -v "$(dirname "$OUT"):/out" -e "OUT_NAME=$(basename "$OUT")" -e "BUILD_ID=$stamp" \
+    -v "$(dirname "$OUT"):/out" -e "OUT_NAME=$(basename "$OUT")" -e "BUILD_ID=$stamp" -e "E5_WRT_VER=${E5_WRT_VER:-25.12.6}" \
     e5-block-sdk-build sh /src/build-block-mount-inner.sh

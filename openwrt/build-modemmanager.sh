@@ -69,7 +69,7 @@ set -euo pipefail
 # 34: keep the logical modem enabled for the other SIM's voice/SMS when the
 # data radio is off, without powering that disabled data radio back on.
 E5REV=34
-VER=${E5_WRT_VER:-25.12.5}
+VER=${E5_WRT_VER:-25.12.6}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
 WORK="$TOP/work/openwrt"

@@ -56,7 +56,7 @@ def prepare():
     epoch = int(time.time())
     started = datetime.fromtimestamp(epoch, UTC8)
     stamp = started.strftime('%Y%m%d-%H%M%S')
-    ver = os.environ.get('E5_WRT_VER', '25.12.5')
+    ver = os.environ.get('E5_WRT_VER', '25.12.6')
     if not re.fullmatch(r'\d+\.\d+\.\d+', ver):
         raise ValueError('invalid OpenWrt version')
     sources = {name: {'repository': repo, 'revision': revision(path)} for name, repo, path in [

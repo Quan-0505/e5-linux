@@ -35,7 +35,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
-VER=${E5_WRT_VER:-25.12.5}
+VER=${E5_WRT_VER:-25.12.6}
 OUT="$TOP/out/openwrt"
 WORK="$TOP/work/openwrt"
 IMG="$OUT/e5-openwrt-$VER-generic.ext4.gz"

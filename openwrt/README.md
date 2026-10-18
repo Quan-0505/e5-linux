@@ -2,7 +2,7 @@
 
 > 中文：[`README.zh-CN.md`](README.zh-CN.md)
 
-OpenWrt **25.12.5** with the mainline E5 **6.18.y** kernel. Android stays on
+OpenWrt **25.12.6** with the mainline E5 **6.18.y** kernel. Android stays on
 slot A; Linux boots slot B. The device panel runs the information screen and
 its apps, including the Phone dialer/contacts page. LuCI is the separate router
 web interface.
