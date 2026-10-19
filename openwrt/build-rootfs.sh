@@ -429,7 +429,7 @@ fi
 # Keeping this small device-specific overlay in e5-linux avoids carrying a
 # private fork of the shared Enceka/infoscreen submodule.
 if [ -n "$screen" ] && [ -f /in/feature-source/openwrt/infoscreen-plugins/daed/manifest.json ]; then
-    python3 /in/feature-source/tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen/www/app.js"
+    python3 /in/feature-source/tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen"
 fi
 # Phone is a separately maintained store application, preinstalled for this
 # image. Core updates do not replace it; plugin updates use the app store.

@@ -1,43 +1,82 @@
 #!/usr/bin/env python3
-"""Verify the E5 DAED shortcut overlay applies cleanly to pinned upstream."""
+"""Test the configurable E5 keypad shortcut overlay against pinned upstream."""
 
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 
 TOP = Path(__file__).resolve().parents[2]
 SCREEN = TOP / "ci/infoscreen"
-SOURCE = "root/usr/share/e5-infoscreen/www/app.js"
 PATCHER = TOP / "tools/patch-e5-daed-shortcut.py"
+FILES = (
+    "root/usr/share/e5-infoscreen/www/app.js",
+    "root/usr/share/e5-infoscreen/www/mobile.js",
+    "root/usr/share/e5-infoscreen/settings.uc",
+    "root/usr/share/e5-infoscreen/api.uc",
+)
 
-base = subprocess.run(
-    ["git", "-C", str(SCREEN), "show", f"HEAD:{SOURCE}"],
-    check=True,
-    capture_output=True,
-    text=True,
-    encoding="utf-8",
-).stdout
+with tempfile.TemporaryDirectory(prefix="e5-shortcuts-") as temp:
+    root = Path(temp)
+    for source_name in FILES:
+        data = subprocess.run(
+            ["git", "-C", str(SCREEN), "show", f"HEAD:{source_name}"],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        ).stdout
+        path = root / source_name.removeprefix("root/usr/share/e5-infoscreen/")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(data, encoding="utf-8")
 
-with tempfile.TemporaryDirectory(prefix="e5-daed-key0-") as temp:
-    app = Path(temp) / "app.js"
-    app.write_text(base, encoding="utf-8")
-    subprocess.run([sys.executable, str(PATCHER), str(app)], check=True)
-    patched = app.read_text(encoding="utf-8")
-    subprocess.run(["node", "--check", str(app)], check=True)
-    assert patched.count("async function openDaedShortcut()") == 1
-    assert "e.preventDefault();\n\t// the volume works" in patched
-    key_handler = patched.index("if (keyLock(kind == 'power'")
-    shortcut = patched.index("if (kind == 'daed')", key_handler)
-    assert key_handler < patched.index("if (blank) {", key_handler) < shortcut
-    assert "if (!e.repeat) void openDaedShortcut();" in patched
-    assert "fromApp && !T551MCalls.active() && !m.repeat" in patched
+    subprocess.run([sys.executable, str(PATCHER), str(root)], check=True)
+    patched = {name: (root / name).read_text(encoding="utf-8") for name in ("www/app.js", "www/mobile.js", "settings.uc", "api.uc")}
+    js = patched["www/app.js"]
+    settings = patched["settings.uc"]
+    api = patched["api.uc"]
+    mobile = patched["www/mobile.js"]
 
-    # Applying the overlay a second time must be harmless for local rebuilds.
-    subprocess.run([sys.executable, str(PATCHER), str(app)], check=True)
-    assert app.read_text(encoding="utf-8") == patched
+    assert "return 'shortcut' + k" in js and "Numpad" in js
+    assert "async function runScreenShortcut(digit)" in js
+    assert "target == 'default'" in js and "target == 'off'" in js
+    assert "target.startsWith('page:')" in js and "^app:([a-z0-9][a-z0-9_-]*)$" in js
+    assert "if (keyLock(kind == 'power'" in js
+    assert js.index("if (blank) {", js.index("if (keyLock(kind == 'power'")) < js.index("kind?.startsWith('shortcut')")
+    assert "const digitKind = keyKind(m)" in js and "!T551MCalls.active()" in js
+    assert "['ui', 'navigation', 'shortcuts'].includes(v.cat.id)" in js
+    assert settings.count("id:`shortcut_${digit}`") == 1
+    assert "uci_category('shortcuts', L('快捷按钮','Shortcut buttons')" in settings
+    for target in ("default", "off", "app:daed", "app:phone", "page:${p[0]}"):
+        assert target in settings
+    screen_config = api.split("function screen_config() {", 1)[1].split("\n}\n", 1)[0]
+    for digit in range(10):
+        assert f"shortcut_{digit}: c.get('e5-infoscreen', 'main', 'shortcut_{digit}') ?? 'default'" in screen_config
+    assert "shortcuts:'keyboard'" in mobile and "/^shortcut_[0-9]$/" in mobile
+
+    node = shutil.which("node")
+    if node:
+        subprocess.run([node, "--check", str(root / "www/app.js")], check=True)
+        subprocess.run([node, "--check", str(root / "www/mobile.js")], check=True)
+
+    subprocess.run([sys.executable, str(PATCHER), str(root)], check=True)
+    for name, content in patched.items():
+        assert (root / name).read_text(encoding="utf-8") == content
 
 builder = (TOP / "openwrt/build-rootfs.sh").read_text(encoding="utf-8")
-assert "tools/patch-e5-daed-shortcut.py" in builder
-assert builder.index("cp -a /in/infoscreen/root/. $R/") < builder.index("tools/patch-e5-daed-shortcut.py")
-print("E5 DAED keypad-0 overlay: source, guard order, syntax, and idempotency passed")
+assert 'tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen"' in builder
+# The screen was already hotpatched with the earlier fixed 0 -> DAED mapping
+# on the E5. Keep support for that live state so the settings can be tested
+# without first restoring the older app.js.
+with tempfile.TemporaryDirectory(prefix="e5-shortcuts-hotpatch-") as temp:
+    root = Path(temp)
+    for source_name in FILES:
+        path = root / source_name.removeprefix("root/usr/share/e5-infoscreen/")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SCREEN / source_name, path)
+    subprocess.run([sys.executable, str(PATCHER), str(root)], check=True)
+    js = (root / "www/app.js").read_text(encoding="utf-8")
+    assert "openDaedShortcut" not in js
+    assert "void runScreenShortcut(kind.slice(8))" in js
+print("E5 keypad shortcuts: 0-9 UI, UCI persistence, page/app targets, guard order and idempotency passed")
