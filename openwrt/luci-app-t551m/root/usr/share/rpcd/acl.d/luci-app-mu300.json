@@ -24,6 +24,7 @@
     },
     "write": {
       "ubus": {
+        "uci": [ "commit" ],
         "mu300dash": [
           "*"
         ],
