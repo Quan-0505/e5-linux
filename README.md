@@ -6,7 +6,7 @@
 
 [![Build](https://img.shields.io/github/actions/workflow/status/Quan-0505/e5-linux/e5-kdae-release.yml?branch=main&label=Build&style=flat-square)](https://github.com/Quan-0505/e5-linux/actions/workflows/e5-kdae-release.yml)
 [![Release](https://img.shields.io/github/v/release/Quan-0505/e5-linux?style=flat-square&label=Release)](https://github.com/Quan-0505/e5-linux/releases/latest)
-[![OpenWrt](https://img.shields.io/badge/OpenWrt-25.12.5-00b5e2?style=flat-square)](https://openwrt.org/)
+[![OpenWrt](https://img.shields.io/badge/OpenWrt-25.12.6-00b5e2?style=flat-square)](https://openwrt.org/)
 [![Kernel](https://img.shields.io/badge/Linux-6.18_LTS-orange?style=flat-square)](https://github.com/sprd-linux-devs/linux/tree/e5-6.18)
 [![Rust daed](https://img.shields.io/badge/Rust_daed-3.2.1-805ad5?style=flat-square)](https://github.com/Quan-0505/rust-daed)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
@@ -28,7 +28,7 @@
 
 | 功能 | 说明 |
 | --- | --- |
-| **内置 OpenWrt** | OpenWrt 25.12.5，安装到独立 `e5root` 分区；已有内置安装通过更新入口升级 |
+| **内置 OpenWrt** | OpenWrt 25.12.6，安装到独立 `e5root` 分区；已有内置安装通过更新入口升级 |
 | **E5 原生内核** | Linux 6.18 LTS，保留 E5 充电、触屏、背光、音频和蜂窝硬件适配 |
 | **daed 管理界面** | Rust daed 3.2.1，提供订阅、节点、群组、DNS、路由、实时日志及热重载管理 |
 | **eBPF 数据面** | 构建时核对 BTF、BPF、veth、TC/clsact 等能力及匹配的内核模块 |
@@ -43,16 +43,17 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 <a id="download"></a>
 ## 📦 固件下载
 
-前往 **[Releases](https://github.com/Quan-0505/e5-linux/releases)** 下载完整 E5 安装包，解压后先看 **`START-HERE.md`**；当前发布文件的 SHA-256 摘要见对应发布说明。
+前往 **[Releases](https://github.com/Quan-0505/e5-linux/releases)** 下载完整 E5 安装包，解压后先看 **`START-HERE.md`**；各资产的 SHA-256 可在 GitHub Release 资产信息中核对。
 
 | 文件 | 用途 |
 | --- | --- |
 | `e5-openwrt-flash-*.zip` | 完整安装包，包含电脑安装器、系统镜像、工具及详细指南 |
-| `e5-linux-switch-*.zip` | 已安装系统的 Android → Linux 切换模块，不是完整固件 |
+| `e5-linux-switch-*.zip` | 已 Root Android 上切回已安装 Linux 的 Magisk 模块，不是完整固件 |
+| `e5-openwrt-installer-windows.zip` | Windows 图形安装器；需配合完整固件 ZIP 使用 |
 
-**最新发布（2026-10-19）**：[build-20261019-130448-6c11242](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261019-130448-6c11242)，OpenWrt 25.12.6、E5 Linux 6.18.54、Rust daed 3.2.1、节点小宝 4.3.5-734。源码提交为 `6c11242edbde428cfde5d0df0af32988e0d7e266`，构建来自 `codex/e5-daed-qr-login-20261019`。
+**最新发布（2026-10-20）**：[build-20261020-001550-479d0fd](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261020-001550-479d0fd)，OpenWrt 25.12.6、E5 Linux `6.18.54-e5-gb93bbc3a36fd`、信息屏 1.6.7、电话插件 1.5。源码提交为 `479d0fd62af2849c01e77f60e4ab58830e73aad0`，对应[构建记录](https://github.com/Quan-0505/e5-linux/actions/runs/39281105646)。
 
-Release 提供完整固件 ZIP、Android/Linux 切换 ZIP 和独立 Windows 安装器 ZIP；构建、rootfs 附加软件校验、信息屏与 LuCI 浏览器测试、Windows 安装器和模拟 UI 回归均成功。新固件包含信息屏 DAED 控制、二维码登录及可在“设置 → 快捷按钮”分别配置实体数字 `0–9` 的功能。E5 OpenWrt 实机验证了设置接口、选项保存/读回和默认值恢复；本次没有把完整固件刷入设备。资产摘要和验证范围见[本次发布记录](docs/RELEASE-20261019-130448.zh-CN.md)。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
+本次 Release 提供完整固件 ZIP、Android/Linux 切换 Magisk ZIP 和 Windows 图形安装器 ZIP。GitHub Actions 的 Rust daed、补丁软件包、固件构建、Windows 安装器及发布校验均成功。CI 不连接 E5；此版本仍需在设备上完成实机刷写与硬件验收。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
 
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
