@@ -50,9 +50,9 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | `e5-openwrt-flash-*.zip` | 完整安装包，包含电脑安装器、系统镜像、工具及详细指南 |
 | `e5-linux-switch-*.zip` | 已安装系统的 Android → Linux 切换模块，不是完整固件 |
 
-**当前发布（2026-10-18）**：[build-20261018-204830-7bae97b](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261018-204830-7bae97b)，OpenWrt 25.12.5、E5 Linux 6.18.54、Rust daed 3.2.1、节点小宝 4.3.5-734。源码来自 `main`，提交 `7bae97bf593d9e8e193ecb11a5263c66359cfaaf`；Rust daed 锁定提交 `90fc9c13ecec9d434c93f7d0f4a20bd742008dca`。
+**最新发布（2026-10-19）**：[build-20261019-130448-6c11242](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261019-130448-6c11242)，OpenWrt 25.12.6、E5 Linux 6.18.54、Rust daed 3.2.1、节点小宝 4.3.5-734。源码提交为 `6c11242edbde428cfde5d0df0af32988e0d7e266`，构建来自 `codex/e5-daed-qr-login-20261019`。
 
-本次 Release 提供完整固件 ZIP、Android/Linux 切换 ZIP 和独立 Windows 安装器 ZIP；三份资产均通过 GitHub SHA-256 校验，固件归档内部完整性检查也通过。完整构建包含 Rust ARM64 引擎、E5 内核编译及生成 rootfs 的附加软件验收。此次为构建与发布验证，未进行新的设备刷写或实机升级。发布资产摘要和验证范围见[本次发布记录](docs/RELEASE-20261018-204830.zh-CN.md)。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
+Release 提供完整固件 ZIP、Android/Linux 切换 ZIP 和独立 Windows 安装器 ZIP；构建、rootfs 附加软件校验、信息屏与 LuCI 浏览器测试、Windows 安装器和模拟 UI 回归均成功。新固件包含信息屏 DAED 控制、二维码登录及可在“设置 → 快捷按钮”分别配置实体数字 `0–9` 的功能。E5 OpenWrt 实机验证了设置接口、选项保存/读回和默认值恢复；本次没有把完整固件刷入设备。资产摘要和验证范围见[本次发布记录](docs/RELEASE-20261019-130448.zh-CN.md)。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
 
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
