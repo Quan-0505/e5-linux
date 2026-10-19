@@ -119,7 +119,8 @@ CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂�
 ## 📚 更多资料
 
 - [内置分区原理与安装流程](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/INTERNAL-PARTITION-SYSTEM-20261012.zh-CN.md)
-- [2026-10-18 最新固件发布与验证范围](docs/RELEASE-20261018-204830.zh-CN.md)
+- [2026-10-20 最新固件发布](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261020-001550-479d0fd)（CI 构建通过，E5 实机验收待完成）
+- [2026-10-18 固件发布与验证记录](docs/RELEASE-20261018-204830.zh-CN.md)
 - [2026-10-15 上游同步记录](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/UPSTREAM-20261015.zh-CN.md)
 - [KDAE 与节点小宝集成](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/KDAE-NODEBABY.zh-CN.md)
 - [上游技术说明（中文）](README.upstream.zh-CN.md) / [English](README.upstream.en.md)
