@@ -11,7 +11,11 @@
 
   function setMessage(text, kind = '') { message.textContent = text; message.className = `message ${kind}`.trim(); }
   function setBusy(value) { busy = value; [...document.querySelectorAll('button')].forEach(button => { button.disabled = value; }); }
-  function errorMessage(error) { return error?.data?.error || error?.data?.message || error?.message || '操作失败，请检查 DAED 服务'; }
+  function errorMessage(error) { return error?.data?.error || error?.data?.message || error?.error || error?.message || '操作失败，请检查 DAED 服务'; }
+  function requiresLogin(value) {
+    const message = value?.data?.error || value?.error || value?.message || '';
+    return value?.status === 401 || value?.data?.status === 401 || /请先扫码登录|登录已过期|请用手机扫码登录|please scan.*login|login.*expired/i.test(message);
+  }
   function setView(view) {
     controlsView.hidden = view !== 'controls';
     subscriptionsView.hidden = view !== 'subscriptions';
@@ -36,13 +40,15 @@
     });
   }
   async function loadSubscriptions() {
-    setView('subscriptions'); subscriptionMessage.textContent = '正在读取订阅…';
+    setView('subscriptions'); subscriptionMessage.textContent = '正在读取订阅…'; subscriptionMessage.className = 'message';
     try {
       const result = await window.e5.api('/subscriptions');
+      if (requiresLogin(result)) { await showPairing(result.error || '请用手机扫码登录 daed。'); return; }
+      if (result?.ok === false) throw new Error(errorMessage(result));
       renderSubscriptions(Array.isArray(result?.subscriptions) ? result.subscriptions : []);
     } catch (error) {
-      if (error?.status === 401 || error?.data?.status === 401) await showPairing('请用手机扫码登录 daed。');
-      else subscriptionMessage.textContent = errorMessage(error);
+      if (requiresLogin(error)) await showPairing(errorMessage(error));
+      else { subscriptionMessage.textContent = errorMessage(error); subscriptionMessage.className = 'message error'; }
     }
   }
   async function showPairing(text = '请用手机扫码登录 daed。') {
@@ -72,9 +78,11 @@
     setBusy(true); subscriptionMessage.textContent = `正在更新“${item.name}”…`; subscriptionMessage.className = 'message';
     try {
       const result = await window.e5.api('/action', { body: { action: 'subscriptions', subscriptionId: item.id } });
+      if (requiresLogin(result)) { await showPairing(result.error || '登录已过期，请重新扫码。'); return; }
+      if (result?.ok === false) throw new Error(errorMessage(result));
       subscriptionMessage.textContent = result?.message || '订阅更新已提交。'; subscriptionMessage.className = 'message success';
     } catch (error) {
-      if (error?.status === 401 || error?.data?.status === 401) await showPairing('登录已过期，请重新扫码。');
+      if (requiresLogin(error)) await showPairing(errorMessage(error));
       else { subscriptionMessage.textContent = errorMessage(error); subscriptionMessage.className = 'message error'; }
     } finally { setBusy(false); }
   }
@@ -92,6 +100,7 @@
     setBusy(true); setMessage(`正在${labels[action]} DAED…`);
     try {
       const result = await window.e5.api('/action', { body: { action } });
+      if (result?.ok === false) throw new Error(errorMessage(result));
       setMessage(result?.message || '操作已完成。', 'success');
     } catch (error) { setMessage(errorMessage(error), 'error'); }
     finally { await refreshStatus(); setBusy(false); }
