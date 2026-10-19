@@ -49,7 +49,7 @@ typedef void (*GAsyncReadyCallback)(void);
 typedef struct {char *command; unsigned timeout; Processor response_processor;} MMBaseModemAtCommandAlloc;
 typedef MMBaseModemAtCommandAlloc MMBaseModemAtCommand;
 typedef struct {MMBaseModemAtCommandAlloc cmds[9]; gboolean present[2]; guint probe,own;} CardsOnContext;
-typedef struct {void *data; int error, returned, unrefs;} GTask;
+typedef struct {void *data; int error, returned, unrefs; CardsOnContext *owned;} GTask;
 typedef int MMBaseModem;
 
 typedef struct {const char *response;int code;} GAsyncResult;
@@ -62,9 +62,9 @@ typedef void (*GDestroyNotify)(void*);
 static unsigned radio_mask=3;
 static gboolean sim_radio_enabled(guint card){return !!(radio_mask&(1u<<card));}
 static guint port_card(void){return 0;}
-static void cards_on_context_free(void *ctx){free(ctx);}
-static void g_object_set_data_full(void *task,const char *key,void *data,GDestroyNotify destroy){destroy(data);}
-static void init_radio_policy_ready(void){}
+static void cards_on_context_free(void *ptr){CardsOnContext *ctx=ptr;for(unsigned i=0;ctx->cmds[i].command;i++)free(ctx->cmds[i].command);free(ctx);}
+static void g_object_set_data_full(void *task,const char *key,void *data,GDestroyNotify destroy){((GTask*)task)->owned=data;}
+static void init_radio_policy_ready(MMBaseModem*,GAsyncResult*,GTask*);
 #define MM_MOBILE_EQUIPMENT_ERROR 1
 #define MM_MOBILE_EQUIPMENT_ERROR_SIM_NOT_INSERTED 10
 #define mm_obj_info(...) ((void)0)
@@ -75,7 +75,7 @@ static void init_sim_on_ready(MMBaseModem*,GAsyncResult*,GTask*);
 static void power_sequence_ready(void) {}
 static void power_command_ready(void) {}
 static void g_task_return_error(GTask *task,GError *error){task->error=error->code;free(error->message);free(error);}
-static void g_object_unref(GTask *task){task->unrefs++;}
+static void g_object_unref(GTask *task){task->unrefs++;if(task->owned){cards_on_context_free(task->owned);task->owned=NULL;}}
 static void g_task_return_boolean(GTask *task,gboolean value){task->returned=value;}
 static void g_task_return_pointer(GTask *task,void *data,void *destroy){assert(task->data==data);task->returned=1;}
 static void g_task_set_task_data(GTask *task,void *data,void *destroy){task->data=data;}
@@ -88,6 +88,9 @@ static struct {int (*initialization_stopped)(MMBaseModem*,void*,void*);} parent=
 static void *mm_broadband_modem_unisoc_parent_class=&parent;
 #define MM_BROADBAND_MODEM_CLASS(p) ((typeof(&parent))(p))
 #define MM_BROADBAND_MODEM(p) (p)
+static GTask *g_task_new(void *self,void *cancel,void *cb,void *data){static GTask task;task=(GTask){0};return &task;}
+#define MM_BASE_MODEM(p) ((MMBaseModem*)(p))
+typedef MMBaseModem MMIfaceModem;
 #define mm_obj_dbg(...) ((void)0)
 #define mm_obj_msg(...) ((void)0)
 static void cards_on(MMBaseModem *m,GAsyncReadyCallback cb,GTask *task){radio_on++;}
@@ -103,11 +106,22 @@ static const char *mm_base_modem_at_command_finish(MMBaseModem *m,GAsyncResult *
 }
 static int g_error_matches(GError *error,int domain,int code){return error->code==code;}
 static void g_clear_error(GError **error){if(*error){free((*error)->message);free(*error);}*error=NULL;}
+#define g_free free
 static char *g_strdup(const char *s){return strdup(s);}
 static char *g_strdup_printf(const char *fmt,...){va_list args;char *out;va_start(args,fmt);vasprintf(&out,fmt,args);va_end(args);return out;}
 MMBaseModemAtResponseProcessorResult mm_base_modem_response_processor_no_result_continue(MMBaseModem*,void*,const char*,const char*,int,const GError*,GVariant**,GError**);
 static void mm_base_modem_at_sequence(MMBaseModem *m,const MMBaseModemAtCommand *commands,void *a,void *b,GAsyncReadyCallback cb,GTask *t){
  sequenced++;
+ if(t->owned){
+  assert(commands==t->owned->cmds);
+  for(unsigned i=0;commands[i].command;i++){
+   unsigned card;assert(sscanf(commands[i].command,"+SPACTCARD=%u;",&card)==1);
+   assert(strstr(commands[i].command,"+SFUN=5") || strstr(commands[i].command,"+CFUN?"));
+   if(strstr(commands[i].command,"+SFUN=5"))assert(!sim_radio_enabled(card));
+   if(strstr(commands[i].command,"+CFUN?"))assert(card==port_card());
+  }
+  GAsyncResult res={NULL,0};init_radio_policy_ready(m,&res,t);return;
+ }
  assert(commands==((CardsOnContext*)t->data)->cmds && commands[8].command==NULL);
  commands_run=0;
  GAsyncResult reply={NULL,0};
@@ -134,9 +148,9 @@ static void check(int first,int second,unsigned own){
   assert(sscanf(command,"+SPACTCARD=%u;",&card)==1 && card<2);
   if(strstr(command,"SFUN=") || strstr(command,"SPTESTMODEM=") || strstr(command,"SPSWDATA"))
     assert(ctx.present[card]);
-  if(strstr(command,"SFUN=") || strstr(command,"CFUN=4"))sfun[card]++;
+  if(strstr(command,"SFUN="))sfun[card]++;
   if(strstr(command,"SFUN=4"))assert(sim_radio_enabled(card));
-  if(strstr(command,"CFUN=4"))assert(!sim_radio_enabled(card));
+  if(strstr(command,"SFUN=5"))assert(!sim_radio_enabled(card));
   if(strstr(command,"SPSWDATA")){assert(card==own);data++;}
   if(strstr(command,"SPTESTMODEM="))assert(strstr(command,"=98,134"));
  }
@@ -151,8 +165,8 @@ static void check(int first,int second,unsigned own){
   assert(!strcmp(ctx.cmds[1].command,"+SPACTCARD=1;+SFUN=2"));
   assert(strstr(ctx.cmds[2].command,"+SPACTCARD=1;+SPTESTMODEM="));
   assert(strstr(ctx.cmds[3].command,"+SPACTCARD=0;+SPTESTMODEM="));
-  assert(!strcmp(ctx.cmds[5].command,sim_radio_enabled(0)?"+SPACTCARD=0;+SFUN=4":"+SPACTCARD=0;+CFUN=4"));
-  assert(!strcmp(ctx.cmds[6].command,sim_radio_enabled(1)?"+SPACTCARD=1;+SFUN=4":"+SPACTCARD=1;+CFUN=4"));
+  assert(!strcmp(ctx.cmds[5].command,sim_radio_enabled(0)?"+SPACTCARD=0;+SFUN=4":"+SPACTCARD=0;+SFUN=5"));
+  assert(!strcmp(ctx.cmds[6].command,sim_radio_enabled(1)?"+SPACTCARD=1;+SFUN=4":"+SPACTCARD=1;+SFUN=5"));
  }
  assert(task.returned==1 && task.error==0 && task.unrefs==1);
  for(unsigned j=0;j<i;j++)free(ctx.cmds[j].command);
@@ -178,19 +192,20 @@ static void fail_each_command(void){
  inject_failure=-1;
 }
 static void power_queries(void){
- const char *responses[]={NULL,"","+CFUN: garbage","+CFUN: -1","+CFUN: 4294967296","+CFUN: 1junk","+CFUN: 0","+CFUN: 1"," +CFUN: 4\r\n"};
+ const char *responses[]={NULL,"","+CFUN: garbage","+CFUN: -1","+CFUN: 4294967296","+CFUN: 1junk","+CFUN: 0","+CFUN: 1"," +CFUN: 4\r\n", "+CFUN: 2"};
  for(unsigned i=0;i<sizeof(responses)/sizeof(responses[0]);i++){
   MMBaseModem modem=0;int token=1;GTask task={.data=&token};GAsyncResult response={responses[i],i?0:14};
   radio_on=power_commands=ports_released=0;
   init_cfun_ready(&modem,&response,&task);
   if(i<6)assert(task.error && !task.returned && task.unrefs==1 && ports_released==1 && !task.data && !radio_on && !power_commands);
-  else if(i==6)assert(radio_on==1 && !task.error && !task.returned && task.data==&token);
+  else if(i==6)assert(power_commands==1 && !strcmp(last_command,"+SPACTCARD=1;+CFUN?") && !radio_on && !task.error && !task.returned && task.data==&token);
   else assert(task.returned==1 && !task.error && task.unrefs==1 && !ports_released && task.data==&token);
   task=(GTask){0};radio_on=power_commands=0;
   power_up_cfun_ready(&modem,&response,&task);
   if(i<6)assert(task.error && task.unrefs==1 && !power_commands && !radio_on);
-  else if(i==6)assert(radio_on==1 && !power_commands && !task.error);
-  else assert(power_commands==1 && !strcmp(last_command,"+CFUN=1") && !radio_on && !task.error);
+  else if(i==6)assert(power_commands==1 && !strcmp(last_command,"+CPIN?") && !radio_on && !task.error);
+  else if(i==7)assert(task.returned && task.unrefs==1 && !power_commands && !radio_on && !task.error);
+  else assert(power_commands==1 && !strcmp(last_command,"+SFUN=4") && !radio_on && !task.error);
  }
  MMBaseModem modem=0;int token=1;GTask task={.data=&token};GAsyncResult failed={NULL,14},ok={NULL,0};
  ports_released=0;init_sim_on_ready(&modem,&failed,&task);
@@ -216,6 +231,39 @@ int main(void){
  radio_mask=2;blocked=(GTask){0};
  power_up_cfun_ready(&modem,&powered,&blocked);
  assert(blocked.returned && !blocked.error && blocked.unrefs==1 && !power_commands && !radio_on);
+ // A disabled own stack reporting 0 must not reinitialize a live peer.
+ radio_mask=2;int token=1;GTask warm={.data=&token};GAsyncResult zero={"+CFUN: 0",0};
+ radio_on=power_commands=0;init_cfun_ready(&modem,&zero,&warm);
+ assert(power_commands==1 && !strcmp(last_command,"+SPACTCARD=1;+CFUN?") && !radio_on);
+ GAsyncResult no_sim={NULL,10};
+ GAsyncResult peer={"+CFUN: 1",0};init_peer_cfun_ready(&modem,&peer,&warm);
+ assert(warm.returned && warm.unrefs==1 && !radio_on && !warm.error);
+ warm=(GTask){.data=&token};peer=(GAsyncResult){"+CFUN: 0",0};radio_on=0;
+ init_peer_cfun_ready(&modem,&peer,&warm);assert(radio_on==1 && !warm.error);
+ warm=(GTask){.data=&token};peer=(GAsyncResult){"bad",0};ports_released=0;
+ init_peer_cfun_ready(&modem,&peer,&warm);assert(warm.error && warm.unrefs==1 && ports_released==1);
+ radio_mask=0;warm=(GTask){.data=&token};radio_on=power_commands=0;
+ init_cfun_ready(&modem,&zero,&warm);assert(!warm.returned && !radio_on && power_commands==1);
+ peer=(GAsyncResult){"+CFUN: 0",0};init_peer_cfun_ready(&modem,&peer,&warm);
+ assert(radio_on==1 && !warm.error);
+ GAsyncResult powered_sim={"+CPIN: READY",0};
+ // Even with both radios allowed, a live peer must restore the owner.
+ radio_mask=3;warm=(GTask){.data=&token};radio_on=0;peer=(GAsyncResult){"+CFUN: 1",0};
+ init_peer_cfun_ready(&modem,&peer,&warm);assert(warm.returned && !radio_on && !warm.error);
+ // Re-enable a powered RF-off SIM without resetting the other stack.
+ radio_mask=3;warm=(GTask){0};radio_on=power_commands=0;
+ power_up_cpin_ready(&modem,&powered_sim,&warm);
+ assert(!radio_on && power_commands==1 && !strcmp(last_command,"+SFUN=4"));
+ warm=(GTask){0};radio_on=power_commands=0;power_up_cpin_ready(&modem,&no_sim,&warm);
+ assert(radio_on==1 && !power_commands && !warm.error);
+ warm=(GTask){0};radio_on=power_commands=0;power_up_cpin_ready(&modem,&busy,&warm);
+ assert(warm.error && !radio_on && !power_commands);
+ radio_mask=0;warm=(GTask){0};power_commands=radio_on=0;
+ power_up_cpin_ready(&modem,&powered_sim,&warm);assert(warm.error && !power_commands && !radio_on);
+ radio_mask=2;warm=(GTask){0};power_up_cpin_ready(&modem,&powered_sim,&warm);
+ assert(warm.returned && !warm.error && !power_commands && !radio_on);
+ warm=(GTask){0};power_commands=0;modem_power_down(&modem,NULL,NULL);
+ assert(power_commands==1 && !strcmp(last_command,"+SFUN=5"));
  puts("SIM power checks passed: 8 slot/preference plans, absent vs busy, vendor order, mandatory failure at all 8 steps, invalid mode/CFUN rejection, init port cleanup");
 }
 '''
@@ -226,6 +274,8 @@ with tempfile.TemporaryDirectory() as directory:
                                function('power_parse_cfun', 'gboolean') +
                                function('cards_on_testmode_ready') + function('cards_on_probe_ready') +
                                function('init_power_failed') + function('init_sim_on_ready') +
-                               function('init_cfun_ready') + function('power_up_cfun_ready') + tests)
+                               function('init_radio_policy_ready') + function('init_apply_radio_policy') +
+                               function('init_peer_cfun_ready') + function('init_cfun_ready') +
+                               function('power_up_cpin_ready') + function('power_up_cfun_ready') + function('modem_power_down') + tests)
     subprocess.run(['cc', '-D_GNU_SOURCE', '-Wall', '-Werror', str(root / 'test.c'), '-o', str(root / 'test')], check=True)
     subprocess.run([str(root / 'test')], check=True)

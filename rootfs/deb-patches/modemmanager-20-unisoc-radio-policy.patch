@@ -4,7 +4,19 @@ Forwarded: no
 
 --- a/src/plugins/unisoc/mm-broadband-modem-unisoc.c
 +++ b/src/plugins/unisoc/mm-broadband-modem-unisoc.c
-@@ -779,6 +779,30 @@
+@@ -30,8 +30,9 @@
+  *  - the dial answers "+CDU: <n>" before its OK, and a VoLTE call reports its
+  *    state with "+CLCCS:"; both are swallowed (calls are followed through the
+  *    +CLCC polling).
+- *  - power.  +CFUN=4 and +CFUN=1 are flight mode and back, with the SIM kept
+- *    on.  +CFUN=0 switches the SIM off, and nothing brings it back within
++ *  - power.  +SFUN=5 and +SFUN=4 stop/start the selected protocol stack,
++ *    keeping the SIM powered, as the vendor RADIO_POWER request does.
++ *    +CFUN=0 switches the SIM off, and nothing brings it back within
+  *    that boot (the vendor pair below then answers "not allowed" or nothing),
+  *    so it is never sent.  The CP comes out of modem_control at +CFUN: 0 with
+  *    the SIM off, though, and the vendor RIL's way up from there is AT+SFUN=2
+@@ -779,6 +780,30 @@
   * The last one leaves the channel on the first card, for a port without the
   * card prefix. */
  static guint port_card (void);
@@ -35,23 +47,23 @@ Forwarded: no
  typedef struct {
      MMBaseModemAtCommandAlloc cmds[9];
      gboolean present[2];
-@@ -894,11 +918,13 @@
+@@ -894,11 +919,13 @@
          ctx->cmds[n++].timeout = 10;
      }
      if (ctx->present[0]) {
 -        ctx->cmds[n].command = g_strdup ("+SPACTCARD=0;+SFUN=4");
 +        ctx->cmds[n].command = g_strdup (sim_radio_enabled (0) ?
-+            "+SPACTCARD=0;+SFUN=4" : "+SPACTCARD=0;+CFUN=4");
++            "+SPACTCARD=0;+SFUN=4" : "+SPACTCARD=0;+SFUN=5");
          ctx->cmds[n++].timeout = 60;
      }
      if (ctx->present[1]) {
 -        ctx->cmds[n].command = g_strdup ("+SPACTCARD=1;+SFUN=4");
 +        ctx->cmds[n].command = g_strdup (sim_radio_enabled (1) ?
-+            "+SPACTCARD=1;+SFUN=4" : "+SPACTCARD=1;+CFUN=4");
++            "+SPACTCARD=1;+SFUN=4" : "+SPACTCARD=1;+SFUN=5");
          ctx->cmds[n++].timeout = 60;
      }
      ctx->cmds[n].command = g_strdup_printf ("+SPACTCARD=%u;+CFUN?", ctx->own);
-@@ -970,6 +996,8 @@
+@@ -970,6 +997,8 @@
  static void
  queue_data_priority (MMBaseModem *self)
  {
@@ -60,7 +72,49 @@ Forwarded: no
      GError *error = NULL;
      gchar slot[2] = { '0' + port_card (), '\0' };
      gchar *argv[] = { (gchar *) "/opt/e5/e5-data-priority",
-@@ -1048,6 +1076,15 @@
+@@ -1029,6 +1058,41 @@
+     else
+         g_task_return_boolean (task, TRUE);
+     g_object_unref (task);
++}
++
++/* After SFUN=5, CFUN=0 does not imply that the SIM lost power. */
++static void
++power_up_cpin_ready (MMBaseModem *self, GAsyncResult *res, GTask *task)
++{
++    GError *error = NULL;
++    const gchar *response = mm_base_modem_at_command_finish (self, res, &error);
++
++    /* RF permission may have changed while the SIM query was in flight. */
++    if (!sim_radio_enabled (port_card ())) {
++        g_clear_error (&error);
++        if (sim_radio_enabled (1 - port_card ()))
++            g_task_return_boolean (task, TRUE);
++        else
++            g_task_return_new_error (task, MM_CORE_ERROR, MM_CORE_ERROR_WRONG_STATE,
++                                     "This SIM radio is disabled by the user");
++        g_object_unref (task);
++        return;
++    }
++    if (error && g_error_matches (error, MM_MOBILE_EQUIPMENT_ERROR,
++                                 MM_MOBILE_EQUIPMENT_ERROR_SIM_NOT_INSERTED)) {
++        g_clear_error (&error);
++        cards_on (self, (GAsyncReadyCallback) power_sequence_ready, task);
++        return;
++    }
++    if (!error && (!response || !strstr (response, "+CPIN:")))
++        error = g_error_new (MM_CORE_ERROR, MM_CORE_ERROR_FAILED, "Invalid SIM power readback during power-up");
++    if (error) {
++        g_task_return_error (task, error);
++        g_object_unref (task);
++        return;
++    }
++    mm_base_modem_at_command (self, "+SFUN=4", 30, FALSE,
++                              (GAsyncReadyCallback) power_command_ready, task);
+ }
+
+ static void
+@@ -1048,12 +1112,26 @@
          g_object_unref (task);
          return;
      }
@@ -73,10 +127,26 @@ Forwarded: no
 +        g_object_unref (task);
 +        return;
 +    }
++    if (power == 1) {
++        g_task_return_boolean (task, TRUE);
++        g_object_unref (task);
++        return;
++    }
      if (power == 0) {
-         mm_obj_dbg (self, "SIM and protocol stack off (+CFUN: 0): AT+SFUN=2 and AT+SFUN=4 for both cards");
-         cards_on (self, (GAsyncReadyCallback) power_sequence_ready, task);
-@@ -1062,6 +1099,16 @@
+-        mm_obj_dbg (self, "SIM and protocol stack off (+CFUN: 0): AT+SFUN=2 and AT+SFUN=4 for both cards");
+-        cards_on (self, (GAsyncReadyCallback) power_sequence_ready, task);
+-        return;
+-    }
+-    mm_base_modem_at_command (self, "+CFUN=1", 30, FALSE,
++        mm_base_modem_at_command (self, "+CPIN?", 5, FALSE,
++                                  (GAsyncReadyCallback) power_up_cpin_ready, task);
++        return;
++    }
++    mm_base_modem_at_command (self, "+SFUN=4", 30, FALSE,
+                               (GAsyncReadyCallback) power_command_ready, task);
+ }
+
+@@ -1062,18 +1140,28 @@
                  GAsyncReadyCallback  callback,
                  gpointer             user_data)
  {
@@ -93,9 +163,23 @@ Forwarded: no
      mm_base_modem_at_command (MM_BASE_MODEM (self), "+CFUN?", 5, FALSE,
                                (GAsyncReadyCallback) power_up_cfun_ready,
                                g_task_new (self, NULL, callback, user_data));
-@@ -1135,6 +1182,19 @@
  }
- 
+
+-/* Low power and off are both flight mode: see the top */
++/* Vendor RIL RADIO_POWER: stop the selected protocol stack, keep SIM power. */
+ static void
+ modem_power_down (MMIfaceModem        *self,
+                   GAsyncReadyCallback  callback,
+                   gpointer             user_data)
+ {
+-    mm_base_modem_at_command (MM_BASE_MODEM (self), "+CFUN=4", 30, FALSE,
++    mm_base_modem_at_command (MM_BASE_MODEM (self), "+SFUN=5", 30, FALSE,
+                               (GAsyncReadyCallback) power_command_ready,
+                               g_task_new (self, NULL, callback, user_data));
+ }
+@@ -1135,6 +1223,70 @@
+ }
+
  static void
 +init_radio_policy_ready (MMBaseModem *self, GAsyncResult *res, GTask *task)
 +{
@@ -110,16 +194,9 @@ Forwarded: no
 +}
 +
 +static void
- init_cfun_ready (MMBaseModem  *self,
-                  GAsyncResult *res,
-                  GTask        *task)
-@@ -1153,6 +1213,28 @@
-     if (power == 0) {
-         mm_obj_msg (self, "SIM and protocol stack off (+CFUN: 0): switching them on");
-         cards_on (self, (GAsyncReadyCallback) init_sim_on_ready, task);
-+        return;
-+    }
-+    if (!sim_radio_enabled (0) || !sim_radio_enabled (1)) {
++init_apply_radio_policy (MMBaseModem *self, GTask *task, gboolean restore)
++{
++    if (restore || !sim_radio_enabled (0) || !sim_radio_enabled (1)) {
 +        /* The sequence retains pointers until its callback. Keep commands
 +         * owned by this task, separately from the parent's port context. */
 +        CardsOnContext *policy = g_slice_new0 (CardsOnContext);
@@ -128,7 +205,7 @@ Forwarded: no
 +        for (card = 0; card < 2; card++) {
 +            if (sim_radio_enabled (card))
 +                continue;
-+            policy->cmds[n].command = g_strdup_printf ("+SPACTCARD=%u;+CFUN=4", card);
++            policy->cmds[n].command = g_strdup_printf ("+SPACTCARD=%u;+SFUN=5", card);
 +            policy->cmds[n++].timeout = 30;
 +        }
 +        policy->cmds[n].command = g_strdup_printf ("+SPACTCARD=%u;+CFUN?", port_card ());
@@ -139,6 +216,55 @@ Forwarded: no
 +                                (GDestroyNotify) cards_on_context_free);
 +        mm_base_modem_at_sequence (self, (const MMBaseModemAtCommand *) policy->cmds, NULL, NULL,
 +                                  (GAsyncReadyCallback) init_radio_policy_ready, task);
++        return;
++    }
++    g_task_return_pointer (task, g_task_get_task_data (task), NULL);
++    g_object_unref (task);
++}
++
++/* SFUN=5 may report CFUN=0 with a powered SIM. If the other stack is
++ * already on, do not mistake a deliberately disabled card for a cold CP. */
++static void
++init_peer_cfun_ready (MMBaseModem *self, GAsyncResult *res, GTask *task)
++{
++    GError *error = NULL;
++    guint power;
++    const gchar *response = mm_base_modem_at_command_finish (self, res, &error);
++
++    if (!error && (!power_parse_cfun (response, &power) ||
++                   (power != 0 && power != 1 && power != 2 && power != 4)))
++        error = g_error_new (MM_CORE_ERROR, MM_CORE_ERROR_FAILED, "Invalid peer +CFUN readback during initialization");
++    if (error) {
++        init_power_failed (self, task, error);
++        return;
++    }
++    if (power == 1)
++        init_apply_radio_policy (self, task, TRUE);
++    else
++        cards_on (self, (GAsyncReadyCallback) init_sim_on_ready, task);
++}
++
++static void
+ init_cfun_ready (MMBaseModem  *self,
+                  GAsyncResult *res,
+                  GTask        *task)
+@@ -1151,12 +1303,13 @@
          return;
      }
-     g_task_return_pointer (task, g_task_get_task_data (task), NULL);
+     if (power == 0) {
+-        mm_obj_msg (self, "SIM and protocol stack off (+CFUN: 0): switching them on");
+-        cards_on (self, (GAsyncReadyCallback) init_sim_on_ready, task);
+-        return;
+-    }
+-    g_task_return_pointer (task, g_task_get_task_data (task), NULL);
+-    g_object_unref (task);
++        gchar *command = g_strdup_printf ("+SPACTCARD=%u;+CFUN?", 1 - port_card ());
++        mm_base_modem_at_command (self, command, 5, FALSE,
++                                  (GAsyncReadyCallback) init_peer_cfun_ready, task);
++        g_free (command);
++        return;
++    }
++    init_apply_radio_policy (self, task, FALSE);
+ }
+
+ static void

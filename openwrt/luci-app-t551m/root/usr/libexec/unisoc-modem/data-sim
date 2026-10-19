@@ -85,10 +85,14 @@ def radio_apply(slot, enabled):
                     raise RuntimeError('Radio setting saved; data teardown is still pending')
                 time.sleep(.2)
         try:
-            command(f'AT+SPACTCARD={slot};+CFUN={1 if enabled else 4}')
+            # Match the vendor RIL's per-card RADIO_POWER operation. CFUN=4
+            # is flight mode; it is not the vendor protocol-stack off command.
+            command(f'AT+SPACTCARD={slot};+SFUN={4 if enabled else 5}')
             result = subprocess.run([at, '-t', '5', f'AT+SPACTCARD={slot};+CFUN?'],
                                     capture_output=True, text=True, timeout=10)
-            if result.returncode or not re.search(r'\+CFUN:\s*' + ('1' if enabled else '4') + r'\s*(?:\r?\n|$)', result.stdout):
+            # Stock isRadioOn() treats 0 and 2 as off, 1 as on. Do not
+            # mistake the old flight-mode value 4 for confirmed SFUN=5 off.
+            if result.returncode or not re.search(r'\+CFUN:\s*' + ('1' if enabled else '[02]') + r'\s*(?:\r?\n|$)', result.stdout):
                 raise RuntimeError('Radio setting saved; RF readback not confirmed')
         finally:
             command(f'AT+SPACTCARD={own};+CFUN?')
@@ -175,11 +179,24 @@ def worker(job_id):
             return
         # e5-sim serializes with SMS transactions, persists the selection,
         # restarts the existing modem interface and applies its automatic APN.
+        deadline = time.monotonic() + 180
         result = subprocess.run([SWITCH, job['target']], stdout=subprocess.DEVNULL,
                                 stderr=subprocess.PIPE, text=True, timeout=180)
         if result.returncode:
             raise RuntimeError(result.stderr.strip()[-300:] or 'System SIM switch failed')
-        if current() != job['target'] or saved() != job['target']:
+        # rc.common starts the WWAN instance asynchronously. The switch tool
+        # can return while the old module is gone and the new card parameter
+        # does not exist yet. Wait only for that reload window, within the
+        # existing operation budget; a ready but wrong selection still fails.
+        while True:
+            try:
+                selected = current()
+                break
+            except FileNotFoundError:
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('WWAN interface did not return after SIM switch')
+                time.sleep(.1)
+        if selected != job['target'] or saved() != job['target']:
             raise RuntimeError('Data SIM did not match the saved selection; refresh actual state')
         job.update(ok=True, state='done')
     except BlockingIOError:

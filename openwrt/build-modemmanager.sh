@@ -67,7 +67,8 @@ set -euo pipefail
 # 33: data teardown preserves RF by default; explicit disable_modem wins.
 # 34: keep the logical modem enabled for the other SIM's voice/SMS when the
 # data radio is off, without powering that disabled data radio back on.
-E5REV=34
+# 35: vendor SFUN RF control and distinguish RF-off from cold SIM power-up.
+E5REV=35
 VER=${E5_WRT_VER:-25.12.5}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"

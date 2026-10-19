@@ -58,6 +58,15 @@ class LocksTest(unittest.TestCase):
             self.assertEqual((locks.STATE / 'mode').read_text().strip(), 'auto')
             self.assertTrue(locks.matches_saved('mode', 'auto', locks.snapshot()))
 
+    def test_profile_default_and_user_override(self):
+        for default in ('134', '152'):
+            for choice in ('', 'default', 'invalid'):
+                self.assertEqual(locks.mode_table(choice, default)['auto'], (int(default), 1))
+            for choice in ('134', '152'):
+                self.assertEqual(locks.mode_table(choice, default)['auto'], (int(choice), 1))
+            for key in ('4g', 'sa', 'nsa', '5g4g', '4g-nsa', 'sa-nsa'):
+                self.assertEqual(locks.mode_table('default', default)[key], locks.mode_table('134')[key])
+
     def test_native_auto_readback_is_not_unknown_on_legacy_config(self):
         self.tm = [152, 3, 0]
         self.assertEqual(locks.snapshot()['mode']['label'], 'auto')

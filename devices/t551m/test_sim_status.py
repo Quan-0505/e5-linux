@@ -62,8 +62,9 @@ class SimsTest(unittest.TestCase):
             self.override['+CPIN?']=reply;self.sent=[]
             self.assertEqual(sims.collect(0,self.read)['registration'],state)
             self.assertEqual(len(self.sent),1)
-        self.override={'+CFUN?':'+CFUN: 4\nOK'}
-        self.assertEqual(sims.collect(1,self.read)['registration'],'disabled')
+        for off in (0,2,4):
+            self.override={'+CFUN?':f'+CFUN: {off}\nOK'}
+            self.assertEqual(sims.collect(1,self.read)['registration'],'disabled')
         self.override={'+CPIN?':'+CME ERROR: 100'}
         self.assertEqual(sims.collect(1,self.read)['registration'],'unknown')
     def test_failure_does_not_reuse_signal(self):

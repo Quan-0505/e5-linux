@@ -25,6 +25,7 @@ def apply(kernel):
     runpy.run_path(str(SHARED.parent / 'common/fuel-gauge.py'))['apply'](kernel)
     runpy.run_path(str(SHARED.parent / 'common/wifi-sae.py'))['apply'](kernel)
     runpy.run_path(str(SHARED.parent / 'common/wifi-stations.py'))['apply'](kernel)
+    runpy.run_path(str(SHARED.parent / 'common/wcn-firmware.py'))['apply'](kernel)
     # A separate checkout is essential: the donor replaces the charger and
     # disables E5's touch firmware and amplifier. Never build E5 from that tree.
     for path in ('drivers/power/supply/bq2560x-charger.c',

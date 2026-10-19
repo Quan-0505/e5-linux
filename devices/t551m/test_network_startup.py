@@ -130,7 +130,7 @@ run_modes() {
 
     def test_pdp_retry_shared_across_profiles(self):
         path = self.root / 'lib/netifd/proto/modemmanager.sh'
-        for profile in ('e5', 't551m', 'm8'):
+        for profile in ('e5', 't551m', 'm8', 't512n'):
             with self.subTest(profile=profile):
                 path.write_text(PROTO)
                 patch_root(self.root, profile)
@@ -344,18 +344,21 @@ modemmanager_unisoc_block_restart wan unisoc-sipc
         path.parent.mkdir(parents=True, exist_ok=True)
         original = "config core 'main'\n\toption device '/dev/ttyUSB0'\n"
         path.write_text(original)
-        patch_root(self.root, 'e5')
-        self.assertEqual(path.read_text(), original)
-        patch_root(self.root, 'm8')
-        self.assertEqual(path.read_text(), original)
+        for profile in ('e5', 'm8', 't512n'):
+            path.write_text(original)
+            patch_root(self.root, profile)
+            self.assertIn("option auto_work_mode_default '134'", path.read_text())
+            self.assertIn("option auto_work_mode 'default'", path.read_text())
         patch_root(self.root, 't551m')
         configured = path.read_text()
-        self.assertIn("option auto_work_mode '152'", configured)
+        self.assertIn("option auto_work_mode_default '152'", configured)
+        self.assertIn("option auto_work_mode 'default'", configured)
         patch_root(self.root, 't551m')
         self.assertEqual(path.read_text(), configured)
-        path.write_text(configured.replace("auto_work_mode '152'", "auto_work_mode '134'"))
-        patch_root(self.root, 't551m')
-        self.assertIn("option auto_work_mode '134'", path.read_text())
+        for override in ('134', '152', 'default'):
+            path.write_text(configured.replace("auto_work_mode 'default'", "auto_work_mode '" + override + "'"))
+            patch_root(self.root, 't551m')
+            self.assertIn("option auto_work_mode '" + override + "'", path.read_text())
 
 
 if __name__ == '__main__':

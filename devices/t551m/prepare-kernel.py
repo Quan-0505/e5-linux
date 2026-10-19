@@ -127,6 +127,8 @@ def board_charger(source):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('kernel', type=Path)
+    ap.add_argument('--preserve-board-current', action='store_true',
+                    help='Reuse the driver port without T551M DCP table changes')
     args = ap.parse_args()
     k = args.kernel
     head = subprocess.check_output(['git', '-C', str(k), 'rev-parse', 'HEAD']).decode().strip()
@@ -134,6 +136,7 @@ def main():
         raise SystemExit('Expected linux-lts-e5 commit ' + KERNEL_COMMIT)
     runpy.run_path(str(Path(__file__).resolve().parents[1] / 'common/display.py'))['apply'](k)
     runpy.run_path(str(Path(__file__).resolve().parents[1] / 'common/power.py'))['apply'](k)
+    runpy.run_path(str(Path(__file__).resolve().parents[1] / 'common/wcn-firmware.py'))['apply'](k)
     runpy.run_path(str(Path(__file__).resolve().parents[1] / 'common/charger-capabilities.py'))['apply'](k)
     runpy.run_path(str(Path(__file__).resolve().parents[1] / 'common/emmc.py'))['apply'](k)
     runpy.run_path(str(Path(__file__).resolve().parents[1] / 'common/sd-power.py'))['apply'](k)
@@ -190,7 +193,8 @@ def main():
     if 'T551M BC1.2 fallback' not in text:
         text = text.replace(marker, marker + '\n\t/* T551M BC1.2 fallback without the vendor PD stack. */\n\tif (!IS_ENABLED(CONFIG_SC27XX_PD))\n\t\tinfo->use_typec_extcon = false;')
     path.write_text(text)
-    runpy.run_path(str(Path(__file__).with_name('usb_charger.py')))['apply'](k, replace_function)
+    runpy.run_path(str(Path(__file__).with_name('usb_charger.py')))['apply'](
+        k, replace_function, restore_board_current=not args.preserve_board_current)
     runpy.run_path(str(Path(__file__).with_name('otg.py')))['apply'](k)
     runpy.run_path(str(Path(__file__).with_name('cpufreq.py')))['apply'](k)
     runpy.run_path(str(Path(__file__).with_name('wifi.py')))['apply'](k)

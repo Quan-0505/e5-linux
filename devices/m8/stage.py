@@ -9,6 +9,13 @@ import runpy
 TOP = Path(__file__).resolve().parents[2]
 
 
+def validate_radio_defaults(config):
+    # Automatic-mode selection is shared by all boards now. Keep an explicit
+    # user choice; only a donor's LTE capability allowlist remains forbidden.
+    if 'lte_supported_bands' in config.read_text():
+        raise ValueError('Donor radio defaults found in M8 root')
+
+
 def stage(root):
     root = Path(root).resolve()
     if os.name == 'nt' or root == Path('/'):
@@ -70,10 +77,9 @@ def stage(root):
     link(root, 'S14e5-charge-mode', 'e5-charge-mode')
     link(root, 'S25t551m-usb', 't551m-usb')
     (root / 'usr/share/e5-infoscreen/ADAPTATION').write_text('m8-mobile-v1\n')
-    # Keep the factory radio mode until this modem's own capabilities are known.
+    # Discover LTE capabilities on this modem, without a donor allowlist.
     config = root / 'etc/config/unisoc_modem'
-    if 'auto_work_mode' in config.read_text() or 'lte_supported_bands' in config.read_text():
-        raise ValueError('Donor radio defaults found in M8 root')
+    validate_radio_defaults(config)
     (root / 'etc/e5/feature-port.json').write_text(json.dumps({
         'profile': 'm8', 'schema': 1, 'status': 'bringup',
         'hardware_validation': 'in progress; not a release image',

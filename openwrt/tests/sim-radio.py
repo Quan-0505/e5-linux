@@ -33,6 +33,8 @@ class RadioTests(unittest.TestCase):
         self.commands = []
         self.fail = None
         self.states = [1, 1]
+        self.off_state = 2
+        self.ignore_write = False
 
         def execute(argv, **kw):
             self.commands.append(argv)
@@ -41,15 +43,16 @@ class RadioTests(unittest.TestCase):
                     '{"up":false,"pending":false}' if argv[-1]=='status' else '', '')
             if argv[0] == 'mmcli':
                 own=int(self.card.read_text())
-                if argv[-1]=='--disable': self.states[own]=4
+                if argv[-1]=='--disable': self.states[own]=self.off_state
                 elif self.scope['radio_policy']()[own]: self.states[own]=1
                 return subprocess.CompletedProcess(argv,0,'','')
             cmd = argv[-1]
             if self.fail and self.fail in cmd:
                 return subprocess.CompletedProcess(argv, 1, 'ERROR\n', '')
             slot = int(cmd.split('SPACTCARD=')[1][0])
-            if ';+CFUN=' in cmd:
-                self.states[slot] = int(cmd[-1])
+            if ';+SFUN=' in cmd:
+                if not self.ignore_write:
+                    self.states[slot] = 1 if cmd.endswith('=4') else self.off_state
             reply = f'+CFUN: {self.states[slot]}\nOK\n' if cmd.endswith('?') else 'OK\n'
             return subprocess.CompletedProcess(argv, 0, reply, '')
         self.patches = [patch.dict(os.environ, self.env), patch.object(self.scope['subprocess'], 'run', execute)]
@@ -68,7 +71,7 @@ class RadioTests(unittest.TestCase):
 
     def test_standby_off_does_not_touch_wan_or_other_rf(self):
         self.apply('1', False)
-        self.assertEqual(self.states, [1,4])
+        self.assertEqual(self.states, [1,2])
         self.assertFalse(any(c[0]=='ubus' for c in self.commands))
         self.assertEqual(self.policy.read_text(), '1 0\n')
         self.assertTrue(self.commands[-1][-1].endswith('SPACTCARD=0;+CFUN?'))
@@ -76,9 +79,9 @@ class RadioTests(unittest.TestCase):
     def test_both_can_be_off_and_enabled_independently(self):
         self.apply('0', False)
         self.apply('1', False)
-        self.assertEqual((self.states,self.policy.read_text()), ([4,4],'0 0\n'))
+        self.assertEqual((self.states,self.policy.read_text()), ([2,2],'0 0\n'))
         self.apply('1', True)
-        self.assertEqual((self.states,self.policy.read_text()), ([4,1],'0 1\n'))
+        self.assertEqual((self.states,self.policy.read_text()), ([2,1],'0 1\n'))
         self.apply('0', True)
         self.assertEqual(self.states,[1,1])
 
@@ -88,14 +91,35 @@ class RadioTests(unittest.TestCase):
         notes = [json.loads(c[-1]) for c in self.commands if c[0]=='ubus' and 'notify_proto' in c]
         self.assertEqual(notes,[{'action':5,'available':False},{'action':5,'available':True}])
         self.assertFalse(any(c[0] in ('ifup','ifdown', 'uci') for c in self.commands))
-        self.assertFalse(any('SPSWDATA' in c[-1] or 'SFUN' in c[-1] for c in self.commands))
+        self.assertFalse(any('SPSWDATA' in c[-1] or 'CFUN=' in c[-1] for c in self.commands))
         self.assertEqual([c[-1] for c in self.commands if c[0]=='mmcli'],['--enable'])
 
     def test_failure_restores_at_owner_and_keeps_explicit_off_for_next_boot(self):
-        self.fail='CFUN=4'
+        self.fail='SFUN=5'
         with self.assertRaises(RuntimeError): self.apply('1',False)
         self.assertEqual(self.policy.read_text(),'1 0\n')
         self.assertTrue(self.commands[-1][-1].endswith('SPACTCARD=0;+CFUN?'))
+
+    def test_vendor_off_readbacks_and_no_flight_mode_writes(self):
+        for off in (0, 2):
+            self.off_state = off
+            for slot in ('0', '1'):
+                self.apply(slot, False)
+                self.assertEqual(self.states[int(slot)], off)
+                self.apply(slot, True)
+                self.assertEqual(self.states[int(slot)], 1)
+                self.assertIn(f'AT+SPACTCARD={slot};+SFUN=5', [c[-1] for c in self.commands])
+                self.assertIn(f'AT+SPACTCARD={slot};+SFUN=4', [c[-1] for c in self.commands])
+        self.assertFalse(any('CFUN=' in c[-1] for c in self.commands))
+
+    def test_ok_without_radio_state_change_is_not_success(self):
+        for state in (1, 4, 99):
+            self.states = [1, state]
+            self.ignore_write = True
+            with self.assertRaisesRegex(RuntimeError, 'readback not confirmed'):
+                self.apply('1', False)
+            self.assertEqual(self.policy.read_text(), '1 0\n')
+            self.assertTrue(self.commands[-1][-1].endswith('SPACTCARD=0;+CFUN?'))
 
     def test_bad_policy_is_not_silently_enabled(self):
         for bad in ('1', '1 2', '1 1\n0', 'on off', ''):

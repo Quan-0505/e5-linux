@@ -28,6 +28,7 @@ def apply(kernel):
     runpy.run_path(str(HERE.parent / 'common/fuel-gauge.py'))['apply'](kernel)
     runpy.run_path(str(HERE.parent / 'common/wifi-sae.py'))['apply'](kernel)
     runpy.run_path(str(HERE.parent / 'common/wifi-stations.py'))['apply'](kernel)
+    runpy.run_path(str(HERE.parent / 'common/wcn-firmware.py'))['apply'](kernel)
     for name in ('drivers/power/supply/board-charge-profile.h',
                  'drivers/unisoc_platform/sprd_disp/t551m-backlight.h'):
         if (kernel / name).exists():

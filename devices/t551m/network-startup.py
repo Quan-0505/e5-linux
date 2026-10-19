@@ -226,7 +226,7 @@ APN_SELECTION = '''\t# unisoc-apn-selection: shared by E5, T551M and M8 on every
 
 
 def patch_root(root, profile='t551m'):
-    if profile not in ('t551m', 'e5', 'm8'):
+    if profile not in ('t551m', 'e5', 'm8', 't512n'):
         raise ValueError('Unknown device profile: ' + profile)
     for asset in ('usr/libexec/e5-network-recovery', 'etc/init.d/e5-network-recovery'):
         source = Path(__file__).resolve().parents[2] / 'openwrt/overlay' / asset
@@ -261,22 +261,29 @@ def patch_root(root, profile='t551m'):
         target.chmod(0o755)
     patch_wifi_capabilities(root)
     config = root / 'etc/config/unisoc_modem'
-    if config.exists() and profile == 't551m':
+    if config.exists():
         text = config.read_text()
         anchor = "config core 'main'\n"
         additions = ''
-        # Match the stock RIL's NR_TL_LF_W capability; 134 additionally
-        # includes GSM. Preserve an explicitly configured compatibility mode.
+        # Board-owned default and user override are separate. Never rewrite an
+        # explicit 134/152 choice when assembling or updating a system.
+        default = '152' if profile == 't551m' else '134'
+        if re.search(r'^\s*option auto_work_mode_default\s+', text, re.M):
+            text = re.sub(r'^(\s*option auto_work_mode_default)\s+.*$',
+                          lambda m: m[1] + " '" + default + "'", text, flags=re.M)
+        else:
+            additions += "\toption auto_work_mode_default '" + default + "'\n"
         if 'option auto_work_mode ' not in text:
-            additions += "\toption auto_work_mode '152'\n"
+            additions += "\toption auto_work_mode 'default'\n"
         # This firmware drops B38 from SPLBAND readback; the imported
         # dashboard's larger fallback list is not a capability query.
-        if 'option lte_supported_bands ' not in text:
+        if profile == 't551m' and 'option lte_supported_bands ' not in text:
             additions += "\toption lte_supported_bands '1,3,5,8,34,39,40,41'\n"
         if additions:
             if text.count(anchor) != 1:
                 raise ValueError('Unexpected modem dashboard configuration')
-            config.write_text(text.replace(anchor, anchor + additions))
+            text = text.replace(anchor, anchor + additions)
+        config.write_text(text)
 
     wrapper = root / 'usr/sbin/ModemManager-wrapper'
     if wrapper.exists():
@@ -436,6 +443,6 @@ def patch_root(root, profile='t551m'):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, required=True)
-    parser.add_argument('--profile', choices=('t551m', 'e5', 'm8'), default='t551m')
+    parser.add_argument('--profile', choices=('t551m', 'e5', 'm8', 't512n'), default='t551m')
     args = parser.parse_args()
     patch_root(args.root, args.profile)
