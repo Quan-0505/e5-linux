@@ -69,6 +69,19 @@ class CPUControlTest(unittest.TestCase):
         self.assertEqual(json.loads(self.control.config.read_text())['policies'][0]['max'], 1500000)
         self.control.write(self.policy / 'scaling_max_freq', 1500000)
 
+    def test_hotplug_preserves_offline_cluster_frequency_profile(self):
+        self.control.set_item('persist', True)
+        saved = json.loads(self.control.config.read_text())
+        (self.policy / 'affected_cpus').write_text('')
+        state = self.control.snapshot()
+        self.assertFalse(state['policies'][0]['writable'])
+        self.assertEqual(state['policies'][0]['cpus'], '0 1 2 3 4 5')
+        # Applying thermal/persistence settings cannot erase offline requests.
+        self.control.apply({}, True)
+        self.assertEqual(json.loads(self.control.config.read_text())['policies'], saved['policies'])
+        with self.assertRaisesRegex(ValueError, 'offline'):
+            self.control.apply({'policies':[{'id':'policy0','min':600000}]})
+
     def test_all_validation_before_writes(self):
         before=self.control.settings(self.control.snapshot())
         for changes in [

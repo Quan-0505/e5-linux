@@ -2,6 +2,7 @@
 'require view';
 'require poll';
 'require mu300.common as M';
+'require mu300.auto-mode as AutoMode';
 
 /* Network settings use verified asynchronous jobs. Each operation reports its
  * own completion/error; bands require command acknowledgement, other fields verify. */
@@ -37,6 +38,7 @@ return view.extend({
   <h3>网络模式 · EN-DC</h3>
   <div class="mud-loadline" id="mud-lock-loading" role="status"></div>
   <div class="mud-ctl" id="mud-lock-modes" style="grid-template-columns:repeat(auto-fit,minmax(76px,1fr));max-width:520px"></div>
+  <div id="mud-auto-mode" hidden></div>
   <div class="mud-ctl" style="margin-top:7px;grid-template-columns:1fr 1fr;max-width:340px">
     <button class="mud-btn" id="mud-lock-endc">EN-DC</button>
     <button class="mud-btn" id="mud-lock-refresh">刷新锁定状态</button>
@@ -114,6 +116,7 @@ return view.extend({
 		var apply = function(kind, val, what, opts) {
 			opts = opts || {};
 			var slot = M.simSlot();
+			opts.slot = slot;
 			M.confirmBox('应用「' + what + '」？',
 				opts.noSfun ? '' : '蜂窝连接会重新建立，蜂窝断开约半分钟。',
 				{ danger: !opts.noSfun, okText: '应用' })
@@ -130,18 +133,30 @@ return view.extend({
 			if (opts.optimistic) opts.optimistic();   /* 按钮立刻切到目标态，回读负责校正 */
 			M.busy(btn, true);   /* 在 optimistic 之后：它可能重置按钮的 className */
 			self.note('正在后台应用 ' + what + ' …' + (opts.noSfun ? '' : '（重新建立蜂窝连接，约半分钟）'), 'busy');
-			M.callLockSet(kind, val).then(function(r) {
+			var run = function() {
+				if (opts.prepare && (self._disposed || M.simSlot() !== opts.slot))
+					throw new Error(M.translate('查看卡槽已改变，请重新确认操作'));
+				return M.callLockSet(kind, val);
+			};
+			// Save only the compatibility option after confirmation; keep the
+			// existing selected-SIM job and AT/replay ordering unchanged.
+			var operation = opts.prepare ? Promise.resolve().then(opts.prepare).then(run) : run();
+			operation.then(function(r) {
 				r = r || {};
 				if (!r.ok) {
 					self._applying = false;
-					M.busy(btn, false);
+					M.busy(btn, false); self.paintAutoMode();
 					self.refresh();
 					self.note('失败：' + (r.error || '未知错误'), 'error');
 					return;
 				}
 				self.readback(r, btn);
-			}, function() { self._applying = false; M.busy(btn, false); self.refresh(); self.note('调用失败', 'error'); });
+			}, function(error) { self._applying = false; M.busy(btn, false); self.paintAutoMode(); self.refresh(); self.note(error && error.message || '调用失败', 'error'); });
 		};
+
+		this.autoMode = AutoMode.attach(this.Q('auto-mode'), function(btn, prepare) {
+			apply('mode', 'auto', M.translate('自动模式兼容性'), {btn:btn, prepare:prepare});
+		});
 
 		this.Q('lock-modes').innerHTML = MODES.map(function(m) {
 			return '<button class="mud-btn" data-mode="' + m[0] + '">' + M.esc(M.translate(m[1])) + '</button>';
@@ -187,16 +202,17 @@ return view.extend({
 			};
 		});
 		this.Q('lock-refresh').onclick = function() {
+			if (self.autoMode) self.autoMode.reload();
 			var btn = this;
 			M.busy(btn, true);
 			self.note('正在直读调制解调器（最多几秒）…', 'busy');
 			L.resolveDefault(M.callLockFresh('1')).then(function(l) {
-				M.busy(btn, false);
+				M.busy(btn, false); self.paintAutoMode();
 				self.lastLock = l || {};
 				self.paint();
 				self.note(l && !l.error ? '已刷新' : '刷新失败：' + (l && l.error || '无法读取模组'), l && !l.error ? 'success' : 'error');
 				self.paintNeighbors();
-			}, function() { M.busy(btn, false); self.note('刷新失败', 'error'); });
+			}, function() { M.busy(btn, false); self.paintAutoMode(); self.note('刷新失败', 'error'); });
 			self.loadServing();
 			self.loadServingMeta();
 		};
@@ -382,7 +398,7 @@ return view.extend({
 			self.note('应用失败：' + (error.message || error), 'error');
 			self.refresh();
 		}).then(function() {
-			self._applying = false; M.busy(btn, false);
+			self._applying = false; M.busy(btn, false); self.paintAutoMode();
 			if (!self._disposed) self.paintVoiceSwitches(self.lastLock || {});
 		});
 	},
@@ -426,7 +442,12 @@ return view.extend({
 		});
 	},
 
+	paintAutoMode: function() {
+		if (this.autoMode) this.autoMode.update((this.lastLock || {}).mode, !!this._applying);
+	},
+
 	paint: function() {
+		this.paintAutoMode();
 		var l = this.lastLock || {};
 		var self = this;
 		this.loading('lock', false, l.error || (!l.mode ? '锁定状态读取失败，请刷新' : null));

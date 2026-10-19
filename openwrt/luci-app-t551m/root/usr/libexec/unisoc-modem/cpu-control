@@ -188,6 +188,10 @@ class Control:
             rail = (1, 2, 0)[domain] if editable and 'sprd,ums9621' in compatible else None
             policies.append({
                 'id': path.name, 'cpus': read(path / 'related_cpus'),
+                'writable': bool(freqs and read(path / 'scaling_available_governors') and
+                                 number(path / 'scaling_min_freq') is not None and
+                                 number(path / 'scaling_max_freq') is not None and
+                                 (not (path / 'affected_cpus').exists() or read(path / 'affected_cpus'))),
                 'driver': read(path / 'scaling_driver'),
                 'current': number(path / 'cpuinfo_cur_freq', number(path / 'scaling_cur_freq')),
                 'min': number(path / 'scaling_requested_min_freq', number(path / 'scaling_min_freq')),
@@ -244,7 +248,7 @@ class Control:
     @staticmethod
     def settings(state):
         return {'policies': [{k: p[k] for k in ('id', 'cpus', 'min', 'max', 'governor')}
-                             for p in state['policies']],
+                             for p in state['policies'] if p.get('writable', True)],
                 'thermal': [{'zone': z['name'], 'trip': t['id'], 'temp': t['temp']}
                             for z in state['zones'] for t in z['trips'] if t['writable']]}
 
@@ -291,6 +295,8 @@ class Control:
             if not current or current['id'] in seen:
                 raise ValueError('CPU policy missing or repeated')
             seen.add(current['id'])
+            if not current.get('writable', True):
+                raise ValueError('CPU policy is offline; enable its cores before changing frequency')
             if 'voltage_next' in p:
                 self.validate_voltage(p['voltage_next'])
                 if not current['voltage_boot_writable']:
@@ -349,7 +355,14 @@ class Control:
                     undo.append((path, before))
                     self.write(path, value)
             if persist is True or (persist is None and self.config.exists()):
-                atomic_json(self.config, self.settings(self.snapshot()))
+                profile = self.settings(self.snapshot())
+                # Keep saved requests for offline clusters. They will be online
+                # when frequency replay runs, before the optional hotplug replay.
+                active = {p['id'] for p in profile['policies']}
+                if previous_config:
+                    profile['policies'].extend(p for p in json.loads(previous_config).get('policies', [])
+                                               if p['id'] not in active)
+                atomic_json(self.config, profile)
             elif persist is False:
                 self.config.unlink(missing_ok=True)
             if next_voltage is not None:

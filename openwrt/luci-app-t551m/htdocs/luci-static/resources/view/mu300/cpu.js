@@ -3,6 +3,7 @@
 'require rpc';
 'require poll';
 'require mu300.common as M';
+'require mu300.cpu-cores as Cores';
 
 /* CPU layout adapted from mu300-linux (local revision 25f8d0c).
  * MIT License
@@ -152,7 +153,7 @@ return view.extend({
         const head = node('div','mud-cpu-title');
         head.append(node('h2',null,text('CPU 设置','CPU settings')),
             node('p','mud-note',text('频率 · 电压 · 温控','Frequency · Voltage · Thermal')));
-        this.content.append(head);
+        this.content.append(head,Cores.render());
         if (!s.ok || !s.available) this.content.append(node('div','mud-card',M.translate(s.error) || text('CPU 调频驱动尚未就绪','The CPU frequency driver is not ready')));
         const section = (title,badge) => {
             const card = node('section','mud-card mud-cpu-section'), head = node('div','mud-cpu-heading');
@@ -172,6 +173,8 @@ return view.extend({
             const metric = node('div','mud-cpu-metric'), value = node('div');
             value.append(now,node('small',null,'MHz'));metric.append(node('span',null,text('当前频率','Current frequency')),value);
             const governor = select(p.governors,p.governor), low = select(p.frequencies,p.min,mhz), high = select(p.frequencies,p.max,mhz);
+            const writable=p.writable!==false && p.frequencies.length && p.governors.length && p.min != null && p.max != null;
+            [governor,low,high].forEach(e=>{e.disabled=!writable;e.dataset.cpuReadonly=String(!writable);});
             governor.dataset.setting = p.id+'_governor'; low.dataset.setting = p.id+'_min'; high.dataset.setting = p.id+'_max';
             const range = node('div','mud-cpu-range');
             range.append(field(text('最低频率','Minimum frequency'),low),field(text('最高频率','Maximum frequency'),high));
@@ -250,6 +253,7 @@ return view.extend({
             const changes={policies:[],thermal:[]};
             if(!reset) {
                 this.inputs.forEach(({p,governor,low,high,voltage})=>{
+                    if(p.writable===false || !p.frequencies.length || !p.governors.length || p.min == null || p.max == null) return;
                     if(+low.value>+high.value) throw new Error(text('最低频率不能大于最高频率','Minimum frequency must not exceed maximum'));
                     const item={id:p.id,cpus:p.cpus,min:+low.value,max:+high.value,governor:governor.value};
                     if(voltage) item.voltage_next=+voltage.value;
@@ -260,12 +264,12 @@ return view.extend({
                     changes.thermal.push({zone:z.name,trip:t.id,temp:+input.value*1000});
                 });
             }
-            this.busy=true;this.content.querySelectorAll('button,input,select').forEach(e=>e.disabled=true);
+            this.busy=true;this.content.querySelectorAll('button,input,select').forEach(e=>{if(!e.closest('.mud-cpu-cores'))e.disabled=true;});
             const result=await (reset?resetCpu():applyCpu(changes,this.persist.checked));
             if(!result.ok) throw new Error(result.error||'Failed');
             this.paint(result);this.message(result.voltage_reboot_required ? text('调频与温控已应用；电压配置已保存，重启后生效','Frequency and thermal settings applied; reboot to apply saved voltage settings') : text('已应用，并读取确认当前设置','Applied and confirmed by kernel readback'));
         } catch(e) { this.message(e.message,true); }
-        finally {this.busy=false;this.content.querySelectorAll('button,input,select').forEach(e=>e.disabled=!this.state.available);}
+        finally {this.busy=false;this.content.querySelectorAll('button,input,select').forEach(e=>{if(!e.closest('.mud-cpu-cores'))e.disabled=!this.state.available || e.dataset.cpuReadonly==='true';});}
     },
     handleSaveApply:null,handleSave:null,handleReset:null
 });

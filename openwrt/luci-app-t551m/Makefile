@@ -27,6 +27,7 @@ define Package/luci-app-t551m/conffiles
 /etc/config/unisoc_modem
 /etc/config/unisoc_apn
 /etc/e5-cpu.json
+/etc/unisoc-cpu-cores.json
 /etc/e5-cpu-voltage.json
 /etc/e5-cpu-voltage-armed.json
 /etc/unisoc-modem/forward/
@@ -41,6 +42,7 @@ define Package/luci-app-t551m/install
 	$(INSTALL_DIR) $(1)/www
 	$(CP) ./htdocs/. $(1)/www/
 	$(CP) ./root/. $(1)/
+	chmod 0755 $(1)/etc/init.d/unisoc-cpu-cores $(1)/usr/libexec/rpcd/unisoc-cpu-cores $(1)/usr/libexec/unisoc-modem/cpu-cores
 	chmod 0755 $(1)/etc/init.d/unisoc-modem-ui $(1)/etc/init.d/unisoc-traffic $(1)/etc/hotplug.d/net/90-unisoc-usb-host $(1)/etc/hotplug.d/iface/90-unisoc-usb-host $(1)/usr/libexec/rpcd/mu300dash $(1)/usr/libexec/unisoc-modem/*
 	chmod 0755 $(1)/etc/init.d/e5-cpu $(1)/usr/libexec/rpcd/e5-cpu
 	chmod 0755 $(1)/etc/init.d/unisoc-sms-forward
@@ -77,6 +79,7 @@ define Package/luci-app-t551m/postinst
 	/etc/init.d/unisoc-sms-forward start 2>/dev/null || true
 	/etc/init.d/e5-cpu disable 2>/dev/null || true
 	/etc/init.d/e5-cpu enable 2>/dev/null || true
+	/etc/init.d/unisoc-cpu-cores enable 2>/dev/null || true
 	/etc/init.d/e5-cpu start 2>/dev/null || true
 }
 exit 0
@@ -93,6 +96,7 @@ define Package/luci-app-t551m/postrm
 		/etc/init.d/unisoc-sms-forward stop 2>/dev/null || true
 		/etc/init.d/unisoc-sms-forward disable 2>/dev/null || true
 		/etc/init.d/e5-cpu disable 2>/dev/null || true
+		/etc/init.d/unisoc-cpu-cores disable 2>/dev/null || true
 		rm -f /etc/unisoc-modem/usb-boot.conf
 	fi
 	rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null
