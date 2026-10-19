@@ -10,6 +10,7 @@ import re
 import runpy
 import subprocess
 import struct
+import sys
 import tarfile
 import tempfile
 import time
@@ -38,6 +39,24 @@ def digest(stream):
 def file_digest(path):
     with path.open('rb') as stream:
         return digest(stream)
+
+
+def e5_shortcut_overlay_hashes():
+    """Return exact hashes for the E5 keypad overlay applied after screen staging."""
+    source = TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen'
+    relative = ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js')
+    if not all((source / name).is_file() for name in relative):
+        raise ValueError('info-screen sources required to verify the E5 keypad overlay are missing')
+    patcher = Path(__file__).resolve().with_name('patch-e5-daed-shortcut.py')
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        for name in relative:
+            target = root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((source / name).read_bytes())
+        subprocess.run([sys.executable, str(patcher), str(root)],
+                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        return {'usr/share/e5-infoscreen/' + name: file_digest(root / name) for name in relative}
 
 
 def revision(path):
@@ -122,6 +141,9 @@ def audit_root(info):
     for name in ('vendor-start.sh', 'e5-modem-coldboot'):
         expected['opt/e5/' + name] = file_digest(TOP / 'device/linux_device_common/overlay/opt/e5' / name)
     expected['etc/e5/block-mount.build-id'] = hashlib.sha256((block_build_id() + '\n').encode()).hexdigest()
+    # E5 applies a repository-maintained keypad patch after copying upstream
+    # info-screen sources into the image. Verify the patched files byte-for-byte.
+    expected.update(e5_shortcut_overlay_hashes())
     found, versions, modules = {}, {}, set()
     required_exec = {'etc/init.d/e5-boot-ok', 'etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
                      'usr/libexec/e5-infoscreen/plugin', 'usr/libexec/e5-infoscreen/update'}
