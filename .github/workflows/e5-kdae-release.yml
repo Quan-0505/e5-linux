@@ -1,5 +1,5 @@
 name: Build and publish OpenWrt
-run-name: OpenWrt ${{ inputs.openwrt_version || '25.12.5' }} 路 ${{ github.ref_name }}
+run-name: OpenWrt ${{ inputs.openwrt_version || '25.12.6' }} 路 ${{ github.ref_name }}
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
     inputs:
       openwrt_version:
         description: OpenWrt release
-        default: '25.12.5'
+        default: '25.12.6'
         required: true
       source_ref:
         description: e5-linux branch, tag or commit
@@ -37,7 +37,7 @@ concurrency:
 env:
   TZ: CST-8
   E5_SOURCE_REPOSITORY: Quan-0505/e5-linux
-  E5_WRT_VER: ${{ inputs.openwrt_version || '25.12.5' }}
+  E5_WRT_VER: ${{ inputs.openwrt_version || '25.12.6' }}
 
 jobs:
   block-package:
@@ -304,7 +304,9 @@ jobs:
           python3 rootfs/tests/modem-coldboot.py
           python3 tools/tests/ci-release.py
           python3 tools/tests/infoscreen-daed-app.py
+          python3 tools/tests/infoscreen-daed-key0.py
           python3 tools/tests/openwrt-package-state.py
+          python3 tools/tests/rootfs-inline-script.py
           python3 tools/tests/rootfs-apk-retry.py
           python3 openwrt/tests/part-root-boot.py
           python3 boot/tests/part-install.py

@@ -69,7 +69,7 @@
 # E5_IMAGE_MB sets the image's size (default 1024, or 2048 with Docker). Needs Docker with arm64
 # (native on Apple silicon).
 set -euo pipefail
-VER=${E5_WRT_VER:-25.12.5}
+VER=${E5_WRT_VER:-25.12.6}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
 python3 "$TOP/tools/device-layout.py" check --system openwrt --model e5 >/dev/null
@@ -237,7 +237,7 @@ fi
 # (the standalone tree is only the image's source)
 TAROUT=$OUT; [ -z "$STANDALONE" ] || TAROUT=$WORK
 docker import --platform linux/arm64 "$WORK/$TARBALL" e5-openwrt-base:$VER >/dev/null
-# Packages OpenWrt's repository dropped -- cog and WPE WebKit left 25.12.5's feed when it was regenerated on
+# Packages OpenWrt's repository dropped -- cog and WPE WebKit disappeared from the 25.12 release feed when it was regenerated on
 # 2026-09-28 -- are taken from the last image that had them: their files, apk database entries and
 # dependencies, out of that image's rootfs archive into $WORK/transplant once (kept there).  The build uses
 # them only while the repository has none of them.
@@ -332,6 +332,9 @@ if [ -d /in/wifi-sae ]; then
     apk_retry add --allow-untrusted /in/wifi-sae/*.apk >/dev/null || apk add --allow-untrusted /in/wifi-sae/*.apk >/dev/null || true
 fi
 apk_retry add $(sed -e "s/#.*//" -e "/^[[:space:]]*$/d" /in/packages.list) >/dev/null
+# The E5 screen authenticated Daed adapter uses the ucode filesystem module
+# for short-lived, permission-restricted curl request files.
+apk_retry add ucode-mod-fs >/dev/null
 # SMS email encoding and DingTalk signatures need the OpenSSL command itself.
 command -v openssl >/dev/null
 openssl version
@@ -353,16 +356,16 @@ apk del luci-app-attendedsysupgrade attendedsysupgrade-common owut >/dev/null 2>
 if grep -q "^P:luci-app-attendedsysupgrade$" /lib/apk/db/installed; then
     echo "luci-app-attendedsysupgrade is still installed" >&2; exit 1
 fi
-# LuCI in Chinese: the base and each installed application'"'"'s translation
+# LuCI in Chinese: the base and each installed application translation
 # (the language is chosen at first boot, 93-e5-luci)
 apk_retry add luci-i18n-base-zh-cn >/dev/null
 for p in $(sed -En "s/^P:luci-(app|proto)-//p" /lib/apk/db/installed); do
     apk add "luci-i18n-$p-zh-cn" >/dev/null 2>&1 && echo "zh-cn: luci-i18n-$p-zh-cn"
 done
-# the Argon theme (its release'"'"'s packages, unsigned)
+# the Argon theme (release packages, unsigned)
 apk_retry add --allow-untrusted $EXTRA_LIST >/dev/null
 echo "argon: $(sed -n "/^P:luci-theme-argon$/{n;s/^V://p}" /lib/apk/db/installed)"
-# the info screen'"'"'s packages (cage, cog, Mesa, ...), when there is one
+# info screen packages (cage, cog, Mesa, ...), when there is one
 if [ -f /in/infoscreen/packages.txt ]; then
     # (the transplant above: used when the repository has none of those packages)
     : > /tmp/tp
@@ -387,7 +390,7 @@ if [ -f /in/infoscreen/packages.txt ]; then
         grep -qx "P:$p" /lib/apk/db/installed || { echo "the image has no $p: the info screen would not start" >&2; exit 1; }
     done
 fi
-# (apk info <name> describes the repository'"'"'s package; the installed one is here)
+# (apk info <name> describes the repository package; the installed one is here)
 echo "modemmanager $(sed -n "/^P:modemmanager$/{n;s/^V://p}" /lib/apk/db/installed) installed"
 
 R=/build/root; mkdir -p $R
@@ -432,9 +435,16 @@ fi
 # Expose the existing local Daed web console as a standalone info-screen app.
 # Keep it as static UI only: no credentials, subscriptions, or proxy state are copied.
 if [ -n "$screen" ] && [ -f /in/feature-source/openwrt/infoscreen-plugins/daed/manifest.json ]; then
+    ucode -c -o /tmp/e5-daed-backend.uc /in/feature-source/openwrt/infoscreen-plugins/daed/backend.uc
+    rm -f /tmp/e5-daed-backend.uc
     mkdir -p $R/etc/e5-infoscreen/plugins
     cp -a /in/feature-source/openwrt/infoscreen-plugins/daed $R/etc/e5-infoscreen/plugins/
     chown -R 0:0 $R/etc/e5-infoscreen/plugins/daed
+    mkdir -p $R/www/e5-daed-login $R/www/cgi-bin
+    cp /in/feature-source/openwrt/infoscreen-plugins/daed/phone-login.html $R/www/e5-daed-login/index.html
+    chmod 644 $R/www/e5-daed-login/index.html
+    cp /in/feature-source/openwrt/infoscreen-plugins/daed/pair-cgi.py $R/www/cgi-bin/e5-daed-pair
+    chmod 755 $R/www/cgi-bin/e5-daed-pair
 fi
 for f in vendor-start.sh android-import-perms.sh e5-modem-coldboot android-run node-perms.sh regdb-load.sh gadget-guard.sh usb-watch.sh e5-next-boot e5-os e5-sd-registry e5-at e5-data-priority e5-audio-dsp e5-call-audio.py; do
     cp /in/opt-e5/$f $R/opt/e5/$f; chmod 755 $R/opt/e5/$f
@@ -444,10 +454,10 @@ cp /in/e5-vibrate $R/usr/bin/e5-vibrate && chmod 755 $R/usr/bin/e5-vibrate
 cp /in/e5-ctl-raw $R/opt/e5/e5-ctl-raw && chmod 755 $R/opt/e5/e5-ctl-raw
 cp /in/e5-modemd $R/usr/sbin/e5-modemd && chmod 755 $R/usr/sbin/e5-modemd
 cp /in/e5-sim-probe $R/usr/libexec/e5-sim-probe && chmod 755 $R/usr/libexec/e5-sim-probe
-# the card'"'"'s UCM profile: applied by e5-audio-dsp with amixer (OpenWrt has no alsaucm)
+# the card UCM profile: applied by e5-audio-dsp with amixer (OpenWrt has no alsaucm)
 mkdir -p $R/usr/share/alsa && cp -a /in/alsa/ucm2 $R/usr/share/alsa/
 cp /in/busybox $R/opt/e5/bin/busybox && chmod 755 $R/opt/e5/bin/busybox
-# the applets the shared scripts use that OpenWrt'"'"'s busybox leaves out --
+# the applets the shared scripts use that OpenWrt busybox leaves out --
 # the ones the full busybox really has
 have=$(/in/busybox --list)
 for a in mountpoint timeout setsid flock seq stat chroot od losetup telnetd cut tr basename dirname \
@@ -465,7 +475,7 @@ done
 # modem_control failed on /dev/chsys and the CP never booted.
 sed -i "s|\[ \"makedev\", \"/dev/%DEVNAME%\", \"0600\" \]|[ \"makedev\", \"/dev/%DEVNAME%\", \"0660\" ]|" $R/etc/hotplug.json
 grep -q "\"/dev/%DEVNAME%\", \"0660\" \]" $R/etc/hotplug.json || { echo "hotplug.json: default node mode not found" >&2; exit 1; }
-# LuCI: the modem'"'"'s revision one row per line (again at boot, /etc/init.d/e5-luci)
+# LuCI: the modem revision one row per line (again at boot, /etc/init.d/e5-luci)
 sh $R/usr/libexec/e5-luci-revision $R
 sh $R/usr/libexec/e5-ttyd-bind $R
 for c in e5-os e5-next-boot e5-at; do ln -sf /opt/e5/$c $R/usr/bin/$c; done
@@ -478,10 +488,10 @@ mv $R/sbin/sysupgrade $R/sbin/sysupgrade.openwrt
 mv $R/usr/libexec/e5-sysupgrade $R/sbin/sysupgrade
 # enable the services ("rc.common enable" wants ubus, which is not running here)
 rm -f $R/etc/rc.d/*pulseaudio
-# (the cage package'"'"'s own kiosk service: cog on http://localhost/, which is LuCI,
-# shown at every boot before the info screen'"'"'s session takes the panel)
+# (the cage package kiosk service: cog on http://localhost/, which is LuCI,
+# shown at every boot before the info screen session takes the panel)
 rm -f $R/etc/rc.d/*cage
-for s in e5-hw e5-vendor e5-modemd e5-sipc-wwan e5-telnetd e5-boot-ok e5-sms-notify e5-charge e5-apn-auto e5-luci e5-audio e5-voice-audio e5-hfp e5-bt bluetoothd dbus modemmanager e5-usb-watch $screen; do
+for s in e5-hw e5-vendor e5-modemd e5-sipc-wwan e5-telnetd e5-boot-ok e5-sms-notify e5-charge e5-apn-auto e5-network-recovery e5-luci e5-audio e5-voice-audio e5-hfp e5-bt bluetoothd dbus modemmanager e5-usb-watch ttyd $screen; do
     n=$(sed -n "s/^START=//p" $R/etc/init.d/$s)
     ln -sf ../init.d/$s $R/etc/rc.d/S$n$s
 done
@@ -492,10 +502,10 @@ arel=$(cat /in/sa/audio/release)
 mkdir -p $R/lib/modules/$arel/audio && cp /in/sa/audio/*.ko $R/lib/modules/$arel/audio/
 cp -a /in/root-modules/. $R/ && chown -R 0:0 $R/lib/modules
 if [ -n "$STANDALONE" ]; then
-    # the device'"'"'s own files, where the directory form binds the Debian root'"'"'s
+    # the device files, where the directory form binds the Debian root
     cp -a /in/sa/firmware/. $R/lib/firmware/
     mkdir -p $R/opt/e5/android && cp -a /in/sa/android/. $R/opt/e5/android/
-    # (bionic refuses a property area that is not root'"'"'s: docs/FINDINGS.md 13)
+    # (bionic refuses a property area that is not root: docs/FINDINGS.md 13)
     chown -R 0:0 $R/opt/e5/android $R/lib/firmware
     rel=$(cat /in/sa/modem/release)
     mkdir -p $R/lib/modules/$rel/modem && cp /in/sa/modem/*.ko $R/lib/modules/$rel/modem/
@@ -513,6 +523,12 @@ if [ "$E5_FEATURES" = 1 ]; then
 elif [ -n "$screen" ]; then
     python3 /in/feature-source/device/openwrt_device_common/shared/ui.py --root $R --profile e5
 fi
+# Apply the E5 DAED keypad shortcut after all info-screen staging. The shared
+# staging step copies upstream files into the root and would otherwise erase
+# this device-specific overlay.
+if [ -n "$screen" ] && [ -f /in/feature-source/openwrt/infoscreen-plugins/daed/manifest.json ]; then
+    python3 /in/feature-source/tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen"
+fi
 # Complete a successful internal-root trial before the next reboot.
 cp /in/feature-source/openwrt/overlay/etc/init.d/e5-boot-ok $R/etc/init.d/e5-boot-ok
 chmod 755 $R/etc/init.d/e5-boot-ok
@@ -523,7 +539,23 @@ cd $R && tar -czf /out/$NAME .
 ls -la /out/$NAME
 '
 
-[ -n "$STANDALONE" ] || exit 0
+if [ -n "$STANDALONE" ]; then
+    # The ext4 stage below reads the standalone archive from WORK.  Keep that
+    # contract explicit even when a caller or a stale environment routes the
+    # first-stage archive to OUT instead.
+    if [ ! -s "$WORK/$NAME" ] && [ -s "$OUT/$NAME" ]; then
+        echo "moving standalone rootfs archive from $OUT to $WORK"
+        mv "$OUT/$NAME" "$WORK/$NAME"
+    fi
+    [ -s "$WORK/$NAME" ] || {
+        echo "standalone rootfs archive missing: $WORK/$NAME" >&2
+        echo "rootfs output directory: $TAROUT" >&2
+        ls -lah "$WORK" "$OUT" >&2 || true
+        exit 1
+    }
+else
+    exit 0
+fi
 # the tree as an ext4 image (mke2fs -d: no loop device, no root on the host)
 IMG=e5-openwrt-$VER.ext4
 [ "$DEVICE_FILES" != 0 ] || IMG=e5-openwrt-$VER-generic.ext4

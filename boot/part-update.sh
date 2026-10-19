@@ -1,4 +1,13 @@
 # Sourced by init: replace only the verified, unmounted internal or TF root.
+part_update_restore_bundled_daed_plugin() {
+    local new=$1 saved=$2 target=$1/etc/e5-infoscreen/plugins/daed
+    [ -s "$saved/manifest.json" ] || return 0
+    [ -d "$new/etc/e5-infoscreen/plugins" ] &&
+        [ ! -L "$new/etc/e5-infoscreen/plugins" ] && [ ! -L "$target" ] || return 1
+    rm -rf "$target" || return 1
+    mkdir -p "$target" && cp -a "$saved/." "$target/"
+}
+
 part_update_pending() {
     [ ! -e /run/tf-update-conflict ] || return 1
     [ -s /run/part-update-pending ] || return 0
@@ -80,13 +89,19 @@ part_update_pending() {
     mkdir -p /part-update-new
     mount -t ext4 "$dev" /part-update-new || { part_fail 'new root mount'; return 1; }
     local new=/part-update-new name
-    mkdir -p "$ram/new-version" "$ram/new-phone"
+    mkdir -p "$ram/new-version" "$ram/new-phone" "$ram/new-daed"
     for name in image-version image-form build-time build.json feature-port.json device-profile network-addons.json; do
         [ ! -f "$new/etc/e5/$name" ] || cp "$new/etc/e5/$name" "$ram/new-version/"
     done
     cp -a "$new/etc/e5-infoscreen/plugins/phone/." "$ram/new-phone/" || return 1
+    if [ -d "$new/etc/e5-infoscreen/plugins/daed" ]; then
+        cp -a "$new/etc/e5-infoscreen/plugins/daed/." "$ram/new-daed/" || return 1
+    fi
     tar -xf firmware.tar -C "$new" && tar -xf settings.tar -C "$new" || { part_fail 'restore archives'; return 1; }
     cp -a "$ram/new-phone/." "$new/etc/e5-infoscreen/plugins/phone/"
+    part_update_restore_bundled_daed_plugin "$new" "$ram/new-daed" || {
+        part_fail 'bundled DAED info-screen restore'; return 1;
+    }
     cp "$ram/new-version/"* "$new/etc/e5/"
     if [ "$KIND" = part ]; then
         rm -f "$new/etc/e5/sd-root" "$new/etc/e5/sd-trial"

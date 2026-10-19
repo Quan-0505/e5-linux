@@ -10,6 +10,7 @@ import re
 import runpy
 import subprocess
 import struct
+import sys
 import tarfile
 import tempfile
 import time
@@ -40,6 +41,24 @@ def file_digest(path):
         return digest(stream)
 
 
+def e5_shortcut_overlay_hashes():
+    """Return exact hashes for the E5 keypad overlay applied after screen staging."""
+    source = TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen'
+    relative = ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js')
+    if not all((source / name).is_file() for name in relative):
+        raise ValueError('info-screen sources required to verify the E5 keypad overlay are missing')
+    patcher = Path(__file__).resolve().with_name('patch-e5-daed-shortcut.py')
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        for name in relative:
+            target = root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((source / name).read_bytes())
+        subprocess.run([sys.executable, str(patcher), str(root)],
+                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        return {'usr/share/e5-infoscreen/' + name: file_digest(root / name) for name in relative}
+
+
 def revision(path):
     return subprocess.check_output(['git', '-C', str(path), 'rev-parse', 'HEAD'], text=True).strip()
 
@@ -56,7 +75,7 @@ def prepare():
     epoch = int(time.time())
     started = datetime.fromtimestamp(epoch, UTC8)
     stamp = started.strftime('%Y%m%d-%H%M%S')
-    ver = os.environ.get('E5_WRT_VER', '25.12.5')
+    ver = os.environ.get('E5_WRT_VER', '25.12.6')
     if not re.fullmatch(r'\d+\.\d+\.\d+', ver):
         raise ValueError('invalid OpenWrt version')
     sources = {name: {'repository': repo, 'revision': revision(path)} for name, repo, path in [
@@ -115,11 +134,16 @@ def audit_root(info):
             if item.is_symlink() or not item.is_file():
                 continue
             expected['etc/e5-infoscreen/plugins/daed/' + item.relative_to(daed_plugin).as_posix()] = file_digest(item)
+        expected['www/e5-daed-login/index.html'] = file_digest(daed_plugin / 'phone-login.html')
+        expected['www/cgi-bin/e5-daed-pair'] = file_digest(daed_plugin / 'pair-cgi.py')
     # These shared startup files are copied from the Debian overlay, rather
     # than device/openwrt_device_common/overlay. Verify the selective cold-start adapter as well.
     for name in ('vendor-start.sh', 'e5-modem-coldboot'):
         expected['opt/e5/' + name] = file_digest(TOP / 'device/linux_device_common/overlay/opt/e5' / name)
     expected['etc/e5/block-mount.build-id'] = hashlib.sha256((block_build_id() + '\n').encode()).hexdigest()
+    # E5 applies a repository-maintained keypad patch after copying upstream
+    # info-screen sources into the image. Verify the patched files byte-for-byte.
+    expected.update(e5_shortcut_overlay_hashes())
     found, versions, modules = {}, {}, set()
     required_exec = {'etc/init.d/e5-boot-ok', 'etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
                      'usr/libexec/e5-infoscreen/plugin', 'usr/libexec/e5-infoscreen/update'}
@@ -131,6 +155,7 @@ def audit_root(info):
                            r'opt/e5/android/.+|etc/e5/install\.conf|etc/dropbear/dropbear_.+_host_key|etc/ssh/ssh_host_)')
     wanted = {'usr/share/e5-infoscreen/VERSION', 'etc/e5-infoscreen/plugins/phone/manifest.json',
               'etc/e5-infoscreen/plugins/daed/manifest.json',
+              'www/e5-daed-login/index.html', 'www/cgi-bin/e5-daed-pair',
               'etc/e5/build-time', 'etc/machine-id', 'usr/bin/openssl', 'etc/e5/feature-port.json',
               'sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab'}
     with tarfile.open(rootfs, 'r|gz') as archive:

@@ -2,7 +2,7 @@
 
 > English: [`README.md`](README.md)
 
-当前使用 **OpenWrt 25.12.5 + E5 主线 6.18.y 内核**。Android 保留在 A 槽，Linux
+当前使用 **OpenWrt 25.12.6 + E5 主线 6.18.y 内核**。Android 保留在 A 槽，Linux
 使用 B 槽。设备面板运行信息屏及其应用，电话拨号盘／通讯录就在信息屏里；LuCI
 是独立的路由器网页管理界面。
 

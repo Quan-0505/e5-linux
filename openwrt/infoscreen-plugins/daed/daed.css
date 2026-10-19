@@ -44,6 +44,25 @@ button {
 
 main { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 10px 12px 8px; gap: 10px; }
 
+[hidden] { display: none !important; }
+
+#controls-view { display: flex; flex: 1; flex-direction: column; min-height: 0; gap: 10px; }
+
+.sub-view { display: flex; flex: 1; flex-direction: column; min-height: 0; gap: 7px; overflow: hidden; }
+.view-heading { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; font-size: 17px; }
+.small-button { min-height: 34px; padding: 4px 8px; border: 1px solid #ffffff30; border-radius: 8px; background: #ffffff0c; color: inherit; font-size: 13px; font-weight: 650; }
+.small-button.primary { border-color: #39e7a488; background: #39e7a422; color: #96f4cb; }
+.small-button:focus-visible, .subscription-item:focus-visible { outline: 2px solid #70d8ff; outline-offset: 1px; }
+.pairing { display: flex; flex: 1; min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
+.pairing p { flex: none; margin: 0; text-align: center; font-size: 12px; }
+.qr-code { display: grid; place-items: center; width: min(42vw, 180px); height: min(42vw, 180px); padding: 6px; border-radius: 8px; background: white; }
+.qr-code svg { display: block; width: 100%; height: 100%; }
+.pairing .message { width: 100%; min-height: 30px; max-height: 42px; padding: 5px 7px; }
+.subscription-list { display: flex; flex: 1; flex-direction: column; gap: 6px; min-height: 0; overflow-y: auto; }
+.subscription-item { display: flex; flex: none; justify-content: space-between; align-items: center; gap: 8px; min-height: 42px; padding: 6px 9px; border: 1px solid #ffffff26; border-radius: 9px; background: #ffffff0c; color: inherit; text-align: left; font-size: 14px; }
+.subscription-item small { color: #b6c8d9; white-space: nowrap; }
+.sub-view .message { max-height: 44px; min-height: 34px; }
+
 .status {
   flex: none;
   min-height: 44px;
@@ -122,4 +141,8 @@ main { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 1
   .control { border-radius: 13px; font-size: 16px; }
   .symbol { font-size: 20px; }
   .message { min-height: 32px; padding-block: 5px; }
+  .sub-view { gap: 4px; }
+  .small-button { min-height: 29px; padding: 3px 5px; font-size: 11px; }
+  .subscription-item { min-height: 35px; font-size: 12px; }
+  .qr-code { width: min(36vw, 135px); height: min(36vw, 135px); }
 }

@@ -4,7 +4,9 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import subprocess
 import struct
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -83,6 +85,11 @@ class RootAudit(unittest.TestCase):
             for name in ('vendor-start.sh', 'e5-modem-coldboot'):
                 (top / 'device/linux_device_common/overlay/opt/e5' / name).write_bytes(b'startup fixture')
                 files = {**files, 'opt/e5/' + name: b'startup fixture'}
+            screen_source = TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen'
+            for name in ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js'):
+                target = top / 'ci/infoscreen/root/usr/share/e5-infoscreen' / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((screen_source / name).read_bytes())
             if staged_vendor is not None:
                 files.update({'etc/e5/feature-port.json': b'{"profile":"e5"}',
                               'opt/e5/vendor-start.sh': staged_vendor})
@@ -110,7 +117,7 @@ class RootAudit(unittest.TestCase):
             return info
 
     def files(self):
-        return {'etc/e5/block-mount.build-id': b'fixture-block-build\n',
+        files = {'etc/e5/block-mount.build-id': b'fixture-block-build\n',
                 'sbin/block': b'block fixture', 'lib/libblkid-tiny.so': b'probe fixture',
                 'etc/init.d/fstab': b'fstab fixture',
                 'etc/init.d/e5-boot-ok': b'#!/bin/sh\n',
@@ -122,11 +129,30 @@ class RootAudit(unittest.TestCase):
                 'etc/e5-infoscreen/plugins/phone/manifest.json': json.dumps({'version': '1.4'}).encode(),
                 'etc/e5-infoscreen/plugins/daed/manifest.json': json.dumps({'version': '1.0.0'}).encode(),
                 'etc/e5/build-time': b'123', 'lib/modules/6.18-e5/modem/sipc_wwan.ko': b'module'}
+        source = TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name in ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js'):
+                target = root / name; target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((source / name).read_bytes())
+            subprocess.run([sys.executable, str(TOP / 'tools/patch-e5-daed-shortcut.py'), str(root)], check=True)
+            for name in ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js'):
+                files['usr/share/e5-infoscreen/' + name] = (root / name).read_bytes()
+        return files
 
     def test_same_release_and_epoch_pass(self):
         info = self.audit(self.files())
         self.assertEqual(info['phone_version'], '1.4')
         self.assertEqual(info['daed_screen_app_version'], '1.0.0')
+
+    def test_expected_e5_shortcut_overlay_passes(self):
+        self.audit(self.files())
+
+    def test_unexpected_e5_shortcut_change_rejected(self):
+        files = self.files()
+        files['usr/share/e5-infoscreen/settings.uc'] += b'\n// unexpected change\n'
+        with self.assertRaisesRegex(ValueError, 'root source mismatch.*settings.uc'):
+            self.audit(files)
 
     def test_nonexecutable_screen_start_rejected(self):
         with self.assertRaisesRegex(ValueError, 'not executable.*e5-infoscreen'):

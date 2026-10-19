@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Idempotent patches for the pinned OpenWrt 25.12 hostapd and wifi-scripts."""
+"""Idempotent patches for the pinned OpenWrt 25.12.6 hostapd and wifi-scripts."""
 from pathlib import Path
 import argparse
 
@@ -75,10 +75,12 @@ def patch_wifi(root):
     replace(path, "import * as iface from 'wifi.iface';\n",
             "import * as iface from 'wifi.iface';\n"
             "import { configure as unisoc_sae_config } from 'wifi.unisoc-sae';\n")
-    replace(path, '\tiface_auth_type(config);',
+    # 25.12.6 passes the active band to iface_auth_type; 25.12.5 did not.
+    # Keep this strict anchor so a future wifi-scripts refactor fails closed.
+    replace(path, '\tiface_auth_type(config, data.config.band);',
             "\tunisoc_sae_config(config, fs.realpath(`/sys/class/ieee80211/${data.phy}/device/driver/module`));\n"
             "\tif (config.unisoc_sae)\n\t\tappend('unisoc_sae', config.unisoc_sae);\n"
-            '\tiface_auth_type(config);')
+            '\tiface_auth_type(config, data.config.band);')
     (ucode / 'unisoc-sae.uc').write_bytes(
         Path(__file__).with_name('hostapd-unisoc.uc').read_bytes())
 
