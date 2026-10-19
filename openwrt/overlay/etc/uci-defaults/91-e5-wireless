@@ -23,6 +23,7 @@ set wireless.radio0.cell_density='0'
 set wireless.default_radio0=wifi-iface
 set wireless.default_radio0.device='radio0'
 set wireless.default_radio0.mode='ap'
+set wireless.default_radio0.uapsd='0'
 set wireless.default_radio0.network='lan'
 set wireless.default_radio0.ifname='wlan0'
 set wireless.default_radio0.wps_pushbutton='0'
