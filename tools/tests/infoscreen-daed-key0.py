@@ -65,7 +65,10 @@ with tempfile.TemporaryDirectory(prefix="e5-shortcuts-") as temp:
         assert (root / name).read_text(encoding="utf-8") == content
 
 builder = (TOP / "openwrt/build-rootfs.sh").read_text(encoding="utf-8")
-assert 'tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen"' in builder
+patch_call = 'tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen"'
+assert patch_call in builder
+assert builder.index('python3 /in/feature-source/device/openwrt_device_common/shared/ui.py --root $R --profile e5') < builder.index(patch_call)
+assert builder.index('python3 /in/feature-source/device/openwrt_device_e5/stage.py --root $R') < builder.index(patch_call)
 # The screen was already hotpatched with the earlier fixed 0 -> DAED mapping
 # on the E5. Keep support for that live state so the settings can be tested
 # without first restoring the older app.js.

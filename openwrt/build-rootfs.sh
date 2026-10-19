@@ -425,12 +425,6 @@ if [ -d /in/infoscreen/root ]; then
     find $R -name .DS_Store -exec rm -f {} +
     screen=e5-infoscreen
 fi
-# Apply the E5 DAED keypad shortcut on top of the pinned upstream info screen.
-# Keeping this small device-specific overlay in e5-linux avoids carrying a
-# private fork of the shared Enceka/infoscreen submodule.
-if [ -n "$screen" ] && [ -f /in/feature-source/openwrt/infoscreen-plugins/daed/manifest.json ]; then
-    python3 /in/feature-source/tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen"
-fi
 # Phone is a separately maintained store application, preinstalled for this
 # image. Core updates do not replace it; plugin updates use the app store.
 if [ -n "$screen" ] && [ -f /in/infoscreen-plugins/plugins/phone/manifest.json ]; then
@@ -528,6 +522,12 @@ if [ "$E5_FEATURES" = 1 ]; then
     python3 /in/feature-source/device/openwrt_device_e5/stage.py --root $R
 elif [ -n "$screen" ]; then
     python3 /in/feature-source/device/openwrt_device_common/shared/ui.py --root $R --profile e5
+fi
+# Apply the E5 DAED keypad shortcut after all info-screen staging. The shared
+# staging step copies upstream files into the root and would otherwise erase
+# this device-specific overlay.
+if [ -n "$screen" ] && [ -f /in/feature-source/openwrt/infoscreen-plugins/daed/manifest.json ]; then
+    python3 /in/feature-source/tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen"
 fi
 # Complete a successful internal-root trial before the next reboot.
 cp /in/feature-source/openwrt/overlay/etc/init.d/e5-boot-ok $R/etc/init.d/e5-boot-ok
