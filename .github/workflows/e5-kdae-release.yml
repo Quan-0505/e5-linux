@@ -304,6 +304,7 @@ jobs:
           python3 rootfs/tests/modem-coldboot.py
           python3 tools/tests/ci-release.py
           python3 tools/tests/infoscreen-daed-app.py
+          python3 tools/tests/infoscreen-daed-key0.py
           python3 tools/tests/openwrt-package-state.py
           python3 tools/tests/rootfs-inline-script.py
           python3 tools/tests/rootfs-apk-retry.py

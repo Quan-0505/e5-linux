@@ -425,6 +425,12 @@ if [ -d /in/infoscreen/root ]; then
     find $R -name .DS_Store -exec rm -f {} +
     screen=e5-infoscreen
 fi
+# Apply the E5 DAED keypad shortcut on top of the pinned upstream info screen.
+# Keeping this small device-specific overlay in e5-linux avoids carrying a
+# private fork of the shared Enceka/infoscreen submodule.
+if [ -n "$screen" ] && [ -f /in/feature-source/openwrt/infoscreen-plugins/daed/manifest.json ]; then
+    python3 /in/feature-source/tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen/www/app.js"
+fi
 # Phone is a separately maintained store application, preinstalled for this
 # image. Core updates do not replace it; plugin updates use the app store.
 if [ -n "$screen" ] && [ -f /in/infoscreen-plugins/plugins/phone/manifest.json ]; then
