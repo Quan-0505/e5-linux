@@ -6,15 +6,42 @@
 # disabled rather than open.
 # Fails (and runs again at the next boot) while there is no radio to configure.
 E5_WIFI_SSID=E5-Linux E5_WIFI_KEY= E5_WIFI_CHANNEL=149
-[ -f /etc/e5/install.conf ] && . /etc/e5/install.conf
 # once: a reinstall keeps the configuration (openwrt/device-install.sh),
 # and what the user changed since stays as it is
 [ -f /etc/e5/configured.wireless ] && exit 0
 
+# A missing stamp is not permission to overwrite restored/user configuration.
+# Only an absent interface or wifi config's untouched disabled/open template
+# needs installation credentials. Keep custom AP, STA and mesh settings intact.
+for section in $(uci -q show wireless | sed -n 's/^wireless\.\([^=]*\)=wifi-iface$/\1/p'); do
+	mode=$(uci -q get "wireless.$section.mode") || mode=
+	ssid=$(uci -q get "wireless.$section.ssid") || ssid=
+	enc=$(uci -q get "wireless.$section.encryption") || enc=
+	key=$(uci -q get "wireless.$section.key") || key=
+	radio=$(uci -q get "wireless.$section.device") || radio=
+	radio_off=$(uci -q get "wireless.$radio.disabled") || radio_off=
+	iface_off=$(uci -q get "wireless.$section.disabled") || iface_off=
+	[ -n "$mode$ssid$key" ] || continue
+	if [ "$mode" = ap ] && [ "$ssid" = OpenWrt ] &&
+	   { [ -z "$enc" ] || [ "$enc" = none ]; } && [ -z "$key" ] &&
+	   { [ -z "$radio_off" ] || [ "$radio_off" = 1 ]; } && [ "$iface_off" = 1 ]; then
+		continue
+	fi
+	# A previous failed commit can leave a custom-looking staging delta.
+	# Never commit someone else's pending changes or stamp them as durable.
+	changes=$(uci -q changes wireless) || exit 1
+	[ -z "$changes" ] || exit 1
+	mkdir -p /etc/e5 && touch /etc/e5/configured.wireless || exit 1
+	exit 0
+done
+
+if [ -f /etc/e5/install.conf ]; then
+	. /etc/e5/install.conf || exit 1
+fi
 uci -q get wireless.radio0 >/dev/null || wifi config
 uci -q get wireless.radio0 >/dev/null || exit 1
 
-uci -q batch <<UCI
+uci -q batch <<UCI || exit 1
 set wireless.radio0.band='5g'
 set wireless.radio0.channel='${E5_WIFI_CHANNEL}'
 set wireless.radio0.htmode='VHT80'
@@ -28,17 +55,17 @@ set wireless.default_radio0.network='lan'
 set wireless.default_radio0.ifname='wlan0'
 set wireless.default_radio0.wps_pushbutton='0'
 UCI
-uci set wireless.default_radio0.ssid="$E5_WIFI_SSID"
+uci set wireless.default_radio0.ssid="$E5_WIFI_SSID" || exit 1
 if [ -n "$E5_WIFI_KEY" ]; then
-	uci set wireless.default_radio0.encryption='psk2+ccmp'
-	uci set wireless.default_radio0.key="$E5_WIFI_KEY"
-	uci set wireless.radio0.disabled='0'
+	uci set wireless.default_radio0.encryption='psk2+ccmp' || exit 1
+	uci set wireless.default_radio0.key="$E5_WIFI_KEY" || exit 1
+	uci set wireless.radio0.disabled='0' || exit 1
 	# (wifi config writes the interface disabled as well as the radio)
-	uci set wireless.default_radio0.disabled='0'
+	uci set wireless.default_radio0.disabled='0' || exit 1
 else
-	uci set wireless.default_radio0.encryption='psk2+ccmp'
-	uci set wireless.radio0.disabled='1'
+	uci set wireless.default_radio0.encryption='psk2+ccmp' || exit 1
+	uci set wireless.radio0.disabled='1' || exit 1
 fi
-uci commit wireless
-mkdir -p /etc/e5 && touch /etc/e5/configured.wireless
+uci commit wireless || exit 1
+mkdir -p /etc/e5 && touch /etc/e5/configured.wireless || exit 1
 exit 0
