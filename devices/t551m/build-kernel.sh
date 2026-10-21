@@ -11,7 +11,7 @@ O=${T551M_BUILD:?Set T551M_BUILD to the object directory}
 DEST=${T551M_OUT:-$TOP/out/t551m/kernel}
 command -v pahole >/dev/null || { echo 'BTF requires pahole (Ubuntu: apt install pahole)' >&2; exit 1; }
 mkdir -p "$O" "$DEST/modules"
-python3 "$HERE/prepare-kernel.py" "$K"
+python3 "$HERE/prepare-kernel.py" "$K" --host-sink
 python3 - "$TOP/upstream/e5-mainline.config" "$O/t551m.config" "${T551M_RELEASE:-0}" <<'PY'
 import pathlib, sys
 s = pathlib.Path(sys.argv[1]).read_text()

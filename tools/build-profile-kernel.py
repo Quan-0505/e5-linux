@@ -171,6 +171,12 @@ def main():
         if args.profile=='m8':
             subprocess.run(['python3','devices/m8/package-kernel.py','--build',str(objects),
                             '--out',str(out)],cwd=TOP,env=env,check=True)
+        if args.profile == 'm8':
+            subprocess.run(['python3', str(TOP/'devices/common/test_dwc3_host_sink.py')],
+                           env=dict(os.environ, E5_TEST_KERNEL=str(source)), check=True)
+        if args.profile in ('e5', 't551m', 't512n'):
+            subprocess.run(['python3', str(TOP/'devices/common/test_musb_host_sink.py')],
+                           env=dict(os.environ, MUSB_TEST_KERNEL=str(source)), check=True)
         for test in ('test_fuel_gauge.py','test_fgu_latch.py','test_charger_jeita.py'):
             subprocess.run(['python3',str(TOP/'devices/common'/test),str(source)],check=True)
         if args.profile=='e5':

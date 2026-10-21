@@ -27,10 +27,14 @@ struct usb_hcd {struct usb_bus self; int power_budget,skip_phy_initialization,rh
 struct usb_otg {struct usb_bus *host;};
 struct phy {struct usb_otg *otg;};
 struct ops {int quirks;};
-struct musb {struct usb_hcd *hcd; int port_mode; struct ops *ops; struct phy *xceiv; void *phy;};
+struct musb {int irq_work; struct usb_hcd *hcd; int port_mode; struct ops *ops; struct phy *xceiv; void *phy;};
 struct platform {int power;};
 static int adds,removes,live,gadget,error,gadget_error,pm_disables;
 static struct usb_device root;
+#define system_wq NULL
+static inline void mod_delayed_work(void *q, int *work, int delay) {(void)q;(void)work;(void)delay;}
+static inline void flush_delayed_work(int *work) {(void)work;}
+
 #define MUSB_HST_MODE(m) ((void)0)
 #define dev_err(...) ((void)0)
 static void musb_set_state(struct musb *m,int state) {}

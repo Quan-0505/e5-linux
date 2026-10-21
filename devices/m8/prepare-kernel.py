@@ -170,6 +170,9 @@ def apply(kernel, *, charger_adapter=None, recipient='m8'):
     # topology uses CC negotiation and the existing DWC3 automatic worker.
     if recipient != 'yuanhang41s':
         runpy.run_path(str(HERE / 'typec-policy.py'))['apply'](kernel)
+    if recipient == 'm8':
+        runpy.run_path(str(HERE.parent / 'common/dwc3-host-policy.py'))['apply'](kernel)
+        runpy.run_path(str(HERE.parent / 'common/dwc3-host-sink.py'))['apply'](kernel)
     runpy.run_path(str(HERE / 'audio.py'))['apply'](kernel)
     runpy.run_path(str(HERE / 'gpu.py'))['apply'](kernel)
     runpy.run_path(str(HERE.parent / 't551m/wifi.py'))['apply'](kernel)

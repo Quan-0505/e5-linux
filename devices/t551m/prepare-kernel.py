@@ -129,6 +129,8 @@ def main():
     ap.add_argument('kernel', type=Path)
     ap.add_argument('--preserve-board-current', action='store_true',
                     help='Reuse the driver port without T551M DCP table changes')
+    ap.add_argument('--host-sink', action='store_true',
+                    help='Enable tested MUSB external-power host policy for this profile')
     args = ap.parse_args()
     k = args.kernel
     head = subprocess.check_output(['git', '-C', str(k), 'rev-parse', 'HEAD']).decode().strip()
@@ -196,6 +198,8 @@ def main():
     runpy.run_path(str(Path(__file__).with_name('usb_charger.py')))['apply'](
         k, replace_function, restore_board_current=not args.preserve_board_current)
     runpy.run_path(str(Path(__file__).with_name('otg.py')))['apply'](k)
+    if args.host_sink:
+        runpy.run_path(str(Path(__file__).resolve().parents[1] / 'common/musb-host-sink.py'))['apply'](k, charger='bq2560x')
     runpy.run_path(str(Path(__file__).with_name('cpufreq.py')))['apply'](k)
     runpy.run_path(str(Path(__file__).with_name('wifi.py')))['apply'](k)
     # mu300-linux f0323bf: keep firmware debug traffic off across WCN power

@@ -77,9 +77,10 @@ class Inbox(unittest.TestCase):
 
     def test_web_read_and_screen_read_all_share_persisted_unread_projection(self):
         data=self.fresh()
+        body='new 中文 \"quoted\" \\path\tpreview'
         for card in (0,1):
             receiver.ingest(data,card,'card'+str(card),[],1)
-            receiver.ingest(data,card,'card'+str(card),sms_pdu.assemble([incoming('new',card+1)]),2)
+            receiver.ingest(data,card,'card'+str(card),sms_pdu.assemble([incoming(body,card+1)]),2)
         ids=[m['id'] for m in data['messages']]
         path=TOP/'openwrt/luci-app-t551m/root/usr/libexec/unisoc-modem/t551m-sms'
         loader=importlib.machinery.SourceFileLoader('sms_web',str(path))
@@ -95,6 +96,12 @@ class Inbox(unittest.TestCase):
                 with receiver.locked():receiver.save(data)
                 unread=root/'run/unread'
                 self.assertEqual(len(unread.read_text().splitlines()),2)
+                listed=web.main('list',{})
+                self.assertEqual((listed['total'],listed['unread']),(2,2))
+                self.assertEqual({m['card'] for m in listed['msgs']},{0,1})
+                for message in listed['msgs']:
+                    self.assertEqual(message['time'],'2026-10-05T19:02:58+08:00')
+                    self.assertEqual(message['preview'],body)
                 self.assertTrue(web.main('show',{'id':str(ids[0])})['ok'])
                 self.assertEqual(unread.read_text(),f'/org/freedesktop/ModemManager1/SMS/{ids[1]}\n')
                 self.assertEqual([m['unread'] for m in receiver.load()['messages']],[False,True])

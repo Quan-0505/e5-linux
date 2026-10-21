@@ -10,7 +10,9 @@ HERE = Path(__file__).resolve().parent
 def apply(kernel):
     charger = runpy.run_path(str(HERE / 'charger.py'))['apply']
     runpy.run_path(str(HERE.parent / 'm8/prepare-kernel.py'))['apply'](
-        kernel, charger_adapter=charger)
+        kernel, charger_adapter=charger, recipient='k1')
+    runpy.run_path(str(HERE.parent / 'common/dwc3-host-policy.py'))['apply'](kernel)
+    runpy.run_path(str(HERE.parent / 'common/dwc3-host-sink.py'))['apply'](kernel)
     # Keep the live K1 panel node, timings, JEITA/OCV tables and PDOs intact.
     # The shared driver uses the device's original bootloader-selected panel.
 

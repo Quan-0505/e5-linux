@@ -19,6 +19,8 @@ def apply(kernel):
     runpy.run_path(str(HERE / 'charger.py'))['apply'](kernel)
     runpy.run_path(str(HERE / 'touch.py'))['apply'](kernel)
     runpy.run_path(str(HERE / 'display-clock.py'))['apply'](kernel)
+    # Opt in after the model's own charger mapping; retain its current/JEITA tables.
+    runpy.run_path(str(HERE.parent / 'common/musb-host-sink.py'))['apply'](kernel, charger='bq2560x')
 
 
 if __name__ == '__main__':

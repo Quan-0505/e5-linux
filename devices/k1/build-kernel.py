@@ -41,6 +41,8 @@ def main():
     if previous.exists() and 'CONFIG_LOCALVERSION="-k1-' not in previous.read_text(encoding='utf-8'):
         parser.error('Object directory belongs to another profile; use a K1 directory')
     runpy.run_path(str(HERE / 'prepare-kernel.py'))['apply'](kernel)
+    subprocess.run(['python3', str(HERE.parent / 'common/test_dwc3_host_sink.py')],
+                   env=dict(os.environ, E5_TEST_KERNEL=str(kernel)), check=True)
     build.mkdir(parents=True, exist_ok=True)
     out.mkdir(parents=True, exist_ok=True)
     previous.write_text(wanted, encoding='utf-8')

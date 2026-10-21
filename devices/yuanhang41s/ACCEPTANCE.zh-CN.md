@@ -64,7 +64,8 @@ Android B 完整 boot 哈希再次通过；不是只检查一次 RAM 启动。
   恢复 NCM 已验证。电脑连接时 host 没有伪造外设或反向供电。
   用户后续确认普通 OTG 与外设供电正常；随后补入实验性手动 HOST/SINK，
   实机确认主机总线、Charging 与 boost 关闭同时成立，恢复 NCM 通过。
-  不将此项等同于用户扩展坞上的真实网卡/U 盘通信通过，见 POWER-CHARGING。
+  2026-10-22 用户确认实际扩展坞网口与充电同时可用；只读复核见 POWER-CHARGING，
+  不扩展为 U 盘或其他扩展坞也已验证，见 POWER-CHARGING。
 - 保数据缩容、全量 fsck、block/node/inode 数量比对、GPT、100 GiB 根分区
   回读、永久启动及一次正常重启已通过，见 INSTALLATION。
 - 缩容期间持续占用一个大核，当时的电流/温度不用于宣称待机功耗。

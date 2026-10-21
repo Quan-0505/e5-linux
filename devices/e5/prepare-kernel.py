@@ -40,6 +40,7 @@ def apply(kernel):
     runpy.run_path(str(SHARED / 'cpufreq.py'))['apply'](kernel)
     runpy.run_path(str(SHARED / 'wifi.py'))['apply'](kernel)
     runpy.run_path(str(Path(__file__).with_name('charger.py')))['apply'](kernel, replace_function)
+    runpy.run_path(str(Path(__file__).resolve().parents[1] / 'common/musb-host-sink.py'))['apply'](kernel, charger='aw32257')
     path = kernel / 'drivers/unisoc_platform/sprdwcn/platform/sysfs.c'
     text = path.read_text()
     marker = 'Default firmware debug log off'
