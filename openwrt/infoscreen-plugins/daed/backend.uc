@@ -50,7 +50,7 @@ return function(ctx) {
 			return { error: '无法创建临时请求目录。' };
 		if (fs.chmod(dir, 0o700) == null) { fs.rmdir(dir); return { error: '无法保护临时认证数据。' }; }
 		let page_id = trim(fs.readfile('/proc/sys/kernel/random/uuid') ?? '');
-		if (!page_id || !match(page_id, /^[0-9a-f-]{36}$/i)) { clean(dir); return { error: '无法建立 daed 页面会话。' }; }
+		if (!page_id || !match(page_id, /^[0-9a-f-]{36}$/i)) { clean(dir); return { error: '无法建立 DAED 页面会话。' }; }
 		let headers = [ 'Content-Type: application/json', 'x-daed-page-id: ' + page_id ];
 		if (token) push(headers, 'Authorization: Bearer ' + token);
 		if (fs.writefile(dir + '/headers', join('\n', headers) + '\n') == null || fs.chmod(dir + '/headers', 0o600) == null) {
@@ -65,11 +65,11 @@ return function(ctx) {
 		}
 		command += ' --output ' + dir + '/response --write-out "%{http_code}" http://127.0.0.1:2023/api/' + path + ' 2>/dev/null';
 		let request = fs.popen(command, 'r');
-		if (!request) { clean(dir); return { error: '无法连接 daed。' }; }
+		if (!request) { clean(dir); return { error: '无法连接 DAED。' }; }
 		let status_text = trim(request.read('all')), exit_code = request.close(), response_text = fs.readfile(dir + '/response');
 		clean(dir);
 		if (exit_code != 0 || !match(status_text, /^[0-9]{3}$/) || response_text == null)
-			return { error: 'daed 暂时无法响应，请稍后重试。' };
+			return { error: 'DAED 暂时无法响应，请稍后重试。' };
 		let response = response_text == '' ? {} : json(response_text);
 		if (type(response) != 'object') response = {};
 		return { status: int(status_text), data: response };
@@ -79,7 +79,7 @@ return function(ctx) {
 		if (result.error) return { error: result.error };
 		if (result.status == 401) return { error: '登录已过期，请重新扫码登录。', status: 401 };
 		if (result.status < 200 || result.status >= 300 || type(result.data.items) != 'array')
-			return { error: '无法读取订阅列表，请检查 daed 服务。', status: 502 };
+			return { error: '无法读取订阅列表，请检查 DAED 服务。', status: 502 };
 		let items = [];
 		for (let item in result.data.items) {
 			if (type(item.id) != 'int' && type(item.id) != 'string') continue;
@@ -125,6 +125,25 @@ return function(ctx) {
 	}
 	return {
 		'GET /status': function(req) { return { running: service_running() }; },
+		'GET /traffic': function(req) {
+			let saved = load_token();
+			if (!saved) return { available: false, message: '流量统计需先在手机扫码登录。' };
+			let result = request_daed('GET', 'runtime/overview', saved.token, null);
+			if (result.error) return { available: false, message: '流量统计暂不可用。' };
+			if (result.status == 401 || result.status == 403) {
+				if (fs.stat(TOKEN_FILE)) fs.unlink(TOKEN_FILE);
+				return { available: false, message: '登录已过期，请重新扫码。' };
+			}
+			if (result.status < 200 || result.status >= 300 || result.data.trafficAvailable != true)
+				return { available: false, message: 'DAED 暂无可用流量数据。' };
+			return {
+				available: true,
+				downloadRate: int(result.data.downloadRate ?? 0),
+				uploadRate: int(result.data.uploadRate ?? 0),
+				downloadTotal: int(result.data.downloadTotal ?? 0),
+				uploadTotal: int(result.data.uploadTotal ?? 0)
+			};
+		},
 		'POST /pairing': function(req) { return pairing_qr(); },
 		'GET /pair-status': function(req) {
 			let saved = load_token();
@@ -145,7 +164,7 @@ return function(ctx) {
 			let result = request_daed('POST', 'auth/token', null, { username, password });
 			if (result.error) return failure(result.error, 502);
 			if (result.status == 401 || result.status == 403) return failure('账号或密码不正确。', 401);
-			if (result.status < 200 || result.status >= 300 || !valid_token(result.data.token)) return failure('daed 登录失败，请稍后重试。', 502);
+			if (result.status < 200 || result.status >= 300 || !valid_token(result.data.token)) return failure('DAED 登录失败，请稍后重试。', 502);
 			if (!save_token(result.data.token)) return failure('无法安全保存登录状态。', 500);
 			ctx.forget(PAIR_STATE);
 			return { ok: true };
@@ -153,7 +172,7 @@ return function(ctx) {
 		'POST /logout': function(req) { if (fs.stat(TOKEN_FILE)) fs.unlink(TOKEN_FILE); return { ok: true }; },
 		'GET /subscriptions': function(req) {
 			let saved = load_token();
-			if (!saved) return failure('请先扫码登录 daed。', 401);
+			if (!saved) return failure('请先扫码登录 DAED。', 401);
 			let result = subscription_list(saved.token);
 			if (result.error) { if (result.status == 401 && fs.stat(TOKEN_FILE)) fs.unlink(TOKEN_FILE); return failure(result.error, result.status ?? 502); }
 			return { ok: true, subscriptions: result.subscriptions };
@@ -163,12 +182,12 @@ return function(ctx) {
 			if (type(action) != 'string') return failure('无效操作', 400);
 			if (action == 'subscriptions') {
 				let saved = load_token(), id = '' + (req.body?.subscriptionId ?? '');
-				if (!saved) return failure('请先扫码登录 daed。', 401);
+				if (!saved) return failure('请先扫码登录 DAED。', 401);
 				if (!match(id, /^[0-9]{1,12}$/)) return failure('无效的订阅项。', 400);
 				let result = request_daed('POST', 'subscriptions/' + id + '/refresh', saved.token, null);
 				if (result.error) return failure(result.error, 502);
 				if (result.status == 401 || result.status == 403) { if (fs.stat(TOKEN_FILE)) fs.unlink(TOKEN_FILE); return failure('登录已过期，请重新扫码登录。', 401); }
-				if (result.status < 200 || result.status >= 300) return failure('订阅更新失败，请在 daed 页面查看详情。', 502);
+				if (result.status < 200 || result.status >= 300) return failure('订阅更新失败，请在 DAED 页面查看详情。', 502);
 				return { ok: true, message: '订阅更新已提交。' };
 			}
 			if (index([ 'start', 'stop', 'reload' ], action) < 0) return failure('不支持此操作', 400);
