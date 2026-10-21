@@ -18,6 +18,7 @@ def apply(kernel):
                     str(kernel), '--preserve-board-current'], check=True)
     runpy.run_path(str(HERE / 'charger.py'))['apply'](kernel)
     runpy.run_path(str(HERE / 'touch.py'))['apply'](kernel)
+    runpy.run_path(str(HERE / 'display-clock.py'))['apply'](kernel)
 
 
 if __name__ == '__main__':

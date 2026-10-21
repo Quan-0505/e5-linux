@@ -374,7 +374,12 @@ failed=0
 if [ -f /etc/module-order ]; then
     while read module; do
         [ -n "$module" ] || continue
-        [ "$module" = wcn_bsp.ko ] && early_device_firmware
+        # ST7123 downloads this unit's RAM firmware synchronously at probe.
+        # It precedes WCN (and some profiles load WCN only after switch_root),
+        # so waiting for wcn_bsp leaves touch permanently unbound with ENOENT.
+        case "$module" in
+            st7123.ko|wcn_bsp.ko) early_device_firmware ;;
+        esac
         if insmod "/linux-modules/$module" 2>/run/insmod.err; then
             loaded=$((loaded + 1))
         else

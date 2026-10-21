@@ -18,8 +18,41 @@ FUNCTIONS = INIT[INIT.index('early_card_firmware() {'):INIT.index('\nloaded=0\n'
 
 
 class Discovery(unittest.TestCase):
+    def test_firmware_is_ready_before_touch_probe_even_without_early_wcn(self):
+        loop = INIT[INIT.index('\nloaded=0\n') + 1:INIT.index('\nmdev -s\nlog "stage=modules-done')]
+        with tempfile.TemporaryDirectory(prefix='e5-module-firmware-') as directory:
+            root = Path(directory)
+            order = root / 'module-order'
+            loop = loop.replace('/etc/module-order', str(order)).replace('/run/insmod.err', str(root / 'insmod.err'))
+            for modules in (
+                ['spi-sprd.ko', 'st7123.ko'],
+                ['spi-sprd.ko', 'st7123.ko', 'wcn_bsp.ko'],
+                ['tlsc6x.ko', 'wcn_bsp.ko'],
+                ['tlsc6x.ko'],
+            ):
+                with self.subTest(modules=modules):
+                    order.write_text('\n'.join(modules) + '\n')
+                    script = '''
+ready=0
+early_device_firmware() { ready=1; echo firmware; }
+insmod() {
+    case "$1" in
+        */st7123.ko|*/wcn_bsp.ko) [ "$ready" = 1 ] || return 9 ;;
+    esac
+    echo "module ${1##*/}"
+}
+log() { echo "$*"; }
+''' + loop + '\necho "failed=$failed"\n'
+                    result = subprocess.run([shutil.which('busybox'), 'sh', '-c', script],
+                                            text=True, capture_output=True, check=True)
+                    self.assertIn('failed=0', result.stdout)
+                    self.assertEqual(result.stdout.count('firmware\n'),
+                                     sum(m in ('st7123.ko', 'wcn_bsp.ko') for m in modules))
+                    if 'st7123.ko' in modules:
+                        self.assertLess(result.stdout.index('firmware\n'), result.stdout.index('module st7123.ko'))
+
     def run_boot(self, *, explicit=False, card=False, delayed=False,
-                 bundle='good', existing=False, mount_fail=False):
+                 bundle='good', existing=False, mount_fail=False, partition=False):
         with tempfile.TemporaryDirectory(prefix='e5-firmware-test-') as directory:
             root = Path(directory)
             def write(name, value):
@@ -31,6 +64,14 @@ class Discovery(unittest.TestCase):
             write('dev/mmcblk0p70', '')
             write('proc/cmdline', 'console=tty0' + (
                 ' e5.openwrt=openwrt-t551m.ext4' if explicit else ''))
+            if partition:
+                write('sys/class/block/mmcblk0p71/uevent', 'PARTNAME=e5root\n')
+                write('partition/etc/e5/part-root', '')
+                write('partition/lib/firmware/wcnmodem.bin', 'partition')
+                write('partition/lib/firmware/sitronix_firmware_huaying.dump', 'own touch firmware')
+                link = root / 'partition/lib/firmware/sitronix/st7123.bin'
+                link.parent.mkdir()
+                link.symlink_to('../sitronix_firmware_huaying.dump')
             for name in ('run', 'tmp', 'data', 'lib/firmware'):
                 (root / name).mkdir(parents=True, exist_ok=True)
             if bundle != 'missing':
@@ -71,6 +112,9 @@ mount() {
         *'-t ext4 -o ro,noload,noatime'*)
             echo card-mount
             cp -a "$ROOT/card/." "$destination/" ;;
+        *'-t ext4 -o ro,noload '*)
+            echo partition-mount
+            cp -a "$ROOT/partition/." "$destination/" ;;
         *) echo "Unexpected mount: $*" >&2; exit 20 ;;
     esac
 }
@@ -93,7 +137,18 @@ early_device_firmware
             errors = '\n'.join(p.read_text() for p in (root / 'run').glob('*.err'))
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr + errors)
             firmware = root / 'lib/firmware/wcnmodem.bin'
+            if partition:
+                self.assertEqual((root / 'lib/firmware/sitronix/st7123.bin').read_text(),
+                                 'own touch firmware')
             return firmware.read_text() if firmware.exists() else None, result.stdout
+
+    def test_internal_partition_supplies_own_touch_firmware_without_wait(self):
+        value, trace = self.run_boot(partition=True)
+        self.assertEqual(value, 'partition')
+        self.assertIn('stage=device-firmware-source e5root', trace)
+        self.assertNotIn('wait ', trace)
+        self.assertNotIn('userdata-mount', trace)
+        self.assertNotIn('card-mount', trace)
 
     def test_explicit_internal_image_has_no_card_wait(self):
         value, trace = self.run_boot(explicit=True, card=True)

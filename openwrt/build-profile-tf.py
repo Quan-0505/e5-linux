@@ -104,13 +104,18 @@ def main():
         '-v', f'{TOP / "out/openwrt"}:/modem:ro',
         '-v', f'{a.wifi_apks.resolve()}:/wifi-sae:ro',
         '--entrypoint', '/bin/sh', a.apk_image, '-ec',
+        # Match the existing MU300 builder: transient index/download failures
+        # retry in this staging tree, without restarting every model's package.
+        'apk_retry() { attempt=1; while ! apk "$@"; do '
+        '[ "$attempt" -lt 3 ] || return 1; attempt=$((attempt + 1)); '
+        'echo "Retrying apk download (attempt $attempt/3)" >&2; sleep 3; done; }; '
         'apk --root /target --no-scripts --no-network add --allow-untrusted /input/block.apk ' + modem_args + ' ' + wifi_args + ' && '
         'mkdir /tmp/modem-verify && apk extract --allow-untrusted --destination /tmp/modem-verify /modem/' + modem_daemon + ' && '
         'cmp /target/usr/sbin/ModemManager /tmp/modem-verify/usr/sbin/ModemManager && '
         'ucode /target/usr/libexec/unisoc-modem/disable-channel-analysis /target && '
         # Incremental builds must also add newly mandatory packages to old bases.
-        'apk --root /target update >/dev/null && '
-        'apk --root /target --no-scripts add ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn luci-i18n-ttyd-tr iw-full && '
+        'apk_retry --root /target update >/dev/null && '
+        'apk_retry --root /target --no-scripts add ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn luci-i18n-ttyd-tr iw-full && '
         'sh /target/usr/libexec/e5-ttyd-bind /target && '
         'ln -sf ../init.d/ttyd /target/etc/rc.d/S99ttyd && '
         'ln -sf ../init.d/ttyd /target/etc/rc.d/K50ttyd && '

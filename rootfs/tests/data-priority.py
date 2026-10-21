@@ -172,7 +172,7 @@ class Integration(unittest.TestCase):
             return original_run(str(path))
 
         with tempfile.TemporaryDirectory(prefix='e5-policy-stage-') as directory:
-            for profile in ('e5', 't551m'):
+            for profile in ('e5', 't551m', 'm8', 't512n', 'yuanhang41s', 'k1'):
                 root = Path(directory) / profile
                 root.mkdir()
                 with patch.dict(os.environ, E5_UI_CACHE=str(Path(directory) / 'cache')), \

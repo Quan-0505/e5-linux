@@ -63,16 +63,20 @@ int main(void) {
     for(slot=0;slot<2;slot++) for(spawn_fails=0;spawn_fails<2;spawn_fails++) {
         unsigned before=spawned;
         parent_ready=1;
-        assert(initialization_stopped(&modem,&modem,NULL));
-        assert(modem_power_up_finish(&modem,&ok,NULL));
-        assert(spawned==before+2); /* helper failure never alters MM success */
+        /* Cold init and CP re-initialization must both schedule preferences;
+         * a previous successful initialization is never a permanent skip. */
+        for (int restart=0; restart<2; restart++) {
+            assert(initialization_stopped(&modem,&modem,NULL));
+            assert(modem_power_up_finish(&modem,&ok,NULL));
+        }
+        assert(spawned==before+4); /* helper failure never alters MM success */
         parent_ready=0;
         assert(!initialization_stopped(&modem,&modem,NULL));
         assert(!modem_power_up_finish(&modem,&bad,NULL));
         assert(modem_power_finish(&modem,&ok,NULL)); /* radio-off path unchanged */
-        assert(spawned==before+2);
+        assert(spawned==before+4);
     }
-    assert(parent_calls==8 && warnings==4);
+    assert(parent_calls==12 && warnings==8);
     radio_allowed=0;
     unsigned before=spawned;
     parent_ready=1;

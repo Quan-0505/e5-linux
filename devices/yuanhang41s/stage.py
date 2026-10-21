@@ -155,6 +155,8 @@ exit 0
     for name in ('etc/init.d/e5-board-identity', 'etc/uci-defaults/97-e5-hostname'):
         copy(root, TOP / 'openwrt/overlay' / name, name)
     link(root, 'S11e5-board-identity', 'e5-board-identity')
+    copy(root, TOP / 'devices/yuanhang41s/led-defaults',
+         'etc/uci-defaults/98-yuanhang41s-leds', 0o755)
     runpy.run_path(str(TOP / 'devices/t551m/ui.py'))['stage'](root, profile='yuanhang41s')
     stage_screen(root)
     stage_audio(root)
