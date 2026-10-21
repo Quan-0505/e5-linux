@@ -75,6 +75,14 @@ class Bootstrap(unittest.TestCase):
 
 
 class RootAudit(unittest.TestCase):
+    def test_infoscreen_package_version_matches_upstream_release(self):
+        metadata = (TOP / 'ci/infoscreen/.version').read_text()
+        version = next((line.partition('=')[2] for line in metadata.splitlines()
+                        if line.startswith('version=')), None)
+        package_version = (TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen/VERSION').read_text().strip()
+        self.assertRegex(version or '', r'^\d+\.\d+\.\d+$')
+        self.assertEqual(package_version, version)
+
     def audit(self, files, staged_vendor=None, kernel_out=None, nonexec=()):
         with tempfile.TemporaryDirectory() as temp:
             top = Path(temp)

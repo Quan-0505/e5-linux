@@ -2,8 +2,17 @@
 """Apply a checked fix to the pinned infoscreen USB settings dispatcher."""
 import hashlib
 from pathlib import Path
+import re
 
 top = Path(__file__).resolve().parents[1]
+metadata = top / 'ci/infoscreen/.version'
+version_file = top / 'ci/infoscreen/root/usr/share/e5-infoscreen/VERSION'
+version_match = re.search(r'^version=(\d+\.\d+\.\d+)$', metadata.read_text(), re.M)
+assert version_match, 'Invalid or missing infoscreen release version'
+version = version_match.group(1)
+version_file.write_text(version + '\n')
+print(f'Info-screen package version synchronized to {version}')
+
 path = top / 'ci/infoscreen/root/usr/share/e5-infoscreen/settings.uc'
 original = {
     'dc46dbca8cdda89da1eb85a696ae7415da2cd637a109795a0e7930763f59e271',
