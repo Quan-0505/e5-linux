@@ -51,9 +51,9 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | `e5-linux-switch-*.zip` | 已 Root Android 上切回已安装 Linux 的 Magisk 模块，不是完整固件 |
 | `e5-openwrt-installer-windows.zip` | Windows 图形安装器；需配合完整固件 ZIP 使用 |
 
-**最新发布（2026-10-20）**：[build-20261020-001550-479d0fd](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261020-001550-479d0fd)，OpenWrt 25.12.6、E5 Linux `6.18.54-e5-gb93bbc3a36fd`、信息屏 1.6.7、电话插件 1.5。源码提交为 `479d0fd62af2849c01e77f60e4ab58830e73aad0`，对应[构建记录](https://github.com/Quan-0505/e5-linux/actions/runs/39281105646)。
+**最新发布（2026-10-21）**：[build-20261021-121835-29ece81](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261021-121835-29ece81)，OpenWrt 25.12.6、E5 Linux `6.18.54-e5-gb93bbc3a36fd`、信息屏 2.0.0、电话插件 1.5。源码提交为 `29ece81f0bfdd25d3c9e2b24a1cb03b5910c0378`，对应[构建记录](https://github.com/Quan-0505/e5-linux/actions/runs/39541683138)。
 
-本次 Release 提供完整固件 ZIP、Android/Linux 切换 Magisk ZIP 和 Windows 图形安装器 ZIP。GitHub Actions 的 Rust daed、补丁软件包、固件构建、Windows 安装器及发布校验均成功。CI 不连接 E5；此版本仍需在设备上完成实机刷写与硬件验收。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
+本次更新将 DAED 速率显示改为自动进位，并可点按切换 bps/Kbps/Mbps/Gbps 与 B/s/KB/s/MB/s/GB/s；同步升级信息屏上游至 2.0.0，并修正构建产物版本号与上游版本元数据不同步的问题。Release 提供完整固件 ZIP、Android/Linux 切换 Magisk ZIP 和 Windows 图形安装器 ZIP。GitHub Actions 的 Rust daed、补丁软件包、固件构建、浏览器测试、Windows 安装器及发布校验均成功。CI 未连接 E5；此版本仍需在设备上完成实机刷写与硬件验收。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
 
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
@@ -119,7 +119,7 @@ CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂�
 ## 📚 更多资料
 
 - [内置分区原理与安装流程](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/INTERNAL-PARTITION-SYSTEM-20261012.zh-CN.md)
-- [2026-10-20 最新固件发布](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261020-001550-479d0fd)（CI 构建通过，E5 实机验收待完成）
+- [2026-10-21 最新固件发布](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261021-121835-29ece81)（CI 构建通过，E5 实机验收待完成）
 - [2026-10-18 固件发布与验证记录](docs/RELEASE-20261018-204830.zh-CN.md)
 - [2026-10-15 上游同步记录](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/UPSTREAM-20261015.zh-CN.md)
 - [KDAE 与节点小宝集成](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/KDAE-NODEBABY.zh-CN.md)
