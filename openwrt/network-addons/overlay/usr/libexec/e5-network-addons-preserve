@@ -1,0 +1,45 @@
+#!/usr/bin/python3
+"""Preserve local application state during an E5 update, never old software."""
+import json
+from pathlib import Path
+import shutil
+import sqlite3
+import sys
+from urllib.parse import quote
+
+old, new = map(Path, sys.argv[1:])
+assert old.is_dir() and new.is_dir() and old.resolve() != new.resolve()
+for relative in ['etc/daed-kdae', 'etc/daed']:
+    source, target = old / relative, new / relative
+    if not source.is_dir() or source.is_symlink():
+        continue
+    target.mkdir(parents=True, exist_ok=True)
+    target.chmod(0o700)
+    for item in source.iterdir():
+        if item.is_symlink() or item.name.endswith(('.db-wal', '.db-shm')):
+            continue
+        dest = target / item.name
+        if item.suffix == '.db':
+            # A live SQLite copy must include committed WAL transactions.
+            with sqlite3.connect('file:' + quote(str(item)) + '?mode=ro', uri=True, timeout=30) as src:
+                with sqlite3.connect(dest) as dst:
+                    src.backup(dst)
+                    assert dst.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+            dest.chmod(0o600)
+        elif item.is_dir():
+            shutil.copytree(item, dest, dirs_exist_ok=True)
+        elif item.is_file():
+            shutil.copy2(item, dest)
+
+metadata = json.loads((new / 'etc/e5/network-addons.json').read_text())
+software = set(metadata['nodebaby_software_files'])
+source = old / 'usr/local/owjdxb'
+if source.is_dir() and not source.is_symlink():
+    for item in source.rglob('*'):
+        relative = item.relative_to(old).as_posix()
+        if relative in software or item.is_symlink() or not item.is_file():
+            continue
+        dest = new / relative
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item, dest)
+print('Preserved local KDAE databases and NodeBaby identity; retained new application binaries')
