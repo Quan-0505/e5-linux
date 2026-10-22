@@ -309,6 +309,7 @@ jobs:
           python3 tools/tests/rootfs-inline-script.py
           python3 tools/tests/rootfs-apk-retry.py
           python3 openwrt/tests/part-root-boot.py
+          python3 openwrt/tests/patch-hostapd-sae.py
           python3 boot/tests/part-install.py
           python3 boot/tests/part-update.py
           python3 tools/tests/network-addons-snapshot.py

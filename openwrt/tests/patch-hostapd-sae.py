@@ -18,12 +18,14 @@ with tempfile.TemporaryDirectory() as tmp:
     ucode.mkdir(parents=True)
     (shell / 'hostapd.sh').write_text(
         'hostapd_set_bss_options() {\n'
+        '\tset_default uapsd 1\n'
         '\t[ -n "$spp_amsdu" ] && append bss_conf "spp_amsdu=$spp_amsdu" "$N"\n',
         encoding='utf-8')
     ap = ucode / 'ap.uc'
     ap.write_text(
         "import * as iface from 'wifi.iface';\n"
         'function generate(interface, data, config) {\n'
+        '\tconfig.wmm_enabled = 1;\n'
         '\tiface_auth_type(config, data.config.band);\n'
         '}\n', encoding='utf-8')
 
