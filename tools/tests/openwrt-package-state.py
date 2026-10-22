@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Reject legacy APKs, source drift and changed binaries before image assembly."""
 import importlib.util
+import contextlib
 import json
+import os
+import runpy
 from pathlib import Path
 import tempfile
 import unittest
@@ -14,6 +17,27 @@ spec.loader.exec_module(package)
 
 
 class PackageState(unittest.TestCase):
+    def test_real_shared_stager_and_helpers_are_fingerprinted(self):
+        inputs = package.sources('25.12.6')['files']
+        common = TOP / 'device/openwrt_device_common'
+        stager = common / 'shared/network-startup.py'
+        self.assertIn(stager.relative_to(TOP).as_posix(), inputs)
+        stage = runpy.run_path(str(stager))['patch_root']
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            # Windows may lack symlink privilege; Linux CI exercises real links.
+            links = patch.object(Path, 'symlink_to') if os.name == 'nt' else contextlib.nullcontext()
+            with links:
+                stage(root, 'e5')
+            for asset in ('usr/libexec/e5-mm-report-ports',
+                          'etc/hotplug.d/wwan/26-e5-sipa-eth',
+                          'usr/libexec/e5-network-recovery',
+                          'etc/init.d/e5-network-recovery'):
+                source = common / 'overlay' / asset
+                self.assertIn(source.relative_to(TOP).as_posix(), inputs)
+                self.assertEqual((root / asset).read_bytes(),
+                                 source.read_bytes().replace(b'\r\n', b'\n'))
+
     def test_apk_and_source_changes_make_the_record_different(self):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory)

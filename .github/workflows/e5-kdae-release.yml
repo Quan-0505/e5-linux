@@ -339,7 +339,7 @@ jobs:
           path: |
             e5-linux/out/openwrt/*.apk
             e5-linux/out/openwrt/e5-modemmanager-build.json
-          key: patched-apk-${{ runner.os }}-${{ runner.arch }}-${{ env.E5_WRT_VER }}-${{ hashFiles('e5-linux/tools/openwrt-package-state.py', 'e5-linux/device/openwrt_device_common/tests/voice-identity.py', 'e5-linux/device/openwrt_device_common/tests/sim-power.py', 'e5-linux/openwrt/build-modemmanager.sh', 'e5-linux/openwrt/build-bluez.sh', 'e5-linux/openwrt/patches/**', 'e5-linux/device/debian_device_common/patches/modemmanager-*.patch', 'e5-linux/device/debian_device_common/patches/bluez-*.patch') }}
+          key: patched-apk-${{ runner.os }}-${{ runner.arch }}-${{ env.E5_WRT_VER }}-${{ hashFiles('e5-linux/tools/openwrt-package-state.py', 'e5-linux/device/openwrt_device_common/shared/network-startup.py', 'e5-linux/device/openwrt_device_common/overlay/**', 'e5-linux/openwrt/tests/*.py', 'e5-linux/rootfs/deb-patches/*.patch', 'e5-linux/device/openwrt_device_common/tests/voice-identity.py', 'e5-linux/device/openwrt_device_common/tests/sim-power.py', 'e5-linux/openwrt/build-modemmanager.sh', 'e5-linux/openwrt/build-bluez.sh', 'e5-linux/openwrt/patches/**', 'e5-linux/device/debian_device_common/patches/modemmanager-*.patch', 'e5-linux/device/debian_device_common/patches/bluez-*.patch') }}
       - name: Compile patched ModemManager and BlueZ
         if: steps.packages.outputs.cache-hit != 'true'
         run: |

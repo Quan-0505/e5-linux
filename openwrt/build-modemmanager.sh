@@ -100,14 +100,15 @@ cp "$HERE/tests/modem-data-ports.py" "$WORK/modem-data-ports.py"
 cp "$HERE/tests/modem-data-port-rules.py" "$WORK/modem-data-port-rules.py"
 cp "$HERE/tests/sim-radio-parser.py" "$WORK/sim-radio-parser.py"
 cp "$HERE/files/modemmanager-unisoc-renew" "$WORK/modemmanager-unisoc-renew"
-mkdir -p "$WORK/devices/t551m" "$WORK/openwrt/overlay/usr/libexec"
-cp "$TOP/devices/t551m/network-startup.py" "$WORK/devices/t551m/network-startup.py"
-cp "$HERE/overlay/usr/libexec/e5-mm-report-ports" "$WORK/openwrt/overlay/usr/libexec/e5-mm-report-ports"
-mkdir -p "$WORK/openwrt/overlay/etc/hotplug.d/wwan"
-cp "$HERE/overlay/etc/hotplug.d/wwan/26-e5-sipa-eth" "$WORK/openwrt/overlay/etc/hotplug.d/wwan/26-e5-sipa-eth"
-cp "$HERE/overlay/usr/libexec/e5-network-recovery" "$WORK/openwrt/overlay/usr/libexec/e5-network-recovery"
-mkdir -p "$WORK/openwrt/overlay/etc/init.d"
-cp "$HERE/overlay/etc/init.d/e5-network-recovery" "$WORK/openwrt/overlay/etc/init.d/e5-network-recovery"
+# Keep the shared stager beside its overlay: it resolves runtime helpers
+# relative to __file__. Copying just the Python file loses those dependencies.
+COMMON="$TOP/device/openwrt_device_common"
+for f in shared/network-startup.py overlay/usr/libexec/e5-mm-report-ports \
+         overlay/etc/hotplug.d/wwan/26-e5-sipa-eth \
+         overlay/usr/libexec/e5-network-recovery overlay/etc/init.d/e5-network-recovery; do
+    [ -s "$COMMON/$f" ] || { echo "Missing shared ModemManager input: $COMMON/$f" >&2; exit 1; }
+done
+
 n=900
 for p in "$TOP"/rootfs/deb-patches/modemmanager-[0-9][0-9]-*.patch; do
     cp "$p" "$WORK/patches/src/$n-e5-$(basename "$p" | sed 's/^modemmanager-//')"
@@ -121,6 +122,7 @@ DOCKER=${E5_DOCKER:-docker}
 case "$(uname -m)" in x86_64) PLAT=linux/amd64;; *) PLAT=linux/arm64;; esac
 Z=; [ "$DOCKER" = podman ] && Z=,z
 $DOCKER run --rm --platform $PLAT -v "$BUILD_VOLUME":/build \
+    -v "$COMMON":/device-common:ro$Z \
     -v "$WORK":/work:ro$Z -v "$OUT":/out${Z:+:z} -e VER="$VER" -e E5REV="$E5REV" \
     -e JOBS="${E5_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc)}" \
     "${E5_MODEM_BUILD_IMAGE:-debian:trixie}" bash -euc '
@@ -161,7 +163,7 @@ for p in /work/patches/pkg/*.patch; do patch -p1 -d $P < "$p"; done
 # Match the rootfs stager: upgrading this APK must retain APN selection,
 # boot replay, port discovery, initial EPS preservation and PDP retries.
 # Package files have no board config, so only the shared glue is affected.
-python3 /work/devices/t551m/network-startup.py --root "$P/files" --profile e5
+python3 /device-common/shared/network-startup.py --root "$P/files" --profile e5
 cp /work/patches/src/*.patch $P/patches/
 rel=$(sed -n "s/^PKG_RELEASE:=//p" $P/Makefile)
 sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=$((rel + 900 + E5REV))/" $P/Makefile
