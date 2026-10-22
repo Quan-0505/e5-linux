@@ -2,7 +2,7 @@
 
 > 中文：[`README.zh-CN.md`](README.zh-CN.md)
 
-OpenWrt **25.12.6** with the mainline E5 **6.18.y** kernel. Android stays on
+OpenWrt **25.12.5** with the mainline E5 **6.18.y** kernel. Android stays on
 slot A; Linux boots slot B. The device panel runs the information screen and
 its apps, including the Phone dialer/contacts page. LuCI is the separate router
 web interface.
@@ -10,7 +10,9 @@ web interface.
 ## Install and update
 
 Download a complete mainline bundle from [Releases](https://github.com/Enceka/e5-linux/releases),
-unpack it, then run `flash.cmd` on Windows or `./flash.sh` on macOS/Linux.
+unpack it, then run `OpenWrt-Installer.exe` on Windows or `sh launchers/start-installer.sh` on macOS/Linux.
+The detailed guide is `START-HERE.md` at the package root. New complete ZIPs can also deploy to TF directly
+from Magisk (erasing the entire card); this differs from the small switch-only module.
 Follow the included bundle README and interactive installer. A first install
 starts from rooted Android and extracts that device's firmware/vendor files;
 the generic image contains neither those files nor personal device identity.
@@ -23,7 +25,7 @@ and older directory installations remain supported.
 For a running OpenWrt system connected over USB:
 
 ```sh
-./flash.sh --update
+sh launchers/update-openwrt.sh
 ```
 
 Updates preserve configuration, contacts, forwarding profiles and the durable
@@ -88,6 +90,6 @@ compile time precise to a second. First boot starts ModemManager, the vendor
 CP runtime and the audio services; network availability follows registration.
 
 Hardware/service implementation lives in `overlay/`, the shared scripts in
-`../device/linux_device_common/overlay/opt/e5/`, and the Unisoc MM patches in `../rootfs/deb-patches/`.
+`../rootfs/overlay/opt/e5/`, and the Unisoc MM patches in `../rootfs/deb-patches/`.
 The older 5.15/vendor and userdata directory forms are retained compatibility
 paths; the current one-click bundle uses mainline and SD installation.

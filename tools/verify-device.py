@@ -5,7 +5,7 @@ Why this exists
 ---------------
 Only three things decide what a booted E5 runs, and none of them is "the checkout":
 
-  * the flashed boot image.  ``boot/build-boot-image.py`` bakes the composed Debian/E5 overlay
+  * the flashed boot image.  ``boot/build-boot-image.py`` bakes ``rootfs/overlay``
     into the initramfs as ``e5-overlay/``, and ``boot/init`` copies every one of
     those files over ``/newroot`` on *every* boot.  An old image therefore
     silently restores old files over ``/etc`` for as long as it is flashed --
@@ -27,7 +27,6 @@ usage:
   tools/verify-device.py --image boot-linux-slotb.img --repo .
 """
 import argparse
-import runpy
 import hashlib
 import json
 import os
@@ -244,10 +243,7 @@ def main():
     ap.add_argument('--repo', type=Path, default=REPO_DEFAULT)
     ap.add_argument('--image', type=Path, default=REPO_DEFAULT / 'boot-linux-slotb.img')
     a = ap.parse_args()
-    private = a.repo / 'work/device-files/e5/overlay'
-    compose = runpy.run_path(str(a.repo / 'tools/device-layout.py'))['compose']
-    overlay = compose('debian', 'e5', a.repo / 'work/overlays/debian-e5',
-                      private if private.is_dir() else None)
+    overlay = a.repo / 'rootfs/overlay'
     problems = 0
 
     dev = Device()

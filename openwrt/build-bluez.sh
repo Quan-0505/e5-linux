@@ -3,7 +3,7 @@
 #
 #   openwrt/build-bluez.sh        -> out/openwrt/bluez-*.apk
 #
-# device/debian_device_common/patches/bluez-0*.patch, the same patches the Debian image takes:
+# rootfs/deb-patches/bluez-0*.patch, the same patches the Debian image takes:
 #  01  the larger SDP MTU for every device.  Headphones (Redmi Buds 6) answer
 #      the service search with PDUs over the default 672-byte MTU, the kernel
 #      drops them, and no audio profile ever connects (docs/FINDINGS.md 45).
@@ -14,7 +14,7 @@
 # the host tools and the toolchain up.  The release is OpenWrt's plus 900 plus
 # E5REV, so apk never replaces these with the repository's.
 set -euo pipefail
-VER=${E5_WRT_VER:-25.12.6}
+VER=${E5_WRT_VER:-25.12.5}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
 WORK="$TOP/work/openwrt"
@@ -29,12 +29,14 @@ for f in config.buildinfo feeds.buildinfo; do
 done
 rm -rf "$WORK/bluez-patches" && mkdir -p "$WORK/bluez-patches"
 n=900
-for p in "$TOP"/device/debian_device_common/patches/bluez-0*.patch; do
+for p in "$TOP"/rootfs/deb-patches/bluez-0*.patch; do
     cp "$p" "$WORK/bluez-patches/$n-e5-$(basename "$p" | sed 's/^bluez-//')"
     n=$((n + 1))
 done
 
-docker run --rm --platform linux/arm64 -v e5-openwrt-src:/build \
+# This volume shares host tools with ModemManager and hostapd.
+case "$(uname -m)" in x86_64) PLAT=linux/amd64;; aarch64|arm64) PLAT=linux/arm64;; *) echo 'Unsupported build host architecture' >&2; exit 1;; esac
+docker run --rm --platform "$PLAT" -v e5-openwrt-src:/build \
     -v "$WORK":/work:ro -v "$OUT":/out -e E5REV="$E5REV" \
     -e JOBS="${E5_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc)}" \
     debian:trixie bash -euc '

@@ -1,14 +1,14 @@
 #!/bin/sh
 set -eu
-sdk=openwrt-sdk-25.12.6-armsr-armv8_gcc-14.3.0_musl.Linux-x86_64
-sdk_sha=cbf3343bc3d6dc6180fc84077b966c13596a79904adaadbfe68409d563b0b596
+sdk=openwrt-sdk-25.12.5-armsr-armv8_gcc-14.3.0_musl.Linux-x86_64
+sdk_sha=1b0316604a3e820b2b008a1baff3f9dac6716af942bef800930e58c7de98c98b
 cd /cache
 # Serialize the shared SDK when 6.x/7.x rootfs builds run in parallel.
 exec 9>/cache/build.lock
 flock 9
 if [ ! -d "$sdk" ]; then
     if [ ! -s sdk.tar.zst ]; then
-        curl -fL --retry 3 -o sdk.tar.zst.part "https://downloads.openwrt.org/releases/25.12.6/targets/armsr/armv8/$sdk.tar.zst"
+        curl -fL --retry 3 -o sdk.tar.zst.part "https://downloads.openwrt.org/releases/25.12.5/targets/armsr/armv8/$sdk.tar.zst"
         echo "$sdk_sha  sdk.tar.zst.part" | sha256sum -c -
         mv sdk.tar.zst.part sdk.tar.zst
     fi
@@ -17,26 +17,11 @@ if [ ! -d "$sdk" ]; then
 fi
 cd "$sdk"
 export FORCE_UNSAFE_CONFIGURE=1
-# The SDK freezes hidden defaults from the release configuration. A seed
-# .config cannot override them: it otherwise selects every shipped kmod.
-# Change package/work selection only; retain all pinned toolchain/ABI options.
-python3 - <<'PY'
-from pathlib import Path
-import re
-p = Path('Config-build.in')
-text = p.read_text()
-def selection(match):
-    name, body = match.group(1), match.group(2)
-    if name.startswith('PACKAGE_kmod-') or name in ('BUILDBOT', 'SDK_LLVM_BPF'):
-        body = re.sub(r'(?m)^(\s*default) [ym](\s*)$', r'\1 n\2', body)
-    return 'config ' + name + body
-p.write_text(re.sub(r'(?m)^config (\S+)([\s\S]*?)(?=^config |\Z)', selection, text))
-PY
 if [ ! -f package/feeds/base/fstools/Makefile ]; then
     ./scripts/feeds update base
     ./scripts/feeds install -p base fstools
 fi
-# This APK is intentionally tied to the same fstools revision as 25.12.6.
+# This APK is intentionally tied to the same fstools revision as 25.12.5.
 # Fail on a changed feed instead of producing an unreviewed probe binary.
 grep -q 'PKG_SOURCE_VERSION:=16718b6e3c0fc7db7be6ae5848db0eae88ac8a8b' package/feeds/base/fstools/Makefile
 sed -i 's/^PKG_RELEASE:=.*/PKG_RELEASE:=100/' package/feeds/base/fstools/Makefile
@@ -49,9 +34,7 @@ cp /src/patches/fstools-probe-device-types.patch package/feeds/base/fstools/patc
     sed 's/^/+/' /src/block-probe-guard.h
 } > package/feeds/base/fstools/patches/901-e5-probe-guard-header.patch
 printf '%s\n' 'CONFIG_ALL_NONSHARED=n' 'CONFIG_ALL_KMODS=n' 'CONFIG_ALL=n' \
-    '# CONFIG_BUILDBOT is not set' '# CONFIG_SDK_LLVM_BPF is not set' \
-    'CONFIG_BPF_TOOLCHAIN_NONE=y' 'CONFIG_PACKAGE_block-mount=m' \
-    'CONFIG_SIGNED_PACKAGES=n' > .config
+    'CONFIG_PACKAGE_block-mount=m' 'CONFIG_SIGNED_PACKAGES=n' > .config
 make defconfig
 make package/fstools/clean
 make -j4 package/fstools/compile V=s

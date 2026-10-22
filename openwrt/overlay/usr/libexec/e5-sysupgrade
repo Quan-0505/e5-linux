@@ -1,0 +1,28 @@
+#!/bin/sh
+# Firmware replacement uses the project updater. Keep only configuration tools.
+backup_operation() {
+    mode=
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -b|--create-backup|-r|--restore-backup)
+                [ -z "$mode" ] && [ "$#" -ge 2 ] && [ -n "$2" ] || return 1
+                mode=$1
+                shift 2
+                ;;
+            -l|--list-backup)
+                [ -z "$mode" ] || return 1
+                mode=$1
+                shift
+                ;;
+            -k|-u|-c|-o|-p|-v|-q) shift ;;
+            *) return 1 ;;
+        esac
+    done
+    [ -n "$mode" ]
+}
+if backup_operation "$@"; then
+    exec /sbin/sysupgrade.openwrt "$@"
+fi
+echo "Stock firmware flashing is disabled; use the project OTA or desktop updater." >&2
+echo "Configuration backup, restore and listing remain available." >&2
+exit 1

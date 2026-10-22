@@ -66,12 +66,10 @@ if [ -d "$DEST/etc/config" ]; then
         fi
     done
     # the new image's version and build time, not the kept ones
-    for f in image-version build-time network-addons.json; do
+    for f in image-version build-time release.json; do
         tar -xzf "$T" -C "$NEW" ./etc/e5/$f 2>/dev/null || true
     done
 fi
-
-[ ! -d "$DEST" ] || sh "$NEW/usr/libexec/e5-network-addons-preserve-run" "$DEST" "$NEW"
 
 if [ ! -f "$NEW/etc/e5/install.conf" ]; then
     echo "== settings from Debian"

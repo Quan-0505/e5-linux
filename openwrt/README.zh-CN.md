@@ -2,14 +2,16 @@
 
 > English: [`README.md`](README.md)
 
-当前使用 **OpenWrt 25.12.6 + E5 主线 6.18.y 内核**。Android 保留在 A 槽，Linux
+当前使用 **OpenWrt 25.12.5 + E5 主线 6.18.y 内核**。Android 保留在 A 槽，Linux
 使用 B 槽。设备面板运行信息屏及其应用，电话拨号盘／通讯录就在信息屏里；LuCI
 是独立的路由器网页管理界面。
 
 ## 安装与更新
 
 从 [Releases](https://github.com/Enceka/e5-linux/releases) 下载完整主线刷入包，解压后
-Windows 运行 `flash.cmd`，macOS／Linux 运行 `./flash.sh`，按包内说明和安装器操作。
+Windows 运行 `OpenWrt-Installer.exe`，macOS／Linux 运行 `sh launchers/start-installer.sh`。
+详细指南放在解压目录顶层 `START-HERE.md`。新版完整 ZIP 也可在 Magisk 内首次部署 TF 卡，
+此操作会清空所选 TF 目标（已有第一分区，无分区则整卡），与仅用于系统切换的小型模块不同。
 首次安装从已 root 的 Android 开始，提取目标设备自身固件和 vendor 文件；通用镜像
 不携带这些文件，也不包含用户设备身份。
 
@@ -20,7 +22,7 @@ Windows 运行 `flash.cmd`，macOS／Linux 运行 `./flash.sh`，按包内说明
 已运行 OpenWrt、通过 USB 连接电脑时：
 
 ```sh
-./flash.sh --update
+sh launchers/update-openwrt.sh
 ```
 
 更新保留配置、通讯录、转发设置和持久短信收件箱。内核和根目录模块必须来自同一次
@@ -77,6 +79,6 @@ ModemManager APK；软件包构建运行通话身份与路由测试，不访问�
 GitHub Actions 编译并发布主线刷入包和 Magisk ZIP，编译时间为 UTC+8、精确到秒。
 启动后由 ModemManager、vendor CP 运行库和音频服务接管硬件，网络待注册完成后可用。
 
-硬件服务在 `overlay/`，共享脚本在 `../device/linux_device_common/overlay/opt/e5/`，Unisoc MM 补丁在
+硬件服务在 `overlay/`，共享脚本在 `../rootfs/overlay/opt/e5/`，Unisoc MM 补丁在
 `../rootfs/deb-patches/`。旧 5.15／vendor 和 userdata 目录安装保留作兼容路径，
 当前一键包使用主线内核、推荐 SD 安装。

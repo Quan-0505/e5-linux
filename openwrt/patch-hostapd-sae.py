@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Idempotent patches for the pinned OpenWrt 25.12.6 hostapd and wifi-scripts."""
+"""Idempotent patches for the pinned OpenWrt 25.12 hostapd and wifi-scripts."""
 from pathlib import Path
 import argparse
 
@@ -61,6 +61,10 @@ def patch_source(root):
 def patch_wifi(root):
     root = Path(root)
     path = root / 'lib/netifd/hostapd.sh'
+    # Shared hotspot policy: disable U-APSD advertisement, retaining WMM and
+    # the existing beacon/DTIM settings. Also covers restored old UCI values.
+    replace(path, '\tset_default uapsd 1\n',
+            '\tuapsd=0 # U-APSD is disabled by the shared hotspot policy.\n')
     replace(path, 'hostapd_set_bss_options() {',
             '. /lib/netifd/hostapd-unisoc.sh\n\nhostapd_set_bss_options() {')
     replace(path, '\t[ -n "$spp_amsdu" ] && append bss_conf "spp_amsdu=$spp_amsdu" "$N"\n',
@@ -72,15 +76,16 @@ def patch_wifi(root):
     # remains available to builds that deliberately select legacy scripts.
     ucode = root.parent / 'files-ucode/usr/share/ucode/wifi'
     path = ucode / 'ap.uc'
+    replace(path, '\tconfig.wmm_enabled = 1;\n',
+            '\tconfig.wmm_enabled = 1;\n'
+            '\tconfig.uapsd_advertisement_enabled = 0; // Shared hotspot policy.\n')
     replace(path, "import * as iface from 'wifi.iface';\n",
             "import * as iface from 'wifi.iface';\n"
             "import { configure as unisoc_sae_config } from 'wifi.unisoc-sae';\n")
-    # 25.12.6 passes the active band to iface_auth_type; 25.12.5 did not.
-    # Keep this strict anchor so a future wifi-scripts refactor fails closed.
-    replace(path, '\tiface_auth_type(config, data.config.band);',
+    replace(path, '\tiface_auth_type(config);',
             "\tunisoc_sae_config(config, fs.realpath(`/sys/class/ieee80211/${data.phy}/device/driver/module`));\n"
             "\tif (config.unisoc_sae)\n\t\tappend('unisoc_sae', config.unisoc_sae);\n"
-            '\tiface_auth_type(config, data.config.band);')
+            '\tiface_auth_type(config);')
     (ucode / 'unisoc-sae.uc').write_bytes(
         Path(__file__).with_name('hostapd-unisoc.uc').read_bytes())
 

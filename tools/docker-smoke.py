@@ -78,7 +78,7 @@ def main():
         print('PASS: published port survives fw4 reload')
         command('docker', 'exec', name, '/bin/sh', '-ec',
                 'wget -q -T 15 -O /tmp/network-test '
-                'http://downloads.openwrt.org/releases/25.12.6/targets/armsr/armv8/sha256sums; '
+                'http://downloads.openwrt.org/releases/25.12.5/targets/armsr/armv8/sha256sums; '
                 'test -s /tmp/network-test; echo persisted > /tmp/overlay-test')
         command('docker', 'restart', '-t', '1', name)
         assert command('docker', 'exec', name, '/bin/cat', '/tmp/overlay-test') == 'persisted'

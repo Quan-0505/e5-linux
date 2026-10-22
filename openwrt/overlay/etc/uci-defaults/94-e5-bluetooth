@@ -1,0 +1,23 @@
+#!/bin/sh
+# First boot: bluetoothd's settings (/etc/bluetooth/main.conf, the
+# package's file): the board adapter name, and always pairable -- a pairing is
+# only kept (bonded) when the adapter is bondable; otherwise the kernel asks
+# the device for "No Bonding" and headphones have to be paired again at every
+# connection.
+F=/etc/bluetooth/main.conf
+[ -f "$F" ] || exit 0
+set_opt() {
+	if grep -qE "^#? *$1 *=" "$F"; then
+		sed -i "s|^#\\? *$1 *=.*|$1 = $2|" "$F"
+	else
+		sed -i "/^\\[General\\]/a $1 = $2" "$F"
+	fi
+}
+current=$(sed -n 's/^ *Name *= *//p' "$F" | head -n 1)
+case "$current" in ''|E5)
+	name=$(cat /etc/e5/device-hostname 2>/dev/null)
+	set_opt Name "${name:-E5}"
+;; esac
+set_opt AlwaysPairable true
+set_opt PairableTimeout 0
+exit 0
