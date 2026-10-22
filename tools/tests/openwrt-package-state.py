@@ -20,20 +20,20 @@ class PackageState(unittest.TestCase):
             daemon = out / 'modemmanager-1.24.0-r914.apk'; daemon.write_bytes(b'daemon build A')
             rpc = out / 'modemmanager-rpcd-1.24.0-r914.apk'; rpc.write_bytes(b'RPC build A')
             with patch.object(package, 'OUT', out), patch.object(package, 'sources', return_value={'patch': 'A'}):
-                saved = package.inspect('25.12.5')
+                saved = package.inspect('25.12.6')
                 daemon.write_bytes(b'old daemon copied into new build')
-                self.assertNotEqual(package.inspect('25.12.5'), saved)
+                self.assertNotEqual(package.inspect('25.12.6'), saved)
                 daemon.write_bytes(b'daemon build A')
-                self.assertEqual(package.inspect('25.12.5'), saved)
+                self.assertEqual(package.inspect('25.12.6'), saved)
             with patch.object(package, 'OUT', out), patch.object(package, 'sources', return_value={'patch': 'B'}):
-                self.assertNotEqual(package.inspect('25.12.5'), saved)
+                self.assertNotEqual(package.inspect('25.12.6'), saved)
 
     def test_missing_required_package_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory)
             (out / 'modemmanager-rpcd-1.24.0-r914.apk').write_bytes(b'RPC only')
             with patch.object(package, 'OUT', out), self.assertRaises(ValueError):
-                package.inspect('25.12.5')
+                package.inspect('25.12.6')
 
 
 if __name__ == '__main__':

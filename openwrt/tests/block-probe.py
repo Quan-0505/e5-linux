@@ -62,7 +62,7 @@ echo 'APK install, ext4 discovery, FIFO and character-device filtering: passed'
 '''
             subprocess.run(['docker', 'run', '--rm', '--platform', 'linux/arm64',
                             '-v', f'{apk}:/test/block.apk:ro', '-v', f'{disk}:/test/disk.ext4:ro',
-                            os.environ.get('E5_TEST_IMAGE', 'e5-openwrt-base:25.12.5'),
+                            os.environ.get('E5_TEST_IMAGE', 'e5-openwrt-base:25.12.6'),
                             '/bin/sh', '-ec', command], check=True, timeout=180)
 
 

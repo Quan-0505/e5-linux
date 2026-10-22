@@ -41,7 +41,7 @@ def main():
     p.add_argument('--profile', choices=MODELS, required=True)
     for name in ('base', 'defaults', 'kernel', 'stock-boot', 'misc-head', 'busybox', 'work', 'output', 'block-apk'):
         p.add_argument('--' + name, type=Path, required=True)
-    p.add_argument('--apk-image', default='mu300-openwrt-base:25.12.5')
+    p.add_argument('--apk-image', default='mu300-openwrt-base:25.12.6')
     p.add_argument('--wifi-apks', type=Path, default=TOP / 'work/wifi-sae')
     p.add_argument('--release-version', help='Optional explicit private release version')
     p.add_argument('--cc', default='aarch64-linux-gnu-gcc')
@@ -59,7 +59,7 @@ def main():
     # A sanitized prebuilt base may carry an older daemon. Refresh it from
     # the source-verified APKs so a userspace fix cannot disappear in a repack.
     modem_state = runpy.run_path(str(TOP / 'tools/openwrt-package-state.py'))
-    modem_build = modem_state['inspect']('25.12.5')
+    modem_build = modem_state['inspect']('25.12.6')
     if json.loads(modem_state['STATE'].read_text()) != modem_build:
         raise ValueError('ModemManager APKs are stale; rebuild them before packaging')
     modem_names = sorted(modem_build['apks'])
@@ -201,7 +201,7 @@ def main():
     (root / 'etc/e5/release.json').write_text(json.dumps(release_info, indent=2) + '\n')
     info = {'private_version': release_info['private_version'], 'source_fingerprint': release_info['source_fingerprint'],
             'name': name, 'profile': a.profile, 'source_commit': rev,
-            'build_epoch': epoch, 'kernel_release': release, 'openwrt': '25.12.5',
+            'build_epoch': epoch, 'kernel_release': release, 'openwrt': '25.12.6',
             'build_type': 'incremental assembly; tested package binaries, current sources, rebuilt initramfs',
             'docker_preinstalled': False, 'root_image_bytes': 2147483648,
             'boot_sha256': boot['sha256'], 'block_mount_sha256': digest(a.block_apk),

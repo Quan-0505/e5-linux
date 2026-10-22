@@ -36,7 +36,7 @@ class PolicyTest(unittest.TestCase):
     def apply(self, success=True):
         result = subprocess.run(['docker', 'run', '--rm', '--user', f'{os.getuid()}:{os.getgid()}', '--platform', 'linux/arm64',
             '-v', f'{self.root}:/target', '-v', f'{PLUGIN}:/policy:ro', '--entrypoint', '/usr/bin/ucode',
-            'mu300-openwrt-base:25.12.5', '/policy', '/target'], capture_output=True, text=True)
+            'mu300-openwrt-base:25.12.6', '/policy', '/target'], capture_output=True, text=True)
         self.assertEqual(result.returncode == 0, success, result.stderr)
 
     def test_removes_only_analysis_and_neutralizes_old_view(self):

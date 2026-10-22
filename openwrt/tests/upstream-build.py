@@ -29,25 +29,25 @@ with tempfile.TemporaryDirectory() as tmp:
             log.write_text('')
             script = f'''set -eu
 uname() {{ echo {machine}; }}
-TOP={root} OUT={root} WORK={root} VER=25.12.5 E5REV=1 stamp=test
+TOP={root} OUT={root} WORK={root} VER=25.12.6 E5REV=1 stamp=test
 {section}
 '''
             subprocess.run(['bash', '-c', script], env=env, check=True)
             assert '--platform ' + platform in log.read_text(), (name, machine, log.read_text())
-    # merge_config creates scratch files in cwd. Run the actual new command with
-    # a merger that refuses a source cwd, including paths containing spaces.
+    # Verify the actual command sends merge_config output to the object directory,
+    # including paths containing spaces.
     source_dir = root / 'kernel source'
     (source_dir / 'scripts/kconfig').mkdir(parents=True)
     output = root / 'object dir'
     output.mkdir()
     merger = source_dir / 'scripts/kconfig/merge_config.sh'
-    merger.write_text('#!/bin/sh\n[ "$PWD" = "$O" ] || exit 71\n[ "$3" = "$O" ] || exit 72\ntouch .merge-ran\n')
+    merger.write_text('#!/bin/sh\n[ "$3" = "$O" ] || exit 72\ntouch "$O/.merge-ran"\n')
     merger.chmod(0o755)
     for name in ('build.sh', 'build-native.sh'):
         source = (TOP / 'upstream' / name).read_text()
         lines = source.splitlines()
-        index = next(i for i, line in enumerate(lines) if line.startswith('kernel_merge_config='))
-        section = '\n'.join(lines[index:index + 2])
+        index = next(i for i, line in enumerate(lines) if 'scripts/kconfig/merge_config.sh' in line)
+        section = lines[index]
         subprocess.run(['bash', '-ec', section], cwd=source_dir,
                        env=dict(os.environ, O=str(output), CFG=str(root / 'config')), check=True)
         assert (output / '.merge-ran').exists()

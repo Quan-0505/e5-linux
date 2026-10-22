@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import runpy
 import struct
 import tarfile
 import tempfile
@@ -80,19 +81,26 @@ class RootAudit(unittest.TestCase):
             (top / 'upstream/out-release').mkdir(parents=True)
             (top / 'upstream/out-release/kernel.release').write_text('6.18-e5\n')
             (top / 'rootfs/overlay/opt/e5').mkdir(parents=True)
-            for name in release.BLOCK_SOURCES:
+            for name in release.BLOCK_SOURCES + (
+                    'build-hostapd.sh', 'build-hostapd-inner.sh', 'hostapd.Dockerfile',
+                    'patch-hostapd-sae.py', 'hostapd-unisoc-sae.h',
+                    'wifi-sae-state.py', 'hostapd-unisoc.sh', 'hostapd-unisoc.uc'):
                 target = top / 'openwrt' / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((TOP / 'openwrt' / name).read_bytes())
+            wifi_id = runpy.run_path(str(TOP / 'openwrt/wifi-sae-state.py'))['build_id']()
+            files['etc/e5/wifi-sae.build-id'] = (wifi_id + '\n').encode()
+            files['lib/netifd/hostapd-unisoc.sh'] = (TOP / 'openwrt/hostapd-unisoc.sh').read_bytes()
+            files['usr/share/ucode/wifi/unisoc-sae.uc'] = (TOP / 'openwrt/hostapd-unisoc.uc').read_bytes()
             for name in ('vendor-start.sh', 'e5-modem-coldboot'):
                 (top / 'rootfs/overlay/opt/e5' / name).write_bytes(b'startup fixture')
                 files = {**files, 'opt/e5/' + name: b'startup fixture'}
-            path = top / 'work/openwrt/e5-openwrt-25.12.5-generic-rootfs.tar.gz'
+            path = top / 'work/openwrt/e5-openwrt-25.12.6-generic-rootfs.tar.gz'
             with tarfile.open(path, 'w:gz') as archive:
                 for name, data in files.items():
                     entry = tarfile.TarInfo(name); entry.size = len(data)
                     archive.addfile(entry, io.BytesIO(data))
-            info = {'openwrt_version': '25.12.5', 'build_epoch': 123}
+            info = {'openwrt_version': '25.12.6', 'build_epoch': 123}
             with patch.object(release, 'TOP', top), patch.object(release.subprocess, 'check_output', return_value=''):
                 release.audit_root(info)
             return info

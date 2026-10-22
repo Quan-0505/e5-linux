@@ -69,7 +69,7 @@
 # E5_IMAGE_MB sets the image's size (default 1024, or 2048 with Docker). Needs Docker with arm64
 # (native on Apple silicon).
 set -euo pipefail
-VER=${E5_WRT_VER:-25.12.5}
+VER=${E5_WRT_VER:-25.12.6}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
 WORK="$TOP/work/openwrt"
@@ -230,7 +230,7 @@ fi
 # (the standalone tree is only the image's source)
 TAROUT=$OUT; [ -z "$STANDALONE" ] || TAROUT=$WORK
 docker import --platform linux/arm64 "$WORK/$TARBALL" e5-openwrt-base:$VER >/dev/null
-# Packages OpenWrt's repository dropped -- cog and WPE WebKit left 25.12.5's feed when it was regenerated on
+# Packages OpenWrt's repository dropped -- cog and WPE WebKit left 25.12.6's feed when it was regenerated on
 # 2026-09-28 -- are taken from the last image that had them: their files, apk database entries and
 # dependencies, out of that image's rootfs archive into $WORK/transplant once (kept there).  The build uses
 # them only while the repository has none of them.

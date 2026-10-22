@@ -52,7 +52,7 @@ with tempfile.TemporaryDirectory(prefix='e5-gpt-plan-') as directory:
     root = Path(directory)
     def run(*args):
         return subprocess.run(['docker', 'run', '--rm', '-v', f'{root}:/test',
-                               '-v', f'{TOOL}:/gpt:ro', os.environ.get('E5_TEST_IMAGE', 'e5-openwrt-base:25.12.5'),
+                               '-v', f'{TOOL}:/gpt:ro', os.environ.get('E5_TEST_IMAGE', 'e5-openwrt-base:25.12.6'),
                                'ucode', '/gpt', *args], text=True, capture_output=True)
     def check(name, size, parts, success, text='', entries=128):
         image = root / (name + '.img')

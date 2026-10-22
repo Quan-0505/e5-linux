@@ -71,7 +71,7 @@ set -euo pipefail
 # 36: accept the recipient's extended ECIND readiness after insertion/SIM busy.
 # 37: retain Unisoc call identity after a failed/ambiguous accept result.
 E5REV=37
-VER=${E5_WRT_VER:-25.12.5}
+VER=${E5_WRT_VER:-25.12.6}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
 WORK="$TOP/work/openwrt"

@@ -13,7 +13,7 @@ E5 = (TOP/'openwrt/luci-app-t551m').exists()
 PLUGIN = TOP/'openwrt'/('luci-app-t551m' if E5 else 'luci-app-mu300')
 POLICY = PLUGIN/'root/usr/libexec/unisoc-modem/disable-stock-upgrade'
 GUARD = TOP/'openwrt/overlay/usr/libexec'/('e5-sysupgrade' if E5 else 'mu300-sysupgrade')
-IMAGE = 'mu300-openwrt-base:25.12.5'
+IMAGE = 'mu300-openwrt-base:25.12.6'
 
 
 class Guard(unittest.TestCase):

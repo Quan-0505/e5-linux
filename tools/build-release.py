@@ -122,7 +122,7 @@ def input_check(common, rows):
         raise ValueError('Clean base lacks the original configuration backup implementation')
     runpy.run_path(str(TOP / 'openwrt/bundle/flash.py'))['validate_installer_busybox'](common['busybox'])
     packages = runpy.run_path(str(TOP / 'tools/openwrt-package-state.py'))
-    current = packages['inspect']('25.12.5')
+    current = packages['inspect']('25.12.6')
     if json.loads(packages['STATE'].read_text()) != current:
         raise ValueError('ModemManager inputs stale: build openwrt/build-modemmanager.sh first')
     runpy.run_path(str(TOP / 'openwrt/wifi-sae-state.py'))['inspect'](common['wifi_apks'])

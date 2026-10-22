@@ -1,6 +1,6 @@
 """Exercise the real rpcd HTTP/UCI session boundary in a disposable OpenWrt container.
 
-Requires the existing mu300-openwrt-base:25.12.5 image; never downloads an image,
+Requires the existing mu300-openwrt-base:25.12.6 image; never downloads an image,
 exposes a host port, contacts a device or modifies the host UCI configuration.
 """
 import argparse
@@ -106,7 +106,7 @@ exec sleep 300
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--peer', type=Path)
-    parser.add_argument('--image', default='mu300-openwrt-base:25.12.5')
+    parser.add_argument('--image', default='mu300-openwrt-base:25.12.6')
     args = parser.parse_args()
     for repository in [TOP] + ([args.peer.resolve()] if args.peer else []):
         check(repository, args.image)

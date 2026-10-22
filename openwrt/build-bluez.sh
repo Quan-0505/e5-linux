@@ -14,7 +14,7 @@
 # the host tools and the toolchain up.  The release is OpenWrt's plus 900 plus
 # E5REV, so apk never replaces these with the repository's.
 set -euo pipefail
-VER=${E5_WRT_VER:-25.12.5}
+VER=${E5_WRT_VER:-25.12.6}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
 WORK="$TOP/work/openwrt"

@@ -1,14 +1,14 @@
 #!/bin/sh
 set -eu
-sdk=openwrt-sdk-25.12.5-armsr-armv8_gcc-14.3.0_musl.Linux-x86_64
-sdk_sha=1b0316604a3e820b2b008a1baff3f9dac6716af942bef800930e58c7de98c98b
+sdk=openwrt-sdk-25.12.6-armsr-armv8_gcc-14.3.0_musl.Linux-x86_64
+sdk_sha=cbf3343bc3d6dc6180fc84077b966c13596a79904adaadbfe68409d563b0b596
 cd /cache
 # Serialize the shared SDK when 6.x/7.x rootfs builds run in parallel.
 exec 9>/cache/build.lock
 flock 9
 if [ ! -d "$sdk" ]; then
     if [ ! -s sdk.tar.zst ]; then
-        curl -fL --retry 3 -o sdk.tar.zst.part "https://downloads.openwrt.org/releases/25.12.5/targets/armsr/armv8/$sdk.tar.zst"
+        curl -fL --retry 3 -o sdk.tar.zst.part "https://downloads.openwrt.org/releases/25.12.6/targets/armsr/armv8/$sdk.tar.zst"
         echo "$sdk_sha  sdk.tar.zst.part" | sha256sum -c -
         mv sdk.tar.zst.part sdk.tar.zst
     fi
@@ -21,7 +21,7 @@ if [ ! -f package/feeds/base/fstools/Makefile ]; then
     ./scripts/feeds update base
     ./scripts/feeds install -p base fstools
 fi
-# This APK is intentionally tied to the same fstools revision as 25.12.5.
+# This APK is intentionally tied to the same fstools revision as 25.12.6.
 # Fail on a changed feed instead of producing an unreviewed probe binary.
 grep -q 'PKG_SOURCE_VERSION:=16718b6e3c0fc7db7be6ae5848db0eae88ac8a8b' package/feeds/base/fstools/Makefile
 sed -i 's/^PKG_RELEASE:=.*/PKG_RELEASE:=100/' package/feeds/base/fstools/Makefile

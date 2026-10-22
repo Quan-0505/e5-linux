@@ -30,5 +30,5 @@ sh /tests/lock.sh | grep -x acquired
 echo 'BusyBox SIM lock checks passed: acquisition, contention, release'
 ''')
     subprocess.run(['docker', 'run', '--rm', '-v', f'{root}:/tests:ro',
-                    os.environ.get('E5_TEST_IMAGE', 'e5-openwrt-base:25.12.5'),
+                    os.environ.get('E5_TEST_IMAGE', 'e5-openwrt-base:25.12.6'),
                     '/bin/sh', '/tests/test.sh'], check=True)

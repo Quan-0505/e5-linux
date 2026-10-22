@@ -2,8 +2,8 @@
 # Build all three matching APKs: wpad, hostapd-common and wifi-scripts.
 set -eu
 TOP=$(cd "$(dirname "$0")/.." && pwd)
-VER=${UNISOC_WRT_VER:-25.12.5}
-[ "$VER" = 25.12.5 ] || {
+VER=${UNISOC_WRT_VER:-25.12.6}
+[ "$VER" = 25.12.6 ] || {
     echo 'Unisoc WPA3: update the pinned source/build checks for this OpenWrt version' >&2
     exit 1
 }

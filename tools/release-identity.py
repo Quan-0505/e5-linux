@@ -11,7 +11,7 @@ import subprocess
 import time
 
 
-def identify(repo,profile,kernel,openwrt='25.12.5',epoch=None,version=None):
+def identify(repo,profile,kernel,openwrt='25.12.6',epoch=None,version=None):
     repo=Path(repo).resolve()
     git_options=['git','-c','safe.directory='+str(repo),'-C',str(repo)]
     marker=repo/'.git'
@@ -55,7 +55,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo',type=Path,default=Path(__file__).resolve().parents[1])
     parser.add_argument('--profile',required=True);parser.add_argument('--kernel',required=True)
-    parser.add_argument('--openwrt',default='25.12.5');parser.add_argument('--epoch',type=int)
+    parser.add_argument('--openwrt',default='25.12.6');parser.add_argument('--epoch',type=int)
     parser.add_argument('--version');parser.add_argument('--output',type=Path)
     parser.add_argument('--field',choices=('private_version','image_version','package_name'))
     args=parser.parse_args()
