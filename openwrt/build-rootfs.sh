@@ -17,19 +17,19 @@
 #    build-bluez.sh;
 #  * the Argon theme for LuCI (jerrykuku/luci-theme-argon, its release's apk
 #    packages, pinned by version and sha256 below) with its settings page;
-#  * openwrt/overlay/: the procd services for the hardware, the first-boot
+#  * device/openwrt_device_common/overlay/: the procd services for the hardware, the first-boot
 #    configuration, the ModemManager glue, the sysupgrade guard;
-#  * from the Debian image's overlay (rootfs/overlay/opt/e5): the scripts both
+#  * from the Debian image's overlay (device/linux_device_common/overlay/opt/e5): the scripts both
 #    systems share -- the baseband's vendor chroot, the regulatory database,
 #    the USB gadget guard, e5-next-boot, e5-os, e5-at;
 #  * a full static busybox (the boot image's own) for the applets OpenWrt's
-#    leaves out, logdw (openwrt/src/logdw.c) for the vendor chroot's log, and
-#    e5-vibrate (openwrt/src/e5-vibrate.c) for the motor, e5-ctl-raw
-#    (openwrt/src/e5-ctl-raw.c) for the audio DSP's profile selects, and
-#    e5-modemd (openwrt/src/e5-modemd.c) for the CP's resets;
+#    leaves out, logdw (device/openwrt_device_common/src/logdw.c) for the vendor chroot's log, and
+#    e5-vibrate (device/openwrt_device_common/src/e5-vibrate.c) for the motor, e5-ctl-raw
+#    (device/openwrt_device_common/src/e5-ctl-raw.c) for the audio DSP's profile selects, and
+#    e5-modemd (device/openwrt_device_common/src/e5-modemd.c) for the CP's resets;
 #  * the speaker: the 24 vendor audio modules of the kernel build (out_linux)
 #    in /lib/modules/<release>/audio, alsa-utils, the card's UCM profile
-#    (rootfs/overlay/usr/share/alsa/ucm2), e5-audio-dsp, and e5-volume;
+#    (device/linux_device_e5/overlay/usr/share/alsa/ucm2), e5-audio-dsp, and e5-volume;
 #
 # The firmware and the Android vendor subset are not in the tarball: they are
 # the Debian root's, bound in at boot (overlay/lib/preinit/05_e5_debian_root).
@@ -40,7 +40,7 @@
 # puts it there).  What the tree would take from the Debian root is in the
 # image then:
 #
-#  * the firmware pulled from the device (rootfs/overlay/lib/firmware:
+#  * the firmware pulled from the device (device/linux_device_common/overlay/lib/firmware:
 #    rootfs/pull-wcn-firmware.sh, pull-audio-firmware.sh, and the Debian-signed
 #    regulatory.db) -> /lib/firmware;
 #  * the Android vendor subset (work/android-subset,
@@ -72,6 +72,13 @@ set -euo pipefail
 VER=${E5_WRT_VER:-25.12.6}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
+python3 "$TOP/tools/device-layout.py" check --system openwrt --model e5 >/dev/null
+PRIVATE_OVERLAY="$TOP/work/device-files/e5/overlay"
+if [ "${E5_DEVICE_FILES:-1}" != 0 ] && [ -d "$PRIVATE_OVERLAY" ]; then
+    OVERLAY=$(python3 "$TOP/tools/device-layout.py" overlay --system openwrt --model e5 --private-overlay "$PRIVATE_OVERLAY")
+else
+    OVERLAY=$(python3 "$TOP/tools/device-layout.py" overlay --system openwrt --model e5)
+fi
 WORK="$TOP/work/openwrt"
 OUT="$TOP/out/openwrt"
 URL=https://downloads.openwrt.org/releases/$VER/targets/armsr/armv8
@@ -79,9 +86,9 @@ TARBALL=openwrt-$VER-armsr-armv8-rootfs.tar.gz
 BUSYBOX=${E5_BUSYBOX:-$TOP/work/busybox/ext/usr/bin/busybox}
 # the info screen, from its own repository, when it is there (E5_INFOSCREEN=
 # empty leaves it out)
-INFOSCREEN=${E5_INFOSCREEN-$TOP/../e5-infoscreen}
+INFOSCREEN=${E5_INFOSCREEN-$TOP/ci/infoscreen}
 [ -n "$INFOSCREEN" ] && [ -f "$INFOSCREEN/packages.txt" ] && [ -d "$INFOSCREEN/root" ] || INFOSCREEN=""
-SCREEN_PLUGINS=${E5_INFOSCREEN_PLUGINS-$TOP/../infoscreen-plugins}
+SCREEN_PLUGINS=${E5_INFOSCREEN_PLUGINS-$TOP/ci/infoscreen-plugins}
 [ -n "$SCREEN_PLUGINS" ] && [ -d "$SCREEN_PLUGINS/plugins/phone" ] || SCREEN_PLUGINS=""
 NAME=e5-openwrt-$VER-rootfs.tar.gz
 STANDALONE=${E5_STANDALONE:-}
@@ -91,19 +98,16 @@ FEATURES=${E5_FEATURES:-0}
 if [ "$FEATURES" = 1 ]; then
     [ -n "$INFOSCREEN" ] || { echo 'E5_FEATURES=1 requires the E5_INFOSCREEN base package' >&2; exit 1; }
     [ -n "${E5_ROOT_MODULES:-}" ] && [ "${E5_ROOT_MODULES_ONLY:-0}" = 1 ] || {
-        echo 'E5_FEATURES=1 requires the matching devices/e5 mainline module archive' >&2; exit 1; }
-    python3 "$TOP/devices/t551m/build-at-client.py"
+        echo 'E5_FEATURES=1 requires the matching device/linux_device_e5 mainline module archive' >&2; exit 1; }
 fi
 DEFAULT_IMAGE_MB=1024
 [ "$CONTAINERS" != 1 ] || DEFAULT_IMAGE_MB=2048
 IMAGE_MB=${E5_IMAGE_MB:-$DEFAULT_IMAGE_MB}
-FIRMWARE=${E5_FIRMWARE:-$TOP/rootfs/overlay/lib/firmware}
+FIRMWARE=${E5_FIRMWARE:-$OVERLAY/lib/firmware}
 ANDROID=${E5_ANDROID_SUBSET:-$TOP/work/android-subset}
 KBUILD=${E5_KBUILD:-$TOP/out_linux}
 mkdir -p "$WORK" "$OUT"
 python3 "$TOP/tools/openwrt-package-state.py" check "$VER"
-# /dev/sd* also matches Unisoc communication channels. Install only the APK
-# whose probe filters device types before opening them (shared by all boards).
 BLOCK_APK="$OUT/block-mount-guarded.apk"
 E5_WRT_VER="$VER" sh "$HERE/build-block-mount.sh" "$BLOCK_APK"
 WIFI_APKS="$TOP/work/wifi-sae"
@@ -139,13 +143,16 @@ have=$(shasum -a 256 "$WORK/$TARBALL" 2>/dev/null || sha256sum "$WORK/$TARBALL")
 [ -n "$want" ] && [ "${have%% *}" = "$want" ] || { echo "checksum mismatch for $TARBALL" >&2; exit 1; }
 
 # logdw, e5-vibrate, e5-ctl-raw and e5-modemd, static: OpenWrt has no compiler of its own
-docker run --rm --platform linux/arm64 -v "$HERE/src":/src:ro -v "$WORK":/out "${E5_TOOLS_BUILD_IMAGE:-alpine:3.22}" \
+docker run --rm --platform linux/arm64 -v "$TOP/device/openwrt_device_common/src":/src:ro \
+    -v "$TOP/device/openwrt_device_common/shared":/at-source:ro -v "$WORK":/out "${E5_TOOLS_BUILD_IMAGE:-alpine:3.22}" \
     sh -euc 'if ! command -v gcc >/dev/null; then apk add -q gcc musl-dev linux-headers >/dev/null; fi
         gcc -static -Os -s -o /out/logdw /src/logdw.c &&
         gcc -static -Os -s -Wall -o /out/e5-vibrate /src/e5-vibrate.c &&
         gcc -static -Os -s -Wall -o /out/e5-ctl-raw /src/e5-ctl-raw.c &&
         gcc -static -Os -s -Wall -o /out/e5-modemd /src/e5-modemd.c &&
-        gcc -static -Os -s -Wall -Wextra -o /out/e5-sim-probe /src/e5-sim-probe.c'
+        gcc -static -Os -s -Wall -Wextra -o /out/e5-sim-probe /src/e5-sim-probe.c &&
+        gcc -std=c11 -static -Os -s -Wall -Wextra -Werror -o /out/t551m-at /at-source/at-client.c'
+python3 "$TOP/device/openwrt_device_common/shared/build-at-client.py" --binary "$WORK/t551m-at"
 
 # what a standalone image carries of the device's own (the Debian root's in the
 # directory form); an empty directory each otherwise
@@ -171,8 +178,8 @@ if [ "${E5_ROOT_MODULES_ONLY:-0}" = 1 ]; then
     ROOT_REL=$(basename "$1")
     if [ "$FEATURES" = 1 ]; then
         case "$ROOT_REL" in
-            *-e5-mobile1-*) ;;
-            *) echo 'E5_FEATURES requires the devices/e5 kernel, not donor board modules' >&2; exit 1 ;;
+            *-e5-mobile[0-9]*) ;;
+            *) echo 'E5_FEATURES requires the device/linux_device_e5 kernel, not donor board modules' >&2; exit 1 ;;
         esac
         [ -f "$1/aw32257_charger.ko" ] && [ -f "$1/audio/snd-soc-sprd-pa-aw87xxx.ko" ] || {
             echo 'E5 native charger/amplifier modules are missing' >&2; exit 1; }
@@ -230,7 +237,7 @@ fi
 # (the standalone tree is only the image's source)
 TAROUT=$OUT; [ -z "$STANDALONE" ] || TAROUT=$WORK
 docker import --platform linux/arm64 "$WORK/$TARBALL" e5-openwrt-base:$VER >/dev/null
-# Packages OpenWrt's repository dropped -- cog and WPE WebKit left 25.12.6's feed when it was regenerated on
+# Packages OpenWrt's repository dropped -- cog and WPE WebKit disappeared from the 25.12 release feed when it was regenerated on
 # 2026-09-28 -- are taken from the last image that had them: their files, apk database entries and
 # dependencies, out of that image's rootfs archive into $WORK/transplant once (kept there).  The build uses
 # them only while the repository has none of them.
@@ -277,13 +284,15 @@ VERSION=$(python3 "$TOP/tools/release-identity.py" --profile e5 \
     --epoch "${E5_BUILD_EPOCH:-$(date +%s)}" --output "$WORK/release.json" --field image_version)
 
 docker run --rm --platform linux/arm64 \
-    -v "$HERE/overlay":/in/overlay:ro -v "$TOP/rootfs/overlay/opt/e5":/in/opt-e5:ro \
+    -v "$OVERLAY":/in/overlay:ro -v "$TOP/device/linux_device_common/overlay/opt/e5":/in/opt-e5:ro \
+    -v "$TOP/device/openwrt_device_common/packages.list":/in/packages.list:ro \
     -v "$WORK/release.json":/in/release.json:ro \
     -v "$TOP":/in/feature-source:ro -e E5_FEATURES="$FEATURES" -e E5_UI_CACHE=/tmp/e5-ui-cache \
+    -e E5_INFOSCREEN=/in/infoscreen -e E5_INFOSCREEN_PLUGINS=/in/infoscreen-plugins \
     -v "$OUT":/in/apk:ro -v "$BUSYBOX":/in/busybox:ro -v "$WORK/logdw":/in/logdw:ro \
     -v "$WORK/e5-vibrate":/in/e5-vibrate:ro -v "${INFOSCREEN:-$WORK/no-infoscreen}":/in/infoscreen:ro \
     -v "${SCREEN_PLUGINS:-$WORK/no-infoscreen}":/in/infoscreen-plugins:ro \
-    -v "$WORK/e5-ctl-raw":/in/e5-ctl-raw:ro -v "$TOP/rootfs/overlay/usr/share/alsa":/in/alsa:ro \
+    -v "$WORK/e5-ctl-raw":/in/e5-ctl-raw:ro -v "$OVERLAY/usr/share/alsa":/in/alsa:ro \
     -v "$WORK/e5-modemd":/in/e5-modemd:ro \
     -v "$WORK/e5-sim-probe":/in/e5-sim-probe:ro \
     -v "$BLOCK_APK":/in/block-mount-guarded.apk:ro \
@@ -294,27 +303,50 @@ docker run --rm --platform linux/arm64 \
     -v "$TAROUT":/out -e NAME="$NAME" -e VERSION="$VERSION" -e E5_BUILD_EPOCH="${E5_BUILD_EPOCH:-}" -e CONTAINERS="$CONTAINERS" \
     e5-openwrt-base:$VER /bin/sh -euc '
 mkdir -p /var/lock /var/run /tmp
-apk update >/dev/null
+# Recover interrupted package downloads, as in MU300 clean-tf-7.2. Keep
+# optional translation probes separate so missing translations fail quickly.
+apk_retry() {
+    n=0
+    until apk "$@"; do
+        n=$((n + 1))
+        [ "$n" -lt 4 ] || return 1
+        echo "Retrying required OpenWrt package installation ($n/3)" >&2
+        sleep $((n * 2))
+    done
+}
+attempt=1
+until apk update >/dev/null; do
+    [ "$attempt" -lt 4 ] || exit 1
+    echo "Retrying OpenWrt package indexes ($attempt/3)" >&2
+    sleep $((attempt * 2))
+    attempt=$((attempt + 1))
+done
 apk add --allow-untrusted /in/block-mount-guarded.apk >/dev/null
-apk add e2fsprogs resize2fs >/dev/null
+apk_retry add e2fsprogs resize2fs f2fs-tools >/dev/null
 # ModemManager first, from its local file (unsigned): its release is above the
 # repository one, so what depends on it takes this one and apk upgrade keeps it
-apk add --allow-untrusted /in/apk/modemmanager-1*.apk /in/apk/modemmanager-rpcd-*.apk >/dev/null
+apk_retry add --allow-untrusted /in/apk/modemmanager-1*.apk /in/apk/modemmanager-rpcd-*.apk >/dev/null
 # BlueZ the same way, patched (openwrt/build-bluez.sh: the SDP MTU headphones need)
-apk add --allow-untrusted /in/apk/bluez-libs-*.apk /in/apk/bluez-daemon-*.apk /in/apk/bluez-utils-5*.apk >/dev/null
+apk_retry add --allow-untrusted /in/apk/bluez-libs-*.apk /in/apk/bluez-daemon-*.apk /in/apk/bluez-utils-5*.apk >/dev/null
 # (dbus-utils: dbus-monitor, for e5-sms-notify)
 # (alsa-utils: aplay and amixer for the speaker, e5-audio-dsp and e5-volume)
 # (curl: the webhook of the SMS forward, /usr/libexec/e5-sms)
-apk add --allow-untrusted /in/wifi-sae/*.apk >/dev/null
-# The cipher capability helper needs the section omitted by reduced iw builds.
-apk add iwinfo iw-full ip-full bash mount-utils luci-proto-modemmanager \
-    dbus-utils alsa-utils curl openssl-util msmtp r8152-firmware ttyd luci-app-ttyd luci-i18n-ttyd-tr >/dev/null
+apk_retry add --allow-untrusted /in/wifi-sae/*.apk >/dev/null
+apk_retry add $(sed -e "s/#.*//" -e "/^[[:space:]]*$/d" /in/packages.list) >/dev/null
+# The E5 screen authenticated Daed adapter uses the ucode filesystem module
+# for short-lived, permission-restricted curl request files.
+apk_retry add ucode-mod-fs iw-full >/dev/null
+# SMS email encoding and DingTalk signatures need the OpenSSL command itself.
+command -v openssl >/dev/null
+openssl version
+[ "$(printf abc | openssl base64 -A)" = YWJj ]
+[ "$(printf abc | openssl dgst -sha256 -hmac test -binary | openssl base64 -A)" = "15ZXmu0SPnt0PMr1sVCv+hIj4x7LqLiMnanM961eBZQ=" ]
 # Bluetooth audio: PulseAudio built with BlueZ (the -avahi variant carries
 # the bluetooth modules), run by /etc/init.d/e5-pulseaudio, not by its own
 # init script (which forbids loading the modules a connecting device needs)
-apk add pulseaudio-daemon-avahi pulseaudio-tools >/dev/null
+apk_retry add pulseaudio-daemon-avahi pulseaudio-tools >/dev/null
 # Reuse the tested Debian hostless FE_ST_VOICE backend for cellular audio.
-apk add python3 >/dev/null
+apk_retry add python3 python3-sqlite3 tc-full ip-full >/dev/null
 if [ "$CONTAINERS" = 1 ]; then
     # Do not run dockerd post-install scripts inside the build container.
     apk add --no-scripts docker dockerd iptables-nft ip6tables-nft resize2fs >/dev/null
@@ -325,16 +357,16 @@ apk del luci-app-attendedsysupgrade attendedsysupgrade-common owut >/dev/null 2>
 if grep -q "^P:luci-app-attendedsysupgrade$" /lib/apk/db/installed; then
     echo "luci-app-attendedsysupgrade is still installed" >&2; exit 1
 fi
-# LuCI in Chinese: the base and each installed application'"'"'s translation
+# LuCI in Chinese: the base and each installed application translation
 # (the language is chosen at first boot, 93-e5-luci)
-apk add luci-i18n-base-zh-cn >/dev/null
+apk_retry add luci-i18n-base-zh-cn >/dev/null
 for p in $(sed -En "s/^P:luci-(app|proto)-//p" /lib/apk/db/installed); do
     apk add "luci-i18n-$p-zh-cn" >/dev/null 2>&1 && echo "zh-cn: luci-i18n-$p-zh-cn"
 done
-# the Argon theme (its release'"'"'s packages, unsigned)
-apk add --allow-untrusted $EXTRA_LIST >/dev/null
+# the Argon theme (release packages, unsigned)
+apk_retry add --allow-untrusted $EXTRA_LIST >/dev/null
 echo "argon: $(sed -n "/^P:luci-theme-argon$/{n;s/^V://p}" /lib/apk/db/installed)"
-# the info screen'"'"'s packages (cage, cog, Mesa, ...), when there is one
+# info screen packages (cage, cog, Mesa, ...), when there is one
 if [ -f /in/infoscreen/packages.txt ]; then
     # (the transplant above: used when the repository has none of those packages)
     : > /tmp/tp
@@ -359,7 +391,7 @@ if [ -f /in/infoscreen/packages.txt ]; then
         grep -qx "P:$p" /lib/apk/db/installed || { echo "the image has no $p: the info screen would not start" >&2; exit 1; }
     done
 fi
-# (apk info <name> describes the repository'"'"'s package; the installed one is here)
+# (apk info <name> describes the repository package; the installed one is here)
 echo "modemmanager $(sed -n "/^P:modemmanager$/{n;s/^V://p}" /lib/apk/db/installed) installed"
 
 R=/build/root; mkdir -p $R
@@ -382,7 +414,9 @@ printf "127.0.0.1\tlocalhost\n\n::1\tlocalhost ip6-localhost ip6-loopback\nff02:
 printf "E5\n" > $R/etc/hostname
 
 cp -a /in/overlay/. $R/
-chmod 0755 $R/etc/uci-defaults/95-disable-ap-uapsd
+rm -f $R/.device-overlay.json
+# Separate public add-ons: never copy a live device state directory.
+python3 /in/feature-source/tools/stage-network-addons.py --root $R
 if [ "$CONTAINERS" = 1 ]; then
     python3 $R/usr/libexec/e5-container-setup --root $R
 fi
@@ -399,6 +433,20 @@ if [ -n "$screen" ] && [ -f /in/infoscreen-plugins/plugins/phone/manifest.json ]
     cp -a /in/infoscreen-plugins/plugins/phone $R/etc/e5-infoscreen/plugins/
     chown -R 0:0 $R/etc/e5-infoscreen/plugins/phone
 fi
+# Expose the existing local Daed web console as a standalone info-screen app.
+# Keep it as static UI only: no credentials, subscriptions, or proxy state are copied.
+if [ -n "$screen" ] && [ -f /in/feature-source/openwrt/infoscreen-plugins/daed/manifest.json ]; then
+    ucode -c -o /tmp/e5-daed-backend.uc /in/feature-source/openwrt/infoscreen-plugins/daed/backend.uc
+    rm -f /tmp/e5-daed-backend.uc
+    mkdir -p $R/etc/e5-infoscreen/plugins
+    cp -a /in/feature-source/openwrt/infoscreen-plugins/daed $R/etc/e5-infoscreen/plugins/
+    chown -R 0:0 $R/etc/e5-infoscreen/plugins/daed
+    mkdir -p $R/www/e5-daed-login $R/www/cgi-bin
+    cp /in/feature-source/openwrt/infoscreen-plugins/daed/phone-login.html $R/www/e5-daed-login/index.html
+    chmod 644 $R/www/e5-daed-login/index.html
+    cp /in/feature-source/openwrt/infoscreen-plugins/daed/pair-cgi.py $R/www/cgi-bin/e5-daed-pair
+    chmod 755 $R/www/cgi-bin/e5-daed-pair
+fi
 for f in vendor-start.sh android-import-perms.sh e5-modem-coldboot android-run node-perms.sh regdb-load.sh gadget-guard.sh usb-watch.sh e5-next-boot e5-os e5-sd-registry e5-at e5-data-priority e5-audio-dsp e5-call-audio.py; do
     cp /in/opt-e5/$f $R/opt/e5/$f; chmod 755 $R/opt/e5/$f
 done
@@ -407,10 +455,10 @@ cp /in/e5-vibrate $R/usr/bin/e5-vibrate && chmod 755 $R/usr/bin/e5-vibrate
 cp /in/e5-ctl-raw $R/opt/e5/e5-ctl-raw && chmod 755 $R/opt/e5/e5-ctl-raw
 cp /in/e5-modemd $R/usr/sbin/e5-modemd && chmod 755 $R/usr/sbin/e5-modemd
 cp /in/e5-sim-probe $R/usr/libexec/e5-sim-probe && chmod 755 $R/usr/libexec/e5-sim-probe
-# the card'"'"'s UCM profile: applied by e5-audio-dsp with amixer (OpenWrt has no alsaucm)
+# the card UCM profile: applied by e5-audio-dsp with amixer (OpenWrt has no alsaucm)
 mkdir -p $R/usr/share/alsa && cp -a /in/alsa/ucm2 $R/usr/share/alsa/
 cp /in/busybox $R/opt/e5/bin/busybox && chmod 755 $R/opt/e5/bin/busybox
-# the applets the shared scripts use that OpenWrt'"'"'s busybox leaves out --
+# the applets the shared scripts use that OpenWrt busybox leaves out --
 # the ones the full busybox really has
 have=$(/in/busybox --list)
 for a in mountpoint timeout setsid flock seq stat chroot od losetup telnetd cut tr basename dirname \
@@ -428,7 +476,7 @@ done
 # modem_control failed on /dev/chsys and the CP never booted.
 sed -i "s|\[ \"makedev\", \"/dev/%DEVNAME%\", \"0600\" \]|[ \"makedev\", \"/dev/%DEVNAME%\", \"0660\" ]|" $R/etc/hotplug.json
 grep -q "\"/dev/%DEVNAME%\", \"0660\" \]" $R/etc/hotplug.json || { echo "hotplug.json: default node mode not found" >&2; exit 1; }
-# LuCI: the modem'"'"'s revision one row per line (again at boot, /etc/init.d/e5-luci)
+# LuCI: the modem revision one row per line (again at boot, /etc/init.d/e5-luci)
 sh $R/usr/libexec/e5-luci-revision $R
 sh $R/usr/libexec/e5-ttyd-bind $R
 for c in e5-os e5-next-boot e5-at; do ln -sf /opt/e5/$c $R/usr/bin/$c; done
@@ -441,25 +489,24 @@ mv $R/sbin/sysupgrade $R/sbin/sysupgrade.openwrt
 mv $R/usr/libexec/e5-sysupgrade $R/sbin/sysupgrade
 # enable the services ("rc.common enable" wants ubus, which is not running here)
 rm -f $R/etc/rc.d/*pulseaudio
-# (the cage package'"'"'s own kiosk service: cog on http://localhost/, which is LuCI,
-# shown at every boot before the info screen'"'"'s session takes the panel)
+# (the cage package kiosk service: cog on http://localhost/, which is LuCI,
+# shown at every boot before the info screen session takes the panel)
 rm -f $R/etc/rc.d/*cage
-for s in e5-hw e5-vendor e5-modemd e5-sipc-wwan e5-telnetd e5-boot-ok e5-sms-notify e5-charge unisoc-battery e5-apn-auto e5-network-recovery e5-luci e5-audio e5-voice-audio e5-hfp e5-bt bluetoothd dbus modemmanager e5-usb-watch ttyd $screen; do
+for s in e5-hw e5-vendor e5-modemd e5-sipc-wwan e5-telnetd e5-boot-ok e5-sms-notify e5-charge e5-apn-auto e5-network-recovery e5-luci e5-audio e5-voice-audio e5-hfp e5-bt bluetoothd dbus modemmanager e5-usb-watch ttyd $screen; do
     n=$(sed -n "s/^START=//p" $R/etc/init.d/$s)
     ln -sf ../init.d/$s $R/etc/rc.d/S$n$s
 done
 ln -sf ../init.d/e5-modemd $R/etc/rc.d/K09e5-modemd
-ln -sf ../init.d/unisoc-battery $R/etc/rc.d/K08unisoc-battery
 # no kernel of its own
 rm -rf $R/lib/modules/* $R/boot
 arel=$(cat /in/sa/audio/release)
 mkdir -p $R/lib/modules/$arel/audio && cp /in/sa/audio/*.ko $R/lib/modules/$arel/audio/
 cp -a /in/root-modules/. $R/ && chown -R 0:0 $R/lib/modules
 if [ -n "$STANDALONE" ]; then
-    # the device'"'"'s own files, where the directory form binds the Debian root'"'"'s
+    # the device files, where the directory form binds the Debian root
     cp -a /in/sa/firmware/. $R/lib/firmware/
     mkdir -p $R/opt/e5/android && cp -a /in/sa/android/. $R/opt/e5/android/
-    # (bionic refuses a property area that is not root'"'"'s: docs/FINDINGS.md 13)
+    # (bionic refuses a property area that is not root: docs/FINDINGS.md 13)
     chown -R 0:0 $R/opt/e5/android $R/lib/firmware
     rel=$(cat /in/sa/modem/release)
     mkdir -p $R/lib/modules/$rel/modem && cp /in/sa/modem/*.ko $R/lib/modules/$rel/modem/
@@ -474,8 +521,19 @@ cp /in/release.json $R/etc/e5/release.json
 if [ -n "$E5_BUILD_EPOCH" ]; then printf "%s\n" "$E5_BUILD_EPOCH" > $R/etc/e5/build-time
 else date -u +%s > $R/etc/e5/build-time; fi
 if [ "$E5_FEATURES" = 1 ]; then
-    python3 /in/feature-source/devices/e5/stage.py --root $R
+    python3 /in/feature-source/device/openwrt_device_e5/stage.py --root $R
+elif [ -n "$screen" ]; then
+    python3 /in/feature-source/device/openwrt_device_common/shared/ui.py --root $R --profile e5
 fi
+# Apply the E5 DAED keypad shortcut after all info-screen staging. The shared
+# staging step copies upstream files into the root and would otherwise erase
+# this device-specific overlay.
+if [ -n "$screen" ] && [ -f /in/feature-source/openwrt/infoscreen-plugins/daed/manifest.json ]; then
+    python3 /in/feature-source/tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen"
+fi
+# Complete a successful internal-root trial before the next reboot.
+cp /in/feature-source/openwrt/overlay/etc/init.d/e5-boot-ok $R/etc/init.d/e5-boot-ok
+chmod 755 $R/etc/init.d/e5-boot-ok
 if [ -f $R/usr/libexec/unisoc-modem/disable-channel-analysis ]; then
     ucode $R/usr/libexec/unisoc-modem/disable-channel-analysis $R
 fi
@@ -488,18 +546,46 @@ cd $R && tar -czf /out/$NAME .
 ls -la /out/$NAME
 '
 
-[ -n "$STANDALONE" ] || exit 0
+if [ -n "$STANDALONE" ]; then
+    # The ext4 stage below reads the standalone archive from WORK.  Keep that
+    # contract explicit even when a caller or a stale environment routes the
+    # first-stage archive to OUT instead.
+    if [ ! -s "$WORK/$NAME" ] && [ -s "$OUT/$NAME" ]; then
+        echo "moving standalone rootfs archive from $OUT to $WORK"
+        mv "$OUT/$NAME" "$WORK/$NAME"
+    fi
+    [ -s "$WORK/$NAME" ] || {
+        echo "standalone rootfs archive missing: $WORK/$NAME" >&2
+        echo "rootfs output directory: $TAROUT" >&2
+        ls -lah "$WORK" "$OUT" >&2 || true
+        exit 1
+    }
+else
+    exit 0
+fi
 # the tree as an ext4 image (mke2fs -d: no loop device, no root on the host)
 IMG=e5-openwrt-$VER.ext4
 [ "$DEVICE_FILES" != 0 ] || IMG=e5-openwrt-$VER-generic.ext4
+mkdir -p "$TOP/out/boot"
 docker run --rm --platform linux/arm64 -v "$WORK":/w -v "$OUT":/out \
     -v "$HERE/prepare-ext4-tools.py":/prepare-ext4-tools.py:ro \
     -v "$HERE/bundle/ext4-geometry.sh":/bundle/ext4-geometry.sh:ro \
+    -v "$TOP/boot/prepare-f2fs-tools.py":/prepare-f2fs-tools.py:ro -v "$TOP/out/boot":/boot-out \
     -e NAME="$NAME" -e IMG="$IMG" -e MB="$IMAGE_MB" alpine:3.22 sh -euc '
-apk add -q e2fsprogs python3 binutils >/dev/null
+apk_retry() {
+    n=0
+    until apk "$@"; do
+        n=$((n + 1))
+        [ "$n" -lt 4 ] || return 1
+        echo "Retrying required OpenWrt package installation ($n/3)" >&2
+        sleep $((n * 2))
+    done
+}
+apk_retry add -q e2fsprogs python3 binutils >/dev/null
 rm -rf /tmp/r && mkdir /tmp/r && tar -xzf /w/$NAME -C /tmp/r
-python3 /prepare-ext4-tools.py --root /tmp/r --out /out/ext4-tools.tar
 rm -f /w/$IMG
+python3 /prepare-ext4-tools.py --root /tmp/r --out /out/ext4-tools.tar
+python3 /prepare-f2fs-tools.py --root /tmp/r --out /boot-out/f2fs-tools
 mke2fs -q -t ext4 -L e5-openwrt -m 1 -d /tmp/r /w/$IMG ${MB}M
 e2fsck -fn /w/$IMG >/dev/null
 gzip -1 -c /w/$IMG > /out/$IMG.gz.part && mv /out/$IMG.gz.part /out/$IMG.gz

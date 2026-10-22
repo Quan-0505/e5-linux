@@ -119,9 +119,9 @@ class Diagnostics(unittest.TestCase):
             def push(local, remote, label):
                 (root / 'e5-bc-b.bin').write_bytes(Path(local).read_bytes())
             def execute(stage, command, timeout=600):
-                command = command.replace('/dev/block/by-name/misc', str(misc))
-                command = command.replace('/data/adb/e5-boot-control', str(root / 'backups'))
-                command = command.replace('/data/local/tmp', str(root))
+                command = command.replace('/dev/block/by-name/misc', misc.as_posix())
+                command = command.replace('/data/adb/e5-boot-control', (root / 'backups').as_posix())
+                command = command.replace('/data/local/tmp', root.as_posix())
                 # This fixture owns regular files only. dd still fsyncs those;
                 # do not flush unrelated Docker/Windows mounts via global sync.
                 result = subprocess.run(['sh', '-ec', 'sync() { :; }; ' + command],

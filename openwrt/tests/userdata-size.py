@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location('flash', Path(__file__).parents[1] / 'bundle/flash.py')
+spec = importlib.util.spec_from_file_location('flash', Path(__file__).resolve().parents[2] / 'openwrt/bundle/flash.py')
 flash = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(flash)
 GIB = 1 << 30
@@ -65,13 +65,19 @@ class Userdata(unittest.TestCase):
             return ''
         replacements = {
             'find_adb': lambda: None, 'android_checks': lambda: None,
-            'check_userdata_image_source': lambda: None,
+            'sh': lambda cmd: {'getprop ro.crypto.state': 'unencrypted',
+                               'getprop ro.crypto.type': ''}[cmd],
             'install_preflight': lambda: None, 'boot_json': lambda: {'sha256': 'abc'},
+            'push_boot': lambda *args: {'sha256': 'abc'},
             'gz_usize': lambda _: 2 * GIB, 'userdata_free': lambda: 12 * GIB,
             'pull_device_files': lambda *args: 1024, 'push': lambda *args: None,
             'su_checked': checked,
-            'stage_userdata_image': lambda *args: (_ for _ in ()).throw(SystemExit('resize failure')),
         }
+        def checked_plaintext(stage, cmd, timeout=600):
+            if cmd == 'cat /proc/mounts':
+                return '/dev/block/by-name/userdata /data ext4 rw 0 0\n'
+            return checked(stage, cmd, timeout)
+        replacements['su_checked'] = checked_plaintext
         with contextlib.ExitStack() as stack:
             for name, fn in replacements.items():
                 stack.enter_context(patch.object(flash, name, fn))
@@ -79,12 +85,37 @@ class Userdata(unittest.TestCase):
             stack.enter_context(patch.object(flash.os.path, 'isfile', return_value=True))
             chain = stack.enter_context(patch.object(flash, 'bootchain'))
             arm = stack.enter_context(patch.object(flash, 'arm_slot_b'))
+            resize = stack.enter_context(patch.object(flash, 'stage_userdata_image',
+                                                      side_effect=SystemExit('resize failure')))
+            stack.enter_context(patch.object(flash, 'adb', side_effect=AssertionError('unexpected real ADB call')))
             stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
-            with self.assertRaises(SystemExit):
+            with self.assertRaisesRegex(SystemExit, 'resize failure'):
                 flash.install(args)
+            resize.assert_called_once_with(2 * GIB, 4 * GIB)
             chain.assert_not_called()
             arm.assert_not_called()
             self.assertFalse(any('of=/dev/block/by-name/boot_b' in c or 'mv ' in c for c in calls))
+
+    def test_userdata_source_rejects_encryption_and_mapped_or_missing_data(self):
+        cases = (
+            ('encrypted', 'file', '/dev/block/by-name/userdata'),
+            ('unencrypted', 'block', '/dev/block/by-name/userdata'),
+            ('unencrypted', '', '/dev/block/dm-0'),
+            ('unencrypted', '', '/dev/mapper/userdata'),
+            ('', '', '/dev/block/by-name/userdata'),
+            ('unencrypted', '', ''),
+        )
+        for state, kind, source in cases:
+            props = {'getprop ro.crypto.state': state, 'getprop ro.crypto.type': kind}
+            mounts = f'{source} /data ext4 rw 0 0\n' if source else ''
+            with self.subTest(state=state, kind=kind, source=source), \
+                 patch.object(flash, 'sh', side_effect=lambda cmd: props[cmd]), \
+                 patch.object(flash, 'su_checked', return_value=mounts), \
+                 patch.object(flash, 'adb', side_effect=AssertionError('unexpected real ADB call')), \
+                 contextlib.redirect_stderr(io.StringIO()) as error:
+                with self.assertRaises(SystemExit):
+                    flash.check_userdata_image_source()
+                self.assertIn('confirmed unencrypted', error.getvalue())
 
 
 if __name__ == '__main__':

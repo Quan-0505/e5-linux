@@ -156,6 +156,8 @@ cp "$BOOT.json" "$P/files/boot.json"
 cp "$BOOT.misc-slot-b-trial.bin" "$P/files/boot-misc-slot-b.bin"
 cp "$HERE/device-install-image.sh" "$HERE/device-install-part.sh" "$HERE/device-flash-boot.sh" "$HERE/device-stage-part-update.sh" "$HERE/bundle/collect-device-files.sh" \
    "$HERE/overlay/usr/libexec/e5-gpt" "$P/files/"
+cp "$HERE/network-addons/overlay/usr/libexec/e5-network-addons-snapshot" "$P/files/"
+cp "$TOP/work/network-addons/software.list" "$P/files/network-addons-software.list"
 cp "$TOP/tools/e5-telnet.py" "$TOP/tools/e5-update.py" "$TOP/tools/sprd-bt-config.py" "$P/scripts/tools/"
 cp "$TOP/tools/android-bootchain.sh" "$P/files/android-bootchain.sh"
 cp -R "$TOP/tools/vbc-profile" "$P/scripts/tools/"
