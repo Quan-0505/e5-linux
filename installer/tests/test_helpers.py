@@ -1,4 +1,5 @@
 """Real host subprocesses, synthetic converters; no ADB or device writes."""
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -28,7 +29,7 @@ class Helpers(unittest.TestCase):
     def test_converter_runs_captures_both_streams_and_has_named_phase(self):
         self.script.write_text('import sys\nprint("conversion stdout")\nprint("conversion stderr",file=sys.stderr)\n')
         run_helper(self.ctx,self.root,self.script,[])
-        text=(self.ctx.directory/'debug.ndjson').read_text(encoding='utf-8',errors='replace')
+        text=(self.ctx.directory/'debug.ndjson').read_text()
         self.assertIn('conversion stdout',text);self.assertIn('conversion stderr',text)
         self.assertEqual(self.record['stage'],'firmware_convert')
         self.assertEqual(self.record['details']['tool'],'vbc-profile.py')
@@ -38,7 +39,7 @@ class Helpers(unittest.TestCase):
         self.script.write_text('raise RuntimeError("converter-specific failure")\n')
         with self.assertRaisesRegex(ValueError,'converter-specific failure'):
             run_helper(self.ctx,self.root,self.script,[])
-        self.assertIn('Traceback',(self.ctx.directory/'debug.ndjson').read_text(encoding='utf-8',errors='replace'))
+        self.assertIn('Traceback',(self.ctx.directory/'debug.ndjson').read_text(encoding='utf-8'))
 
     def test_converter_timeout_is_bounded(self):
         self.script.write_text('import time\ntime.sleep(30)\n')
@@ -93,6 +94,11 @@ class Helpers(unittest.TestCase):
         for name in ('dsp_vbc','audio_structure','cvs'):
             names[name+'.xml']=(f'<{name} num_mode="1" struct_size="4"><item mode="0"><x id="0" t="u32" val="123"/></item></{name}>').encode()
         legacy.SCRIPTS=str(self.root/'scripts');legacy.F=str(self.root/'files')
+        legacy.ANDROID_SLOT='a';legacy.LINUX_SLOT='b'
+        import struct,zlib
+        control=bytearray(32);control[:10]=b'_a\0\0BCAB\x01\x02';control[12]=0x9f;control[14]=0x1e
+        struct.pack_into('<I',control,28,zlib.crc32(control[:28]))
+        legacy.read_boot_control=lambda:bytes(control)
         legacy.GUI=SimpleNamespace(stage=self.ctx.stage,run_tool=lambda script,*args:run_helper(self.ctx,self.root,script,args))
         def shell(command):
             if command.startswith('ls /odm/firmware'):return ''
@@ -112,6 +118,8 @@ class Helpers(unittest.TestCase):
                 self.assertEqual(len(archive.extractfile('lib/firmware/'+name).read()),28)
             self.assertEqual(len(archive.extractfile('lib/firmware/sprd/marlin3lite_pskey.bin').read()),176)
             self.assertEqual(len(archive.extractfile('lib/firmware/sprd/marlin3lite_rf.bin').read()),252)
+            self.assertEqual(archive.extractfile('etc/e5/linux-slot').read(),b'b\n')
+            self.assertEqual(archive.extractfile('lib/firmware/android-firmware-slot').read(),b'a\n')
         self.assertTrue(any(target.endswith('e5-firmware.tar') for source,target in pushes))
         self.assertFalse(self.record['effects'])
 

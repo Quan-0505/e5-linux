@@ -28,6 +28,12 @@ class ReadOnlyAdb:
     def devices(self):return [{'serial':SERIAL,'state':'device'}]
     def properties(self):return {'ro.product.model':'E5','ro.product.device':'fixture','ro.board.platform':'fixture','ro.boot.slot_suffix':'_a','ro.boot.verifiedbootstate':'orange','ro.crypto.state':'unencrypted','ro.crypto.type':'','sys.boot_completed':'1'}
     def root_status(self):return 'ready'
+    def read(self,script):
+        self.commands.append(script)
+        if script in ('dd if=/dev/block/by-name/boot_b bs=512 count=8 2>/dev/null',
+                      'dd if=/dev/block/by-name/boot_a bs=512 count=8 2>/dev/null'):
+            return bytes(4096)
+        raise AssertionError('Unexpected binary read: '+script)
     def shell(self,script,root=False):
         self.commands.append(script)
         if script=='cat /proc/sys/kernel/random/boot_id':return 'boot-fixture'
@@ -43,6 +49,16 @@ class ReadOnlyAdb:
 
 
 class MethodRouting(unittest.TestCase):
+    def test_e5_probe_keeps_both_android_and_linux_roles(self):
+        for slot in ('_a','_b'):
+            a=self.adapter()
+            properties=a.adb.properties();properties['ro.boot.slot_suffix']=slot
+            with self.subTest(slot=slot),patch.object(a.adb,'properties',return_value=properties):
+                device=a.probe(SERIAL,'boot')
+                self.assertEqual(device['slot'],slot)
+                self.assertEqual(a.legacy.ANDROID_SLOT,slot[1:])
+                self.assertEqual(a.legacy.LINUX_SLOT,'b' if slot=='_a' else 'a')
+
     def adapter(self,kind='e5',card=False):
         a=Adapter.__new__(Adapter);a.kind=kind;a.root=Path('.');a.ctx=None;a.password=''
         a.package={'adapter':kind,'path':'.','profile':'e5' if kind=='e5' else 'mu300-family'}
@@ -64,6 +80,21 @@ class MethodRouting(unittest.TestCase):
                         a.legacy.device_sd.assert_not_called();a.legacy.device_size.assert_not_called()
                         self.assertNotIn('tf_bytes',device)
                         if method=='boot':a.read_gpt.assert_not_called()
+
+    def test_t512n_engineering_boot_state_does_not_relax_existing_profiles(self):
+        for profile,model,allowed in [('t512n','T512N',True),('yuanhang41s','ZTE 7546N',True),('e5','E5',False)]:
+            with self.subTest(profile=profile):
+                a=self.adapter()
+                properties=a.adb.properties()
+                properties.update({'ro.product.model':model,'ro.boot.verifiedbootstate':'green'})
+                if profile=='yuanhang41s':properties['ro.product.device']='P720S11'
+                a.adb.properties=Mock(return_value=properties)
+                a.legacy.package_profile.return_value={'profile':profile,'android_models':[model]}
+                if allowed:
+                    self.assertEqual(a.probe(SERIAL,'boot')['profile'],profile)
+                else:
+                    with self.assertRaisesRegex(ValueError,'unlocked'):
+                        a.probe(SERIAL,'boot')
 
     def test_reinstall_plan_on_device_without_card(self):
         for kind in ('e5','mu300'):
@@ -109,13 +140,20 @@ class MethodRouting(unittest.TestCase):
                     root=Path(directory);(root/'desktop').mkdir();(root/'desktop/manifest.json').write_text('{}')
                     record=Store(root/'app').create({'path':directory,'adapter':kind},{'serial':SERIAL},{'method':method},{'method':method,'openwrt_bytes':4<<30})
                     a=self.adapter(kind);a.root=root;a.ctx=Context(Store(root/'app'),record,lambda *_:None)
-                    a.probe=Mock();a.backup=Mock();a.stage=Mock();a.update_e5=Mock()
+                    a.probe=Mock();a.backup=Mock();a.stage=Mock();a.update_e5=Mock();a.boot_mu300=Mock()
                     a.legacy=SimpleNamespace(**{n:Mock() for n in ('install_sd','install','part_two_stage','boot_openwrt','install_part','update')})
                     flags=args_for(record,root)
                     self.assertEqual(sum(bool(getattr(flags,n)) for n in ('tf','part','reinstall_part','data','boot_openwrt')),0 if method=='update' else 1)
-                    a.execute()
+                    with patch('backend.adapter.update_mu300') as shared_update:
+                        a.execute()
                     if method=='update':
-                        (a.update_e5 if kind=='e5' else a.legacy.update).assert_called_once()
+                        if kind=='e5':a.update_e5.assert_called_once();shared_update.assert_not_called()
+                        else:
+                            shared_update.assert_called_once()
+                            self.assertIs(shared_update.call_args.args[0],vars(a.legacy))
+                            a.legacy.update.assert_not_called()
+                    elif kind=='mu300' and method=='boot':
+                        a.boot_mu300.assert_called_once();a.legacy.install.assert_not_called()
                     elif kind=='mu300':a.legacy.install.assert_called_once()
                     else:
                         target={'tf':'install_sd','part':'install_part','reinstall':'part_two_stage','image':'install','boot':'boot_openwrt'}[method]

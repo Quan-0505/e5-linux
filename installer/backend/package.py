@@ -27,8 +27,10 @@ def inspect_package(directory):
     else:
         profile_data = json.loads(safe_file(root, 'files/device-profile.json').read_text())
         adapter, profile, layout, kernel = 'e5', profile_data['profile'], 'e5root-ext4', 'e5-boot-v2'
-        if profile not in ('e5', 'm8', 't551m'):
+        if profile not in ('e5', 'm8', 't551m', 't512n', 'yuanhang41s', 'k1'):
             raise ValueError('Unsupported device profile / 不支持的机型')
+        if profile == 'k1' and profile_data.get('android_models') != ['angelcare K1']:
+            raise ValueError('K1 package model identity differs / K1 安装包型号不匹配')
         checks = {}
         for line in safe_file(root, 'files/SHA256SUMS').read_text().splitlines():
             digest, name = line.split(None, 1)
@@ -40,5 +42,10 @@ def inspect_package(directory):
     payloads = {name: sha(safe_file(root, name)) for name in names}
     if not (root/'OpenWrt-Installer.py').is_file():
         raise ValueError('Missing compatible Python entry / 缺少兼容安装入口')
-    return {'protocol': 1, 'adapter': adapter, 'profile': profile, 'layout': layout, 'kernel': kernel,
-            'payloads': payloads, 'path': str(root), 'name': root.name}
+    package = {'protocol': 1, 'adapter': adapter, 'profile': profile, 'layout': layout, 'kernel': kernel,
+               'payloads': payloads, 'path': str(root), 'name': root.name}
+    release_file = root/('desktop/release.json' if adapter == 'mu300' else 'files/RELEASE.json')
+    if release_file.is_file():
+        release_data = json.loads(release_file.read_text(encoding='utf-8'))
+        package['release_version'] = release_data['image_version']
+    return package
