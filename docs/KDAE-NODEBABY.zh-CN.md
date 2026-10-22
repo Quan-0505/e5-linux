@@ -1,6 +1,6 @@
 # E5 OpenWrt：Rust daed 与节点小宝
 
-Actions → Build and publish OpenWrt 使用本 fork 的 E5 固定子模块、E5 6.18 内核和 OpenWrt 25.12.5，构建并校验完整通用 ZIP/TAR 刷入包。Rust daed 从 `openwrt/network-addons/lock.json` 固定的公开提交构建，包含 DaedNext 页面、Geosite/GeoIP 和 ARM64 引擎。
+Actions → Build and publish OpenWrt 使用本 fork 的 E5 固定子模块、E5 6.18 内核和 OpenWrt 25.12.6，构建并校验完整通用 ZIP/TAR 刷入包。Rust daed 3.2.2 从 `openwrt/network-addons/lock.json` 固定的公开提交构建，包含 DaedNext 页面、Geosite/GeoIP 和 ARM64 引擎。
 MU300 clean-tf-7.2 只作为构建校验参考，不使用它的 boot、设备树或模组适配。
 
 LuCI → 服务 → daed / 节点小宝 自动打开当前设备的 2023 / 9118 管理界面。Rust daed 使用上游 Rust 引擎与固定的 DaedNext 管理界面；E5 服务显式使用 `NETNS_LINK=veth`。针对 E5 核验过的 Go `wing.db`，首启时用 Rust 内置 `state migrate` 命令创建独立的 `/etc/daed/daed.db` 副本，原 `wing.db` 不修改，以便回退。节点小宝使用官方公开 ARM64 4.3.5-734，并校验 SHA256。

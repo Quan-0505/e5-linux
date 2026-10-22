@@ -1,7 +1,7 @@
 {
   "rust_daed_repository": "https://github.com/Quan-0505/rust-daed.git",
-  "rust_daed_revision": "90fc9c13ecec9d434c93f7d0f4a20bd742008dca",
-  "rust_daed_version": "3.2.1",
+  "rust_daed_revision": "225315d84d4ce2aa5914643d65bc47f086d5eca8",
+  "rust_daed_version": "3.2.2",
   "nodebaby_url": "https://cdn.ionewu.com/upgrade/jdxb/owjdxb_openwrt_arm64_4.3.5-734.tgz",
   "nodebaby_sha256": "c2c1853eac004ae3699a8f3beba3331afc42aca1878acd2c7945a5658deea702",
   "nodebaby_version": "4.3.5-734"

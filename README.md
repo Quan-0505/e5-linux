@@ -8,7 +8,7 @@
 [![Release](https://img.shields.io/github/v/release/Quan-0505/e5-linux?style=flat-square&label=Release)](https://github.com/Quan-0505/e5-linux/releases/latest)
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-25.12.6-00b5e2?style=flat-square)](https://openwrt.org/)
 [![Kernel](https://img.shields.io/badge/Linux-6.18_LTS-orange?style=flat-square)](https://github.com/sprd-linux-devs/linux/tree/e5-6.18)
-[![Rust daed](https://img.shields.io/badge/Rust_daed-3.2.1-805ad5?style=flat-square)](https://github.com/Quan-0505/rust-daed)
+[![Rust daed](https://img.shields.io/badge/Rust_daed-3.2.2-805ad5?style=flat-square)](https://github.com/Quan-0505/rust-daed)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 **面向老头乐 E5（Unisoc UMS9621 / ARM64）的 OpenWrt 定制构建**
@@ -30,7 +30,7 @@
 | --- | --- |
 | **内置 OpenWrt** | OpenWrt 25.12.6，安装到独立 `e5root` 分区；已有内置安装通过更新入口升级 |
 | **E5 原生内核** | Linux 6.18 LTS，保留 E5 充电、触屏、背光、音频和蜂窝硬件适配 |
-| **daed 管理界面** | Rust daed 3.2.1，提供订阅、节点、群组、DNS、路由、实时日志及热重载管理 |
+| **daed 管理界面** | Rust daed 3.2.2，提供订阅、节点、群组、DNS、路由、实时日志及热重载管理 |
 | **eBPF 数据面** | 构建时核对 BTF、BPF、veth、TC/clsact 等能力及匹配的内核模块 |
 | **节点小宝** | 预装官方 ARM64 4.3.5-734 客户端，提供 LuCI 服务入口，使用者自行登录绑定 |
 | **蜂窝与热点** | ModemManager Unisoc 适配，提供 SIM/APN、蜂窝数据、Wi-Fi 热点和 USB 网络管理 |
