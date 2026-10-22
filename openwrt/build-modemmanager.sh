@@ -199,7 +199,11 @@ if [ ! -f staging_dir/.e5-kernel-ok ]; then
 fi
 echo "== modemmanager"
 make package/modemmanager/clean >/dev/null 2>&1 || true
-make package/modemmanager/compile -j"$JOBS" >/build/log 2>&1 || { tail -80 /build/log; exit 1; }
+if ! make package/modemmanager/compile -j"$JOBS" V=s >/build/log 2>&1; then
+    cp /build/log /out/modemmanager-build.log
+    tail -160 /build/log
+    exit 1
+fi
 voice_source=$(find build_dir -path "*/modemmanager-*/src/mm-iface-modem-voice.c" -print -quit)
 [ -n "$voice_source" ] || { echo "missing patched voice source" >&2; exit 1; }
 python3 /work/voice-identity.py "$(dirname "$voice_source")"

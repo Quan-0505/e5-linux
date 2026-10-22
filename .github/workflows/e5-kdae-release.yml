@@ -418,6 +418,7 @@ jobs:
           name: build-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             e5-linux/out/release/*.log
+            e5-linux/out/openwrt/*-build.log
             e5-linux/out/release/build.json
             e5-linux/upstream/out-release/config
           if-no-files-found: ignore
