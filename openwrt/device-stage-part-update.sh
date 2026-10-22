@@ -32,11 +32,6 @@ gzip -t "$stage/openwrt.ext4.gz"
 mkdir -p /.e5-update
 chmod 700 /.e5-update
 cp "$stage/openwrt.ext4.gz" "$stage/ext4-tools.tar" /.e5-update/
-# Verify the persistent copies before releasing our duplicate tmpfs payloads.
-cmp -s "$stage/openwrt.ext4.gz" /.e5-update/openwrt.ext4.gz
-cmp -s "$stage/ext4-tools.tar" /.e5-update/ext4-tools.tar
-sync
-rm -f "$stage/openwrt.ext4.gz" "$stage/ext4-tools.tar"
 view=$(mktemp -d /tmp/e5-update-view.XXXXXX)
 trap 'umount "$view" 2>/dev/null || :; rmdir "$view" 2>/dev/null || :' EXIT
 mount --bind / "$view"
@@ -45,7 +40,12 @@ cd "$view"
 firmware=
 for name in lib/firmware/wcnmodem.bin lib/firmware/gnssmodem.bin lib/firmware/wifi_board_config*.ini \
     lib/firmware/tsx_data lib/firmware/l_agdsp_a.img lib/firmware/audio_structure lib/firmware/dsp_vbc \
-    lib/firmware/cvs lib/firmware/aw87xxx_acf.bin lib/firmware/sprd opt/e5/android; do
+    lib/firmware/codec.xml \
+    lib/firmware/cvs lib/firmware/aw87xxx_acf.bin lib/firmware/sprd \
+    lib/firmware/aw883xx_acf.bin lib/firmware/awinic_params.bin \
+    lib/firmware/sitronix_firmware_huaying.dump lib/firmware/sitronix \
+    lib/firmware/yuanhang41s-HiFi.conf lib/firmware/yuanhang41s-media-max \
+    lib/firmware/android-firmware-slot opt/e5/android; do
     [ ! -e "$name" ] || firmware="$firmware $name"
 done
 [ -s lib/firmware/wcnmodem.bin ] && [ -x opt/e5/android/vendor/bin/modem_control ]
@@ -53,14 +53,10 @@ tar -cf /.e5-update/firmware.tar $firmware
 settings=
 for name in etc/config etc/shadow etc/passwd etc/group etc/dropbear etc/e5 etc/e5linux \
     etc/uhttpd.crt etc/uhttpd.key etc/vnstat etc/e5-infoscreen etc/e5-sms etc/unisoc-modem \
-    etc/daed etc/daed-kdae usr/local/owjdxb \
-    etc/init.d/daed etc/init.d/owjdxb usr/libexec/e5-nodebaby-guard \
-    etc/init.d/daed-dns usr/libexec/e5-daed-dns \
-    etc/rc.d/S96daed-dns etc/rc.d/K9daed-dns; do
+    etc/e5-sounds etc/e5-cpu-voltage.json etc/bluetooth; do
     [ ! -e "$name" ] || settings="$settings $name"
 done
-sh "$stage/e5-network-addons-snapshot" "$view" /.e5-update/settings.tar \
-    "$stage/network-addons-software.list" $settings
+tar -cf /.e5-update/settings.tar $settings
 cd /
 umount "$view"; rmdir "$view"; trap - EXIT
 cd /.e5-update

@@ -49,10 +49,7 @@ class OfflineUpdate(unittest.TestCase):
                 **({'etc/e5/sd-root':b'e5-openwrt-sd\n', 'etc/e5/sd-gen':b'7\n'} if kind == 'sd' else {}),
                 'etc/e5/image-version':b'OLD release', 'etc/e5/device-profile':b't551m\n',
                 'etc/e5-infoscreen/plugins/phone/phone.js':b'old phone code',
-                'etc/shadow':b'root:saved-password-hash:\n',
-                'etc/init.d/daed-dns':b'local DNS fallback service',
-                'usr/libexec/e5-daed-dns':b'local DNS fallback helper',
-                'etc/daed/trusted-ca.pem':b'local trust bundle'})
+                'etc/shadow':b'root:saved-password-hash:\n'})
             archive(pending / 'ext4-tools.tar', {'lib/ld-musl-aarch64.so.1':b'#!/bin/sh\nshift 3\nexec /usr/sbin/e2fsck "$@"\n',
                 'usr/sbin/e2fsck':b'placeholder'})
             hashes = ''.join(hashlib.sha256((pending/n).read_bytes()).hexdigest()+'  '+n+'\n'
@@ -108,9 +105,6 @@ reboot() {{ echo REBOOT >> "{root}/calls"; }}
                 self.assertIn('REBOOT',calls)
                 self.assertEqual((new/'etc/config/wireless').read_text(),'自己的热点')
                 self.assertIn('saved-password-hash',(new/'etc/shadow').read_text())
-                self.assertEqual((new/'etc/init.d/daed-dns').read_bytes(), b'local DNS fallback service')
-                self.assertEqual((new/'usr/libexec/e5-daed-dns').read_bytes(), b'local DNS fallback helper')
-                self.assertEqual((new/'etc/daed/trusted-ca.pem').read_bytes(), b'local trust bundle')
                 self.assertEqual((new/'etc/e5/image-version').read_text(),'new release\n')
                 self.assertEqual((new/'etc/e5-infoscreen/plugins/phone/phone.js').read_text(),'new phone code')
                 self.assertEqual((new/'lib/firmware/wcnmodem.bin').read_bytes(),b'own firmware')

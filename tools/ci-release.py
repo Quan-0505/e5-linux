@@ -7,12 +7,9 @@ import json
 import os
 from pathlib import Path
 import re
-import runpy
 import subprocess
 import struct
-import sys
 import tarfile
-import tempfile
 import time
 import zipfile
 
@@ -25,6 +22,7 @@ BLOCK_SOURCES = ('block-mount.Dockerfile', 'build-block-mount.sh',
 
 
 def block_build_id():
+    # Same ordered input bytes as build-block-mount.sh's cache stamp.
     return hashlib.sha256(b''.join((TOP / 'openwrt' / name).read_bytes()
                                    for name in BLOCK_SOURCES)).hexdigest()
 
@@ -39,24 +37,6 @@ def digest(stream):
 def file_digest(path):
     with path.open('rb') as stream:
         return digest(stream)
-
-
-def e5_shortcut_overlay_hashes():
-    """Return exact hashes for the E5 keypad overlay applied after screen staging."""
-    source = TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen'
-    relative = ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js')
-    if not all((source / name).is_file() for name in relative):
-        raise ValueError('info-screen sources required to verify the E5 keypad overlay are missing')
-    patcher = Path(__file__).resolve().with_name('patch-e5-daed-shortcut.py')
-    with tempfile.TemporaryDirectory() as temp:
-        root = Path(temp)
-        for name in relative:
-            target = root / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes((source / name).read_bytes())
-        subprocess.run([sys.executable, str(patcher), str(root)],
-                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        return {'usr/share/e5-infoscreen/' + name: file_digest(root / name) for name in relative}
 
 
 def revision(path):
@@ -75,24 +55,20 @@ def prepare():
     epoch = int(time.time())
     started = datetime.fromtimestamp(epoch, UTC8)
     stamp = started.strftime('%Y%m%d-%H%M%S')
-    ver = os.environ.get('E5_WRT_VER', '25.12.6')
+    ver = os.environ.get('E5_WRT_VER', '25.12.5')
     if not re.fullmatch(r'\d+\.\d+\.\d+', ver):
         raise ValueError('invalid OpenWrt version')
     sources = {name: {'repository': repo, 'revision': revision(path)} for name, repo, path in [
-        ('e5-linux', os.environ.get('E5_SOURCE_REPOSITORY', 'sprd-linux-devs/e5-linux'), TOP),
-        ('kernel', 'sprd-linux-devs/linux', TOP / 'linux-lts-e5'),
+        ('e5-linux', os.environ.get('GITHUB_REPOSITORY', 'Enceka/e5-linux'), TOP),
+        ('kernel', 'Enceka/linux-lts-e5', TOP / 'linux-lts-e5'),
         ('infoscreen', 'Enceka/infoscreen', TOP / 'ci/infoscreen'),
         ('plugins', 'Enceka/infoscreen-plugins', TOP / 'ci/infoscreen-plugins'),
     ]}
-    for path in sorted((TOP / 'device').glob('*_device_*')):
-        sources[path.name] = {'repository': 'sprd-linux-devs/' + path.name, 'revision': revision(path)}
     RELEASE.mkdir(parents=True, exist_ok=True)
     info = {'build_epoch': epoch, 'build_started_at': started.isoformat(timespec='seconds'),
             'timestamp': stamp, 'openwrt_version': ver, 'sources': sources,
             'bootstrap_sha256': os.environ.get('E5_CI_INPUTS_SHA256'),
-            'run_url': os.environ.get('E5_RUN_URL'),
-            'release_repository': os.environ.get('GITHUB_REPOSITORY'),
-            'release_revision': os.environ.get('GITHUB_SHA')}
+            'run_url': os.environ.get('E5_RUN_URL')}
     (RELEASE / 'build.json').write_text(json.dumps(info, indent=2) + '\n')
     env = os.environ.get('GITHUB_ENV')
     if env:
@@ -106,63 +82,42 @@ def prepare():
 def audit_root(info):
     expected = {}
     for source, root, relative, prefix in [
-        ('openwrt-common', TOP / 'device/openwrt_device_common', 'overlay', ''),
-        ('openwrt-device', TOP / 'device/openwrt_device_e5', 'overlay', ''),
-        ('linux-device', TOP / 'device/linux_device_e5', 'overlay', ''),
+        ('e5-linux', TOP, 'openwrt/overlay', ''),
         ('infoscreen', TOP / 'ci/infoscreen', 'root', ''),
         ('plugins', TOP / 'ci/infoscreen-plugins', 'plugins/phone', 'etc/e5-infoscreen/plugins/phone/'),
     ]:
         files = subprocess.check_output(['git', '-C', str(root), 'ls-files', relative], text=True).splitlines()
         for item in files:
-            if (root / item).is_symlink():
-                continue
             tail = Path(item).relative_to(relative).as_posix()
             # rc/config may change during assembly; verify runtime backend/UI files.
             if source != 'plugins' and not tail.startswith(('usr/', 'www/')):
                 continue
-            if tail == 'usr/share/luci/menu.d/luci-app-e5-sms.json' or tail.startswith('www/luci-static/resources/view/e5-sms/'):
-                continue  # shared/ui-cleanup.py retires this legacy SMS view
-            if source == 'openwrt-common' and tail == 'usr/libexec/e5-sysupgrade':
+            if source == 'e5-linux' and tail == 'usr/libexec/e5-sysupgrade':
                 # build-rootfs.sh installs this safety guard at /sbin/sysupgrade.
                 tail = 'sbin/sysupgrade'
             expected[prefix + tail] = file_digest(root / item)
-    # The Daed info-screen launcher is maintained in this repository (rather
-    # than the upstream plugin-store submodule) and copied into the rootfs.
-    daed_plugin = TOP / 'openwrt/infoscreen-plugins/daed'
-    if daed_plugin.is_dir():
-        for item in sorted(daed_plugin.rglob('*')):
-            if item.is_symlink() or not item.is_file():
-                continue
-            expected['etc/e5-infoscreen/plugins/daed/' + item.relative_to(daed_plugin).as_posix()] = file_digest(item)
-        expected['www/e5-daed-login/index.html'] = file_digest(daed_plugin / 'phone-login.html')
-        expected['www/cgi-bin/e5-daed-pair'] = file_digest(daed_plugin / 'pair-cgi.py')
     # These shared startup files are copied from the Debian overlay, rather
-    # than device/openwrt_device_common/overlay. Verify the selective cold-start adapter as well.
+    # than openwrt/overlay. Verify the selective cold-start adapter as well.
     for name in ('vendor-start.sh', 'e5-modem-coldboot'):
-        expected['opt/e5/' + name] = file_digest(TOP / 'device/linux_device_common/overlay/opt/e5' / name)
+        expected['opt/e5/' + name] = file_digest(TOP / 'rootfs/overlay/opt/e5' / name)
     expected['etc/e5/block-mount.build-id'] = hashlib.sha256((block_build_id() + '\n').encode()).hexdigest()
-    # E5 applies a repository-maintained keypad patch after copying upstream
-    # info-screen sources into the image. Verify the patched files byte-for-byte.
-    expected.update(e5_shortcut_overlay_hashes())
+    import runpy
+    wifi_id = runpy.run_path(str(TOP / 'openwrt/wifi-sae-state.py'))['build_id']()
+    expected['etc/e5/wifi-sae.build-id'] = hashlib.sha256((wifi_id + '\n').encode()).hexdigest()
+    expected['lib/netifd/hostapd-unisoc.sh'] = file_digest(TOP / 'openwrt/hostapd-unisoc.sh')
+    expected['usr/share/ucode/wifi/unisoc-sae.uc'] = file_digest(TOP / 'openwrt/hostapd-unisoc.uc')
     found, versions, modules = {}, {}, set()
-    required_exec = {'etc/init.d/e5-boot-ok', 'etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
-                     'usr/libexec/e5-infoscreen/plugin', 'usr/libexec/e5-infoscreen/update'}
-    executable = set()
     rootfs = TOP / 'work/openwrt' / f'e5-openwrt-{info["openwrt_version"]}-generic-rootfs.tar.gz'
     if not rootfs.is_file():
         raise ValueError(f'root filesystem archive was not built: {rootfs}; inspect bundle-build.log for the original failure')
     forbidden = re.compile(r'^(?:lib/firmware/(?:wcnmodem|gnssmodem|l_agdsp|wifi_board|sprd/)|'
                            r'opt/e5/android/.+|etc/e5/install\.conf|etc/dropbear/dropbear_.+_host_key|etc/ssh/ssh_host_)')
     wanted = {'usr/share/e5-infoscreen/VERSION', 'etc/e5-infoscreen/plugins/phone/manifest.json',
-              'etc/e5-infoscreen/plugins/daed/manifest.json',
-              'www/e5-daed-login/index.html', 'www/cgi-bin/e5-daed-pair',
-              'etc/e5/build-time', 'etc/machine-id', 'usr/bin/openssl', 'etc/e5/feature-port.json',
+              'etc/e5/build-time', 'etc/machine-id',
               'sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab'}
     with tarfile.open(rootfs, 'r|gz') as archive:
         for entry in archive:
             name = entry.name.removeprefix('./')
-            if name in required_exec and entry.isfile() and entry.mode & 0o111:
-                executable.add(name)
             if forbidden.match(name):
                 raise ValueError('device-specific file in generic image: ' + name)
             if name.startswith('lib/modules/') and entry.isfile() and name.endswith('.ko'):
@@ -175,19 +130,6 @@ def audit_root(info):
                     found[name] = hashlib.sha256(data).hexdigest()
                 else:
                     found[name] = digest(stream)
-    if required_exec - executable:
-        raise ValueError('required startup/screen scripts are not executable: ' + ', '.join(sorted(required_exec - executable)))
-    if 'etc/e5/feature-port.json' in versions:
-        # Feature staging deliberately rewrites vendor-start to preserve the
-        # isolated NV loops. Reproduce that exact transformation for the gate.
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            for name in ('etc/init.d', 'etc/rc.d', 'opt/e5'):
-                (root / name).mkdir(parents=True, exist_ok=True)
-            vendor = root / 'opt/e5/vendor-start.sh'
-            vendor.write_bytes((TOP / 'device/linux_device_common/overlay/opt/e5/vendor-start.sh').read_bytes())
-            runpy.run_path(str(TOP / 'device/openwrt_device_common/shared/staging.py'))['stage_nv'](root)
-            expected['opt/e5/vendor-start.sh'] = file_digest(vendor)
     missing = set(expected) - set(found)
     different = [name for name in expected if name in found and expected[name] != found[name]]
     if missing or different:
@@ -195,49 +137,23 @@ def audit_root(info):
     for name in ('sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab'):
         if not versions.get(name):
             raise ValueError('guarded block-mount payload missing: ' + name)
-    kernel_out = Path(os.environ.get('E5_UPSTREAM_OUT', TOP / 'upstream/out-release'))
-    kernel = (kernel_out / 'kernel.release').read_text().strip()
+    kernel = (TOP / 'upstream/out-release/kernel.release').read_text().strip()
     if modules != {kernel}:
         raise ValueError('root modules do not all match the release kernel')
     if int(versions['etc/e5/build-time']) != info['build_epoch']:
         raise ValueError('root image build time differs from CI compile start')
-    if 'usr/bin/openssl' not in versions:
-        raise ValueError('OpenWrt image is missing openssl-util (/usr/bin/openssl)')
     if versions.get('etc/machine-id', b'').strip():
         raise ValueError('generic image has a machine ID')
     info.update({'kernel_release': kernel, 'infoscreen_version': versions['usr/share/e5-infoscreen/VERSION'].decode().strip(),
-                 'phone_version': json.loads(versions['etc/e5-infoscreen/plugins/phone/manifest.json'])['version'],
-                 'daed_screen_app_version': json.loads(versions['etc/e5-infoscreen/plugins/daed/manifest.json'])['version']})
-
-
-def internal_update_sources():
-    return {
-        'scripts/tools/e5-update.py': TOP / 'tools/e5-update.py',
-        'files/device-stage-part-update.sh': TOP / 'openwrt/device-stage-part-update.sh',
-        'files/device-flash-boot.sh': TOP / 'openwrt/device-flash-boot.sh',
-        'files/e5-network-addons-snapshot': TOP / 'openwrt/network-addons/overlay/usr/libexec/e5-network-addons-snapshot',
-    }
-
-
-def verify_internal_update(members, boot):
-    update = boot.get('part_update', {})
-    if update.get('version') != 1 or update.get('script_sha256') != file_digest(TOP / 'boot/part-update.sh'):
-        raise ValueError('missing or stale internal-partition boot updater')
-    for name, source in internal_update_sources().items():
-        if members.get(name) != file_digest(source):
-            raise ValueError('internal update helper missing or stale: ' + name)
-    if not members.get('files/network-addons-software.list'):
-        raise ValueError('missing internal update software exclusion list')
+                 'phone_version': json.loads(versions['etc/e5-infoscreen/plugins/phone/manifest.json'])['version']})
 
 
 def verify():
     info = json.loads((RELEASE / 'build.json').read_text())
     audit_root(info)
     # Ensure nobody advanced one of the checkouts during the build.
-    source_paths = [('e5-linux', TOP), ('kernel', TOP / 'linux-lts-e5'),
-                    ('infoscreen', TOP / 'ci/infoscreen'), ('plugins', TOP / 'ci/infoscreen-plugins')]
-    source_paths += [(p.name, p) for p in sorted((TOP / 'device').glob('*_device_*'))]
-    for name, path in source_paths:
+    for name, path in [('e5-linux', TOP), ('kernel', TOP / 'linux-lts-e5'),
+                       ('infoscreen', TOP / 'ci/infoscreen'), ('plugins', TOP / 'ci/infoscreen-plugins')]:
         if revision(path) != info['sources'][name]['revision']:
             raise ValueError('source revision changed: ' + name)
     glob = f'e5-openwrt-flash-{info["openwrt_version"]}-mainline-{info["timestamp"]}-*.tar.gz'
@@ -258,27 +174,27 @@ def verify():
             if name in members:
                 raise ValueError('duplicate bundle member: ' + name)
             stream = archive.extractfile(entry)
-            if name in ('SHA256SUMS', 'files/VERSION', 'files/boot.json'):
+            if name in ('SHA256SUMS', 'files/SHA256SUMS', 'files/VERSION', 'files/boot.json'):
                 content = stream.read()
                 data[name] = content
                 members[name] = hashlib.sha256(content).hexdigest()
             else:
                 members[name] = digest(stream)
     listed = {}
-    for line in data['SHA256SUMS'].decode().splitlines():
+    sums = 'files/SHA256SUMS' if 'files/SHA256SUMS' in data else 'SHA256SUMS'
+    for line in data[sums].decode().splitlines():
         checksum, name = line.split(None, 1)
         listed[name] = checksum
-    expected_members = {name: checksum for name, checksum in members.items() if name.startswith(('files/', 'scripts/')) or name in ('flash.py', 'flash.sh', 'flash.cmd', 'install-userdata.sh', 'install-userdata.cmd')}
+    expected_members = {name: checksum for name, checksum in members.items() if name != sums}
     if listed != expected_members:
         raise ValueError('bundle SHA256SUMS mismatch')
     for name, path in [('files/boot.img', TOP / 'work/boot-linux-slotb-bundle-mainline.img'),
                        ('files/android-bootchain.sh', TOP / 'tools/android-bootchain.sh'),
-                       ('flash.py', TOP / 'openwrt/bundle/flash.py'),
+                       ('OpenWrt-Installer.py', TOP / 'openwrt/bundle/flash.py'),
                        ('files/openwrt.ext4.gz', TOP / 'out/openwrt' / f'e5-openwrt-{info["openwrt_version"]}-generic.ext4.gz')]:
         if members[name] != file_digest(path):
             raise ValueError('bundle uses a different build output: ' + name)
     boot = json.loads(data['files/boot.json'])
-    verify_internal_update(members, boot)
     if boot['overlay_files'] or boot['sha256'] != members['files/boot.img']:
         raise ValueError('boot image contains an overlay or mismatches its manifest')
     version = data['files/VERSION'].decode()
@@ -287,13 +203,13 @@ def verify():
     with zipfile.ZipFile(zipath) as archive:
         if archive.testzip() is not None:
             raise ValueError('ZIP CRC check failed')
+        prefix = '' if 'module.prop' in archive.namelist() else stem + '/'
+        if set(archive.namelist()) != {prefix + name for name in members}:
+            raise ValueError('ZIP and tar file lists differ')
         for name, checksum in members.items():
-            with archive.open(stem + '/' + name) as stream:
+            with archive.open(prefix + name) as stream:
                 if digest(stream) != checksum:
                     raise ValueError('ZIP differs from tar: ' + name)
-    for name in ('install-userdata.cmd', 'install-userdata.sh'):
-        if members.get(name) != file_digest(TOP / 'openwrt/bundle' / name):
-            raise ValueError('userdata installer mismatch: ' + name)
     modules = list((TOP / 'out/magisk').glob(f'e5-linux-switch-*-{info["timestamp"]}.zip'))
     if len(modules) != 1:
         raise ValueError('expected one completed Magisk module for the build timestamp')
@@ -301,7 +217,7 @@ def verify():
     with zipfile.ZipFile(module_path) as module:
         expected = {p.name: p.read_bytes() for p in (TOP / 'magisk/e5-linux-switch').iterdir() if p.name != 'bootctl.c'}
         expected['README.md'] = (TOP / 'magisk/README.md').read_bytes()
-        expected['sd-registry.sh'] = (TOP / 'device/linux_device_common/overlay/opt/e5/e5-sd-registry').read_bytes()
+        expected['sd-registry.sh'] = (TOP / 'rootfs/overlay/opt/e5/e5-sd-registry').read_bytes()
         expected['bootchain.sh'] = (TOP / 'tools/android-bootchain.sh').read_bytes()
         if set(module.namelist()) != set(expected) | {'e5-bootctl'} or module.testzip() is not None:
             raise ValueError('Magisk module member or CRC mismatch')
@@ -324,9 +240,10 @@ def verify():
         f'编译时间（UTC+8）：**{info["build_started_at"]}**\n\n'
         f'OpenWrt {info["openwrt_version"]} · 内核 `{info["kernel_release"]}` · '
         f'信息屏 {info["infoscreen_version"]} · 电话插件 {info["phone_version"]}\n\n'
-        '下载固件 ZIP，解压后运行 `flash.cmd`（Windows）或 `./flash.sh`（macOS/Linux）。'
-        '已安装 OpenWrt 使用 `--update` 保留设置。刷入说明在包内 README。\n\n'
-        'Magisk ZIP 用于已 root Android 手动切回已安装的 Linux，在模块列表点击「操作」。\n\n'
+        '完整固件 ZIP 可在 Android Magisk 内安装到 TF 卡（清空整卡），'
+        '也可解压后运行 `OpenWrt-Installer.exe` 或 `launchers/start-installer.sh`。'
+        '详细使用指南在包内顶层 `START-HERE.md`，已安装系统用更新入口保留设置。\n\n'
+        '另附的小型 e5-linux-switch Magisk ZIP 仅用于手动切回已安装的 Linux，不负责首次部署。\n\n'
         '镜像不含设备固件和 Android vendor 运行库；安装器从目标设备提取。'
         'CI 已验证文件和模块一致性，硬件实测仍需在 E5 上进行。\n\n'
         f'源码版本：\n\n{refs}\n\n[构建记录]({info.get("run_url")})\n')

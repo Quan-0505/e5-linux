@@ -3,7 +3,7 @@
 #
 #   openwrt/build-modemmanager.sh        -> out/openwrt/modemmanager-*.apk
 #
-# OpenWrt 25.12 ships ModemManager 1.24.0, the version device/debian_device_common/patches/
+# OpenWrt 25.12 ships ModemManager 1.24.0, the version rootfs/deb-patches/
 # modemmanager source patches are written against, so the Debian image and the
 # OpenWrt one run the same plugin (docs/FINDINGS.md 37).  The patches go into
 # the feed package's patches/ after OpenWrt's own (0001-0004, which they stack
@@ -48,7 +48,6 @@ set -euo pipefail
 # 12: confirm transient empty call lists and adopt existing outgoing CP calls.
 # 13: serialize hangup, settle before redial and ignore pre-hangup CLCC snapshots.
 # 14: detached, owner-aware CEUS/CEMODE confirmation with bounded retries.
-# 15: PAP/CHAP credentials through the shared Unisoc AT owner.
 # 15: mobility-safe CGEV/SPPCODATA events and in-place bearer address renewal.
 # 16: include shared APN, pre-dial replay and recovery glue in APK upgrades too.
 # 17: replace the complete netifd snapshot so old addresses/DNS do not survive.
@@ -68,12 +67,16 @@ set -euo pipefail
 # 33: data teardown preserves RF by default; explicit disable_modem wins.
 # 34: keep the logical modem enabled for the other SIM's voice/SMS when the
 # data radio is off, without powering that disabled data radio back on.
-E5REV=34
-VER=${E5_WRT_VER:-25.12.6}
+# 35: vendor SFUN RF control and distinguish RF-off from cold SIM power-up.
+# 36: accept the recipient's extended ECIND readiness after insertion/SIM busy.
+# 37: retain Unisoc call identity after a failed/ambiguous accept result.
+E5REV=37
+VER=${E5_WRT_VER:-25.12.5}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
 WORK="$TOP/work/openwrt"
 OUT="$TOP/out/openwrt"
+BUILD_VOLUME=${E5_MODEM_BUILD_VOLUME:-e5-openwrt-src}
 URL=https://downloads.openwrt.org/releases/$VER/targets/armsr/armv8
 mkdir -p "$WORK" "$OUT"
 
@@ -83,31 +86,30 @@ done
 
 # the source patches, numbered after OpenWrt's own
 rm -rf "$WORK/patches" && mkdir -p "$WORK/patches/src" "$WORK/patches/pkg"
-TESTS="$TOP/device/openwrt_device_common/tests"
-cp "$TESTS/voice-identity.py" "$WORK/voice-identity.py"
-cp "$TESTS/sim-power.py" "$WORK/sim-power.py"
-cp "$TESTS/voice-urc.py" "$WORK/voice-urc.py"
-cp "$TESTS/voice-recovery.py" "$WORK/voice-recovery.py"
-cp "$TESTS/data-priority-hook.py" "$WORK/data-priority-hook.py"
-cp "$TESTS/modem-mobility.py" "$WORK/modem-mobility.py"
-cp "$TESTS/sms-isolation.py" "$WORK/sms-isolation.py"
-cp "$TESTS/sim-events.py" "$WORK/sim-events.py"
-cp "$TESTS/voice-hangup.py" "$WORK/voice-hangup.py"
-cp "$TESTS/modem-data-ports.py" "$WORK/modem-data-ports.py"
-cp "$TESTS/modem-data-port-rules.py" "$WORK/modem-data-port-rules.py"
-cp "$TESTS/sim-radio-parser.py" "$WORK/sim-radio-parser.py"
-COMMON="$TOP/device/openwrt_device_common"
-cp "$COMMON/files/modemmanager-unisoc-renew" "$WORK/modemmanager-unisoc-renew"
-mkdir -p "$WORK/device/openwrt_device_common/shared" "$WORK/device/openwrt_device_common/overlay/usr/libexec"
-cp "$COMMON/shared/network-startup.py" "$WORK/device/openwrt_device_common/shared/network-startup.py"
-cp "$COMMON/shared/network-startup-defaults" "$WORK/device/openwrt_device_common/shared/network-startup-defaults"
-cp "$COMMON/overlay/usr/libexec/e5-mm-report-ports" "$WORK/device/openwrt_device_common/overlay/usr/libexec/e5-mm-report-ports"
-mkdir -p "$WORK/device/openwrt_device_common/overlay/etc/hotplug.d/wwan" "$WORK/device/openwrt_device_common/overlay/etc/init.d"
-cp "$COMMON/overlay/etc/hotplug.d/wwan/26-e5-sipa-eth" "$WORK/device/openwrt_device_common/overlay/etc/hotplug.d/wwan/26-e5-sipa-eth"
-cp "$COMMON/overlay/usr/libexec/e5-network-recovery" "$WORK/device/openwrt_device_common/overlay/usr/libexec/e5-network-recovery"
-cp "$COMMON/overlay/etc/init.d/e5-network-recovery" "$WORK/device/openwrt_device_common/overlay/etc/init.d/e5-network-recovery"
+cp "$HERE/tests/voice-identity.py" "$WORK/voice-identity.py"
+cp "$HERE/tests/sim-power.py" "$WORK/sim-power.py"
+cp "$HERE/tests/sim-events.py" "$WORK/sim-events.py"
+cp "$HERE/tests/voice-urc.py" "$WORK/voice-urc.py"
+cp "$HERE/tests/voice-recovery.py" "$WORK/voice-recovery.py"
+cp "$HERE/tests/voice-hangup.py" "$WORK/voice-hangup.py"
+cp "$HERE/tests/voice-accept.py" "$WORK/voice-accept.py"
+cp "$HERE/tests/data-priority-hook.py" "$WORK/data-priority-hook.py"
+cp "$HERE/tests/modem-mobility.py" "$WORK/modem-mobility.py"
+cp "$HERE/tests/sms-isolation.py" "$WORK/sms-isolation.py"
+cp "$HERE/tests/modem-data-ports.py" "$WORK/modem-data-ports.py"
+cp "$HERE/tests/modem-data-port-rules.py" "$WORK/modem-data-port-rules.py"
+cp "$HERE/tests/sim-radio-parser.py" "$WORK/sim-radio-parser.py"
+cp "$HERE/files/modemmanager-unisoc-renew" "$WORK/modemmanager-unisoc-renew"
+mkdir -p "$WORK/devices/t551m" "$WORK/openwrt/overlay/usr/libexec"
+cp "$TOP/devices/t551m/network-startup.py" "$WORK/devices/t551m/network-startup.py"
+cp "$HERE/overlay/usr/libexec/e5-mm-report-ports" "$WORK/openwrt/overlay/usr/libexec/e5-mm-report-ports"
+mkdir -p "$WORK/openwrt/overlay/etc/hotplug.d/wwan"
+cp "$HERE/overlay/etc/hotplug.d/wwan/26-e5-sipa-eth" "$WORK/openwrt/overlay/etc/hotplug.d/wwan/26-e5-sipa-eth"
+cp "$HERE/overlay/usr/libexec/e5-network-recovery" "$WORK/openwrt/overlay/usr/libexec/e5-network-recovery"
+mkdir -p "$WORK/openwrt/overlay/etc/init.d"
+cp "$HERE/overlay/etc/init.d/e5-network-recovery" "$WORK/openwrt/overlay/etc/init.d/e5-network-recovery"
 n=900
-for p in "$TOP"/device/debian_device_common/patches/modemmanager-[0-9][0-9]-*.patch; do
+for p in "$TOP"/rootfs/deb-patches/modemmanager-[0-9][0-9]-*.patch; do
     cp "$p" "$WORK/patches/src/$n-e5-$(basename "$p" | sed 's/^modemmanager-//')"
     n=$((n + 1))
 done
@@ -118,7 +120,7 @@ cp "$HERE"/patches/modemmanager-package-*.patch "$WORK/patches/pkg/"
 DOCKER=${E5_DOCKER:-docker}
 case "$(uname -m)" in x86_64) PLAT=linux/amd64;; *) PLAT=linux/arm64;; esac
 Z=; [ "$DOCKER" = podman ] && Z=,z
-$DOCKER run --rm --platform $PLAT -v e5-openwrt-src:/build \
+$DOCKER run --rm --platform $PLAT -v "$BUILD_VOLUME":/build \
     -v "$WORK":/work:ro$Z -v "$OUT":/out${Z:+:z} -e VER="$VER" -e E5REV="$E5REV" \
     -e JOBS="${E5_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc)}" \
     "${E5_MODEM_BUILD_IMAGE:-debian:trixie}" bash -euc '
@@ -159,7 +161,7 @@ for p in /work/patches/pkg/*.patch; do patch -p1 -d $P < "$p"; done
 # Match the rootfs stager: upgrading this APK must retain APN selection,
 # boot replay, port discovery, initial EPS preservation and PDP retries.
 # Package files have no board config, so only the shared glue is affected.
-python3 /work/device/openwrt_device_common/shared/network-startup.py --root "$P/files" --profile e5
+python3 /work/devices/t551m/network-startup.py --root "$P/files" --profile e5
 cp /work/patches/src/*.patch $P/patches/
 rel=$(sed -n "s/^PKG_RELEASE:=//p" $P/Makefile)
 sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=$((rel + 900 + E5REV))/" $P/Makefile
@@ -200,13 +202,14 @@ voice_source=$(find build_dir -path "*/modemmanager-*/src/mm-iface-modem-voice.c
 [ -n "$voice_source" ] || { echo "missing patched voice source" >&2; exit 1; }
 python3 /work/voice-identity.py "$(dirname "$voice_source")"
 python3 /work/sim-power.py "$(dirname "$voice_source")"
+python3 /work/sim-events.py "$(dirname "$voice_source")"
 python3 /work/voice-urc.py "$(dirname "$voice_source")"
 python3 /work/voice-recovery.py "$(dirname "$voice_source")"
+python3 /work/voice-hangup.py "$(dirname "$voice_source")"
+python3 /work/voice-accept.py "$(dirname "$voice_source")"
 python3 /work/data-priority-hook.py "$(dirname "$voice_source")"
 python3 /work/modem-mobility.py "$(dirname "$voice_source")" /work/modemmanager-unisoc-renew
 python3 /work/sms-isolation.py "$(dirname "$voice_source")"
-python3 /work/sim-events.py "$(dirname "$voice_source")"
-python3 /work/voice-hangup.py "$(dirname "$voice_source")"
 python3 /work/modem-data-ports.py "$(dirname "$voice_source")"
 python3 /work/modem-data-port-rules.py "$(dirname "$voice_source")"
 python3 /work/sim-radio-parser.py "$(dirname "$voice_source")/plugins/unisoc/mm-broadband-modem-unisoc.c"

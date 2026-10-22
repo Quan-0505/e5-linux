@@ -4,9 +4,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
-import subprocess
 import struct
-import sys
 import tarfile
 import tempfile
 import unittest
@@ -75,122 +73,39 @@ class Bootstrap(unittest.TestCase):
 
 
 class RootAudit(unittest.TestCase):
-    def audit(self, files, staged_vendor=None, kernel_out=None, nonexec=()):
+    def audit(self, files):
         with tempfile.TemporaryDirectory() as temp:
             top = Path(temp)
             (top / 'work/openwrt').mkdir(parents=True)
             (top / 'upstream/out-release').mkdir(parents=True)
             (top / 'upstream/out-release/kernel.release').write_text('6.18-e5\n')
-            (top / 'device/linux_device_common/overlay/opt/e5').mkdir(parents=True)
-            for name in ('vendor-start.sh', 'e5-modem-coldboot'):
-                (top / 'device/linux_device_common/overlay/opt/e5' / name).write_bytes(b'startup fixture')
-                files = {**files, 'opt/e5/' + name: b'startup fixture'}
-            screen_source = TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen'
-            for name in ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js'):
-                target = top / 'ci/infoscreen/root/usr/share/e5-infoscreen' / name
+            (top / 'rootfs/overlay/opt/e5').mkdir(parents=True)
+            for name in release.BLOCK_SOURCES:
+                target = top / 'openwrt' / name
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes((screen_source / name).read_bytes())
-            if staged_vendor is not None:
-                files.update({'etc/e5/feature-port.json': b'{"profile":"e5"}',
-                              'opt/e5/vendor-start.sh': staged_vendor})
-            if kernel_out:
-                (top / kernel_out).mkdir(parents=True)
-                (top / kernel_out / 'kernel.release').write_text('6.18-e5\n')
-                (top / 'upstream/out-release/kernel.release').write_text('wrong-default\n')
+                target.write_bytes((TOP / 'openwrt' / name).read_bytes())
+            for name in ('vendor-start.sh', 'e5-modem-coldboot'):
+                (top / 'rootfs/overlay/opt/e5' / name).write_bytes(b'startup fixture')
+                files = {**files, 'opt/e5/' + name: b'startup fixture'}
             path = top / 'work/openwrt/e5-openwrt-25.12.5-generic-rootfs.tar.gz'
             with tarfile.open(path, 'w:gz') as archive:
                 for name, data in files.items():
                     entry = tarfile.TarInfo(name); entry.size = len(data)
-                    if name in ('etc/init.d/e5-boot-ok', 'etc/init.d/e5-infoscreen', 'usr/libexec/e5-infoscreen/session',
-                                'usr/libexec/e5-infoscreen/plugin', 'usr/libexec/e5-infoscreen/update') and name not in nonexec:
-                        entry.mode = 0o755
                     archive.addfile(entry, io.BytesIO(data))
             info = {'openwrt_version': '25.12.5', 'build_epoch': 123}
-            def stage_nv(root):
-                (root / 'opt/e5/vendor-start.sh').write_bytes(b'isolated NV fixture')
-            env = {'E5_UPSTREAM_OUT': str(top / kernel_out)} if kernel_out else {}
-            with patch.object(release, 'TOP', top), patch.object(release.subprocess, 'check_output', return_value=''), \
-                 patch.object(release.runpy, 'run_path', return_value={'stage_nv': stage_nv}), \
-                 patch.object(release, 'block_build_id', return_value='fixture-block-build'), \
-                 patch.dict(release.os.environ, env):
+            with patch.object(release, 'TOP', top), patch.object(release.subprocess, 'check_output', return_value=''):
                 release.audit_root(info)
             return info
 
     def files(self):
-        files = {'etc/e5/block-mount.build-id': b'fixture-block-build\n',
-                'sbin/block': b'block fixture', 'lib/libblkid-tiny.so': b'probe fixture',
-                'etc/init.d/fstab': b'fstab fixture',
-                'etc/init.d/e5-boot-ok': b'#!/bin/sh\n',
-                'etc/init.d/e5-infoscreen': b'#!/bin/sh\n',
-                'usr/libexec/e5-infoscreen/session': b'#!/bin/sh\n',
-                'usr/libexec/e5-infoscreen/plugin': b'#!/bin/sh\n',
-                'usr/libexec/e5-infoscreen/update': b'#!/bin/sh\n',
-                'usr/bin/openssl': b'OpenSSL fixture', 'usr/share/e5-infoscreen/VERSION': b'1.6.3',
+        return {'usr/share/e5-infoscreen/VERSION': b'1.6.3',
                 'etc/e5-infoscreen/plugins/phone/manifest.json': json.dumps({'version': '1.4'}).encode(),
-                'etc/e5-infoscreen/plugins/daed/manifest.json': json.dumps({'version': '1.0.0'}).encode(),
-                'etc/e5/build-time': b'123', 'lib/modules/6.18-e5/modem/sipc_wwan.ko': b'module'}
-        source = TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen'
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            for name in ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js'):
-                target = root / name; target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes((source / name).read_bytes())
-            subprocess.run([sys.executable, str(TOP / 'tools/patch-e5-daed-shortcut.py'), str(root)], check=True)
-            for name in ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js'):
-                files['usr/share/e5-infoscreen/' + name] = (root / name).read_bytes()
-        return files
+                'etc/e5/build-time': b'123', 'lib/modules/6.18-e5/modem/sipc_wwan.ko': b'module',
+                'etc/e5/block-mount.build-id': (release.block_build_id() + '\n').encode(),
+                'sbin/block': b'block', 'lib/libblkid-tiny.so': b'library', 'etc/init.d/fstab': b'init'}
 
     def test_same_release_and_epoch_pass(self):
-        info = self.audit(self.files())
-        self.assertEqual(info['phone_version'], '1.4')
-        self.assertEqual(info['daed_screen_app_version'], '1.0.0')
-
-    def test_expected_e5_shortcut_overlay_passes(self):
-        self.audit(self.files())
-
-    def test_unexpected_e5_shortcut_change_rejected(self):
-        files = self.files()
-        files['usr/share/e5-infoscreen/settings.uc'] += b'\n// unexpected change\n'
-        with self.assertRaisesRegex(ValueError, 'root source mismatch.*settings.uc'):
-            self.audit(files)
-
-    def test_nonexecutable_screen_start_rejected(self):
-        with self.assertRaisesRegex(ValueError, 'not executable.*e5-infoscreen'):
-            self.audit(self.files(), nonexec=('etc/init.d/e5-infoscreen',))
-
-    def test_nonexecutable_boot_confirmation_rejected(self):
-        with self.assertRaisesRegex(ValueError, 'not executable.*e5-boot-ok'):
-            self.audit(self.files(), nonexec=('etc/init.d/e5-boot-ok',))
-
-    def test_nonexecutable_plugin_manager_rejected(self):
-        with self.assertRaisesRegex(ValueError, 'not executable.*plugin'):
-            self.audit(self.files(), nonexec=('usr/libexec/e5-infoscreen/plugin',))
-
-    def test_stale_block_mount_build_rejected(self):
-        files = self.files(); files['etc/e5/block-mount.build-id'] = b'stale\n'
-        with self.assertRaisesRegex(ValueError, 'block-mount'):
-            self.audit(files)
-
-    def test_missing_block_mount_payload_rejected(self):
-        for name in ('sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab'):
-            files = self.files(); files.pop(name)
-            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'block-mount'):
-                self.audit(files)
-
-    def test_selected_kernel_output_pass(self):
-        self.assertEqual(self.audit(self.files(), kernel_out='out/e5/kernel')['kernel_release'], '6.18-e5')
-
-    def test_exact_nv_transformation_pass(self):
-        self.audit(self.files(), staged_vendor=b'isolated NV fixture')
-
-    def test_unexpected_nv_transformation_rejected(self):
-        with self.assertRaisesRegex(ValueError, 'vendor-start'):
-            self.audit(self.files(), staged_vendor=b'unexpected vendor fixture')
-
-    def test_missing_openssl_rejected(self):
-        files = self.files(); files.pop('usr/bin/openssl')
-        with self.assertRaisesRegex(ValueError, 'openssl-util'):
-            self.audit(files)
+        self.assertEqual(self.audit(self.files())['phone_version'], '1.4')
 
     def test_wrong_kernel_modules_rejected(self):
         files = self.files(); files['lib/modules/5.15/audio/card.ko'] = b'wrong kernel'
@@ -207,34 +122,17 @@ class RootAudit(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'device-specific'):
             self.audit(files)
 
+    def test_unguarded_mount_package_rejected(self):
+        files = self.files()
+        files['etc/e5/block-mount.build-id'] = b'old-package\n'
+        with self.assertRaisesRegex(ValueError, 'source mismatch'):
+            self.audit(files)
 
-class InternalUpdatePackage(unittest.TestCase):
-    def fixture(self):
-        members = {name: release.file_digest(path) for name, path in release.internal_update_sources().items()}
-        members['files/network-addons-software.list'] = 'a' * 64
-        boot = {'part_update': {'version': 1, 'script_sha256': release.file_digest(TOP / 'boot/part-update.sh')}}
-        return members, boot
-
-    def test_complete_update_chain_passes(self):
-        release.verify_internal_update(*self.fixture())
-
-    def test_missing_upload_tool_rejected(self):
-        members, boot = self.fixture()
-        del members['scripts/tools/e5-update.py']
-        with self.assertRaisesRegex(ValueError, 'helper missing'):
-            release.verify_internal_update(members, boot)
-
-    def test_stale_boot_updater_rejected(self):
-        members, boot = self.fixture()
-        boot['part_update']['script_sha256'] = '0' * 64
-        with self.assertRaisesRegex(ValueError, 'boot updater'):
-            release.verify_internal_update(members, boot)
-
-    def test_missing_software_exclusions_rejected(self):
-        members, boot = self.fixture()
-        del members['files/network-addons-software.list']
-        with self.assertRaisesRegex(ValueError, 'exclusion list'):
-            release.verify_internal_update(members, boot)
+    def test_missing_mount_package_payload_rejected(self):
+        files = self.files()
+        del files['sbin/block']
+        with self.assertRaisesRegex(ValueError, 'block-mount payload missing'):
+            self.audit(files)
 
 
 if __name__ == '__main__':

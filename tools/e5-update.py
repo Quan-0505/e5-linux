@@ -5,12 +5,58 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
+import runpy
 import shlex
 import socket
 import struct
 import sys
 import time
 import uuid
+GUI = None
+
+
+def bind_update_boot(image, manifest, fallback, linux_trial, helper):
+    if hashlib.sha256(image).hexdigest() != manifest['sha256']:
+        raise ValueError('Package boot checksum mismatch')
+    android = helper['validate_control'](fallback)
+    linux = 'b' if android == 'a' else 'a'
+    if (len(linux_trial) != 32 or linux_trial[:2] != ('_'+linux).encode()
+            or linux_trial[4:8] != b'BCAB'
+            or struct.unpack_from('<I',linux_trial,28)[0] != __import__('zlib').crc32(linux_trial[:28])):
+        raise ValueError('Installed Android/Linux boot roles conflict')
+    if android == 'b' and manifest.get('slot_roles_version',0) < 1:
+        raise ValueError('Package initramfs lacks dynamic-slot support')
+    return helper['bind_boot'](image, fallback, android)
+
+
+def read_control(client, path):
+    _, out, err = client.exec_command('cat '+path, timeout=15)
+    data = out.read(); error = err.read()
+    if out.channel.recv_exit_status() or len(data) != 32:
+        raise ValueError('Cannot read installed boot role: '+path+' '+error.decode('utf-8','replace'))
+    return data
+
+
+def image_capacity(client):
+    if GUI:
+        return int(GUI.ctx.record['plan']['openwrt_bytes'])
+    # Use raw SSH stdout, without requiring od/hexdump or SFTP on OpenWrt.
+    dev = execute(client, "readlink -f $(awk '$2==\"/\" {print $1}' /proc/mounts | tail -1)").strip()
+    if not re.fullmatch(r'/dev/(?:block/)?(?:mmcblk\d+(?:p\d+)?|loop\d+)', dev):
+        raise ValueError('Cannot identify the current image root')
+    _, out, err = client.exec_command(f'dd if={dev} bs=1024 skip=1 count=1 2>/dev/null', timeout=15)
+    raw = out.read()
+    err.read()
+    if out.channel.recv_exit_status() or len(raw) != 1024 or raw[56:58] != b'\x53\xef':
+        raise ValueError('Cannot read the current ext4 image capacity')
+    shift = struct.unpack_from('<I', raw, 24)[0]
+    blocks = struct.unpack_from('<I', raw, 4)[0]
+    if struct.unpack_from('<I', raw, 96)[0] & 0x80:
+        blocks |= struct.unpack_from('<I', raw, 336)[0] << 32
+    if shift > 6 or not blocks:
+        raise ValueError('Invalid ext4 image capacity')
+    return blocks * (1024 << shift)
 
 
 def execute(client, command, timeout=1800):
@@ -42,9 +88,11 @@ def upload(client, path, destination):
     channel.settimeout(120)
     channel.exec_command('umask 077; cat > ' + shlex.quote(destination))
     count = 0; digest = hashlib.sha256(); last = 0
+    started = time.monotonic()
     with path.open('rb') as stream:
         while data := stream.read(262144):
             channel.sendall(data); digest.update(data); count += len(data)
+            if GUI: GUI.transfer(path.name, count, size, started)
             if time.monotonic() - last >= 1:
                 print(f'\r   {path.name}: {count >> 20}/{size >> 20} MiB', end='', flush=True)
                 last = time.monotonic()
@@ -71,22 +119,30 @@ def main():
     a = p.parse_args()
     files = a.package / 'files'
     profile = json.loads((files / 'device-profile.json').read_text())['profile'] if (files / 'device-profile.json').exists() else 'e5'
-    known = a.package / 'backups' / ('ssh-' + profile + '.known_hosts')
-    known.parent.mkdir(parents=True, exist_ok=True)
     client = paramiko.SSHClient()
-    if known.exists():
-        client.load_host_keys(str(known))
+    # USB-connected devices reuse the same management address. Keep trust
+    # within this connection rather than pinning that IP to one installation.
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(a.host, username='root', password=os.environ['E5_TELNET_PASS'],
+    client.connect(a.host, username='root', password=GUI.password if GUI else os.environ['E5_TELNET_PASS'],
                    look_for_keys=False, allow_agent=False, timeout=15, auth_timeout=20)
+    if GUI: GUI.validate_ssh(client)
     stage = None
     try:
         execute(client, '[ "$(id -u)" = 0 ] && [ "$(cat /etc/e5/device-profile)" = ' + shlex.quote(profile) + ' ]')
-        client.save_host_keys(str(known))
         # Detection and capacity checks precede uploads and all boot writes.
         layout = execute(client, 'if [ -f /etc/e5/part-root ]; then echo part; '
             'elif [ -f /etc/e5/sd-root ]; then echo sd; else echo image; fi').strip()
+        capacity_env = ''
+        if layout == 'image':
+            capacity = image_capacity(client)
+            if capacity < a.raw_size:
+                raise ValueError('New image exceeds the installed filesystem capacity; nothing staged')
+            capacity_env = 'E5_IMAGE_FS_BYTES=' + str(capacity) + ' '
         boot = json.loads((files / 'boot.json').read_text())
+        helper = runpy.run_path(str(a.package/'scripts/installer/boot-slots.py'))
+        bound_boot = bind_update_boot((files/'boot.img').read_bytes(), boot,
+            read_control(client,'/run/e5linux/misc-bc-slot-a.bin'),
+            read_control(client,'/run/e5linux/misc-bc-slot-b-trial.bin'), helper)
         if layout in ('part', 'sd') and not boot.get('part_update'):
             raise RuntimeError('this package has no independent-partition update support; use a newer package')
         if layout == 'sd' and not boot.get('tf_update'):
@@ -105,22 +161,21 @@ def main():
         # Internal partition updates carry the selection in the boot header,
         # allowing encrypted Android userdata to stay completely unmounted.
         with __import__('tempfile').TemporaryDirectory() as temporary:
-            image = bytearray((files / 'boot.img').read_bytes())
+            image = bytearray(bound_boot)
             if layout == 'part':
                 image[44:1580] = b'e5.part_v=2 e5.root=part e5.part_update=1'.ljust(1536, b'\0')
             head = Path(temporary) / 'boot-head.img'
             head.write_bytes(image[:boot['persist_log_offset']])
             for name in ('openwrt.ext4.gz', 'ext4-tools.tar', 'device-install-image.sh',
-                         'device-flash-boot.sh', 'device-stage-part-update.sh', 'e5-gpt',
-                         'e5-network-addons-snapshot', 'network-addons-software.list'):
+                         'device-flash-boot.sh', 'device-stage-part-update.sh', 'e5-gpt'):
                 upload(client, files / name, stage + '/' + name)
             upload(client, head, stage + '/boot-head.img')
             command = ('umask 077; mkdir -p /run/e5-upgrade; '
                 '[ ! -L /run/e5-upgrade ] && [ "$(stat -c %u:%a /run/e5-upgrade)" = 0:700 ]; '
                 '[ ! -L /run/e5-upgrade/lock ]; exec 8>>/run/e5-upgrade/lock; '
                 'flock -n 8 || { echo "another upgrade is running"; exit 1; }; '
-                'export E5_UPGRADE_LOCK_HELD=1; '
-                'E5_IMAGE_SIZE=' + str(a.raw_size) + ' E5_IMAGE_SHA256=' + shlex.quote(a.raw_sha256) +
+                'export E5_UPGRADE_LOCK_HELD=1; ' +
+                capacity_env + 'E5_IMAGE_SIZE=' + str(a.raw_size) + ' E5_IMAGE_SHA256=' + shlex.quote(a.raw_sha256) +
                 ' E5_UPDATE_PROFILE=' + shlex.quote(profile) + ' sh ' + stage + '/device-stage-part-update.sh ' + stage)
             command += '; sh ' + stage + '/device-flash-boot.sh ' + stage + '/boot-head.img ' + \
                     hashlib.sha256(head.read_bytes()).hexdigest() + ' ' + str(boot['persist_log_offset'] >> 20)
@@ -130,7 +185,8 @@ def main():
             else:
                 command += '; e5-os openwrt'
             command += '; echo "== all uploaded files verified; rebooting"; (sleep 3; reboot) </dev/null >/dev/null 2>&1 &'
-            execute(client, command)
+            if GUI: GUI.action('update-commit', lambda: execute(client, command))
+            else: execute(client, command)
             print('Update verified; rebooting / 更新已校验，正在重启', flush=True)
     finally:
         if stage:
