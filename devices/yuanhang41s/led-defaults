@@ -1,0 +1,18 @@
+#!/bin/sh
+# P720S11 stock DT: UMP9620 BLTC @180, red/green/blue channels 0/1/2.
+# Explicitly clear the bootloader's LED state through the LED driver.
+[ "$(cat /etc/e5/device-profile 2>/dev/null)" = yuanhang41s ] || exit 0
+
+for color in red green blue; do
+    section="yuanhang41s_${color}"
+    # Defaults only: retain any LED settings subsequently chosen by the user.
+    uci -q get "system.$section" >/dev/null && continue
+    uci batch <<EOF || exit 1
+set system.$section=led
+set system.$section.name='Notification $color'
+set system.$section.sysfs='sc27xx:$color'
+set system.$section.trigger='none'
+set system.$section.default='0'
+EOF
+done
+uci commit system
