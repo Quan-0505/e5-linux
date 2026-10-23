@@ -38,6 +38,7 @@ python3 /policy/wifi-tx.py .
 python3 /policy/fuel-gauge.py .
 python3 /policy/wifi-sae.py .
 python3 /policy/wifi-stations.py .
+python3 /work/usb-ncm.py .
 KV=$(make -s kernelversion)
 O=/out/$KV
 mkdir -p "$O"
