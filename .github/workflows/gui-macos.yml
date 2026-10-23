@@ -2,6 +2,15 @@ name: Apple Silicon installer
 
 on:
   workflow_call:
+    inputs:
+      source_ref:
+        description: Source commit or ref to build
+        required: false
+        type: string
+      runner:
+        required: false
+        type: string
+        default: macos-15
   workflow_dispatch:
     inputs:
       runner:
@@ -23,6 +32,8 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: '11.0'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
