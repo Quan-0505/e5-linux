@@ -63,6 +63,8 @@ class Entrypoints(unittest.TestCase):
             self.assertTrue((package/'scripts/installer/part-two-stage.py').exists())
             self.assertTrue((package/'files/userdata-image.sh').exists())
             self.assertTrue((package/'files/android-loop.sh').exists())
+            self.assertEqual((package/'scripts/tools/yuanhang41s-HiFi.base.conf').read_bytes(),
+                             (TOP/'device/linux_device_e5/overlay/usr/share/alsa/ucm2/sprdphone-sc273/HiFi.conf').read_bytes())
             self.assertTrue((package/'docs/README.zh-CN.md').exists())
             self.assertEqual({p.name for p in package.iterdir() if p.is_file()},
                              {'OpenWrt-Installer.py','START-HERE.md'})

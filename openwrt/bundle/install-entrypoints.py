@@ -24,6 +24,10 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def audio_route_base_source():
+    return HERE.parents[1] / 'device/linux_device_e5/overlay/usr/share/alsa/ucm2/sprdphone-sc273/HiFi.conf'
+
+
 def assemble(package, source=HERE):
     package, source = Path(package).resolve(), Path(source).resolve()
     if package == source:
@@ -57,7 +61,10 @@ def assemble(package, source=HERE):
     shutil.copy2(HERE.parents[1] / 'boot/boot-args.sh', internal / 'boot-args.sh')
     tools = package / 'scripts/tools'; tools.mkdir(parents=True,exist_ok=True)
     shutil.copy2(HERE.parents[1] / 'devices/yuanhang41s/audio-routes.py', tools / 'yuanhang41s-audio-routes.py')
-    shutil.copy2(HERE.parents[1] / 'rootfs/overlay/usr/share/alsa/ucm2/sprdphone-sc273/HiFi.conf', tools / 'yuanhang41s-HiFi.base.conf')
+    audio_route_base = audio_route_base_source()
+    if not audio_route_base.is_file():
+        raise FileNotFoundError(f'missing E5 audio route base: {audio_route_base}')
+    shutil.copy2(audio_route_base, tools / 'yuanhang41s-HiFi.base.conf')
     shutil.copy2(HERE.parents[1] / 'installer/backend/boot_image.py', internal / 'boot-control.py')
     exe = source / 'flash.exe'
     if exe.is_file() and (source != HERE or os.environ.get('OPENWRT_BUILD_LEGACY_EXE') == '1'):
