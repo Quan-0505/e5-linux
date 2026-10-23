@@ -18,6 +18,12 @@ FILES = ('sbin/fsck.f2fs', 'sbin/resize.f2fs', 'lib/ld-musl-aarch64.so.1', 'lib/
          'usr/bin/ucode', 'lib/libucode.so.20230711', 'lib/libjson-c.so.5', 'usr/lib/ucode/fs.so',
          'usr/sbin/resize2fs', 'lib/libe2p.so.2', 'lib/libext2fs.so.2', 'lib/libcom_err.so.0')
 
+def default_output_path(script_file=__file__):
+    # The release build bind-mounts this script at /prepare-f2fs-tools.py.
+    # Use two parent operations instead of parents[1], whose sequence is too
+    # short for a script directly under the filesystem root.
+    return Path(script_file).resolve().parent.parent/'out/boot/f2fs-tools'
+
 def stage(root, out):
     manifest = {}
     for name in FILES:
@@ -38,6 +44,6 @@ def stage(root, out):
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root', type=Path, required=True)
-    p.add_argument('--out', type=Path, default=Path(__file__).resolve().parents[1]/'out/boot/f2fs-tools')
+    p.add_argument('--out', type=Path, default=default_output_path())
     a = p.parse_args()
     stage(a.root, a.out)
