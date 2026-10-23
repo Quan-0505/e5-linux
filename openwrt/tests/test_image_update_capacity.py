@@ -181,6 +181,11 @@ class HostImageCapacity(unittest.TestCase):
         self.module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.module)
 
+    def test_partition_updates_stage_on_disk_while_image_updates_keep_tmpfs(self):
+        self.assertEqual(self.module.update_stage_root('part'), '/root')
+        self.assertEqual(self.module.update_stage_root('sd'), '/root')
+        self.assertEqual(self.module.update_stage_root('image'), '/tmp')
+
     def test_cli_reads_binary_superblock_without_od_or_sftp(self):
         raw = bytearray(1024)
         raw[56:58] = b'\x53\xef'
@@ -195,27 +200,46 @@ class HostImageCapacity(unittest.TestCase):
         client.open_sftp.assert_not_called()
 
     def test_gui_capacity_is_passed_to_the_real_commit_command(self):
-        for capacity in (2 << 30, 4 << 30):
-            with self.subTest(capacity=capacity), tempfile.TemporaryDirectory() as folder:
-                files = Path(folder) / 'files'
-                files.mkdir()
-                for name in ('boot.img', 'openwrt.ext4.gz', 'ext4-tools.tar'):
-                    (files / name).write_bytes(b'fixture')
-                (files / 'boot.json').write_text(json.dumps({'persist_log_offset': 1 << 20}))
-                gui = SimpleNamespace(password='', ctx=SimpleNamespace(record={'plan': {'openwrt_bytes': capacity}}),
-                                      validate_ssh=Mock(), action=lambda name, operation: operation())
-                commands = []
-                def execute(_client, command, **_options):
-                    commands.append(command)
-                    return 'image' if command.startswith('if [ -f /etc/e5/part-root ]') else ''
-                with patch.object(self.module, 'GUI', gui), patch.object(self.module, 'execute', side_effect=execute), \
-                     patch.object(self.module, 'upload'), patch.dict('sys.modules', {'paramiko': Mock()}), \
-                     patch('sys.argv', ['e5-update', '--package', folder, '--host', '192.0.2.1',
-                                        '--raw-size', str(2 << 30), '--raw-sha256', 'a' * 64]), \
-                     patch('sys.stdout', new_callable=io.StringIO):
-                    self.module.main()
-                commit = next(command for command in commands if 'device-stage-part-update.sh ' in command)
-                self.assertIn('E5_IMAGE_FS_BYTES=' + str(capacity) + ' ', commit)
+        for layout_name in ('image', 'part'):
+            for capacity in (2 << 30, 4 << 30):
+                with self.subTest(layout=layout_name, capacity=capacity), tempfile.TemporaryDirectory() as folder:
+                    package = Path(folder)
+                    files = package / 'files'
+                    files.mkdir()
+                    for name in ('boot.img', 'openwrt.ext4.gz', 'ext4-tools.tar'):
+                        (files / name).write_bytes(b'fixture')
+                    (files / 'boot.img').write_bytes(b'B' * (2 << 20))
+                    (files / 'boot.json').write_text(json.dumps({
+                        'persist_log_offset': 1 << 20, 'part_update': True, 'tf_update': True,
+                        'slot_roles_version': 1,
+                    }))
+                    helper = package / 'scripts/installer/boot-slots.py'
+                    helper.parent.mkdir(parents=True)
+                    shutil.copy2(TOP / 'openwrt/bundle/boot-slots.py', helper)
+                    gui = SimpleNamespace(password='', ctx=SimpleNamespace(record={'plan': {'openwrt_bytes': capacity}}),
+                                          validate_ssh=Mock(), action=lambda name, operation: operation())
+                    commands = []
+                    def execute(_client, command, **_options):
+                        commands.append(command)
+                        return layout_name if command.startswith('if [ -f /etc/e5/part-root ]') else ''
+                    with patch.object(self.module, 'GUI', gui), patch.object(self.module, 'execute', side_effect=execute), \
+                         patch.object(self.module, 'upload'), patch.object(self.module, 'image_capacity', return_value=capacity), \
+                         patch.object(self.module, 'read_control', return_value=b'\0' * 32), \
+                         patch.object(self.module, 'bind_update_boot', return_value=b'B' * (2 << 20)), \
+                         patch.dict('sys.modules', {'paramiko': Mock()}), \
+                         patch('sys.argv', ['e5-update', '--package', folder, '--host', '192.0.2.1',
+                                            '--raw-size', str(2 << 30), '--raw-sha256', 'a' * 64]), \
+                         patch('sys.stdout', new_callable=io.StringIO):
+                        self.module.main()
+                    stage_root = '/root' if layout_name == 'part' else '/tmp'
+                    stage_command = next(command for command in commands if 'mkdir -m 700 ' + stage_root + '/e5-update-' in command)
+                    self.assertIn('df -Pk ' + stage_root, stage_command)
+                    commit = next(command for command in commands if 'device-stage-part-update.sh ' in command)
+                    if layout_name == 'image':
+                        self.assertIn('E5_IMAGE_FS_BYTES=' + str(capacity) + ' ', commit)
+                    else:
+                        self.assertIn('rm -rf /root/e5-update-', commit)
+                        self.assertIn('mv /.e5-update/request.ready /.e5-update/request', commit)
 
 
 if __name__ == '__main__':

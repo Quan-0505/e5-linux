@@ -108,6 +108,14 @@ def upload(client, path, destination):
         raise RuntimeError('uploaded file checksum mismatch: ' + path.name)
 
 
+def update_stage_root(layout):
+    # Partition-root updates keep the large image on the writable root disk.
+    # /tmp is tmpfs on E5 and would consume the same RAM checked by the offline
+    # update guard below. Image-mode updates still use /tmp because their root
+    # filesystem may be read-only.
+    return '/root' if layout in ('part', 'sd') else '/tmp'
+
+
 def main():
     import paramiko
     p = argparse.ArgumentParser(description=__doc__)
@@ -155,9 +163,12 @@ def main():
         if a.check_only:
             print('Update preflight passed / 更新预检查通过: ' + profile + ', ' + layout)
             return
-        stage = '/tmp/e5-update-' + uuid.uuid4().hex
+        stage_root = update_stage_root(layout)
+        stage = stage_root + '/e5-update-' + uuid.uuid4().hex
         required = sum((files / n).stat().st_size for n in ('boot.img', 'openwrt.ext4.gz', 'ext4-tools.tar')) + (64 << 20)
-        execute(client, 'test "$(df -Pk /tmp | awk \'NR==2 {print $4}\')" -gt ' + str((required+1023)//1024) + '; mkdir -m 700 ' + stage)
+        execute(client, 'test "$(df -Pk ' + stage_root + ' | awk \'NR==2 {print $4}\')" -gt ' +
+                str((required+1023)//1024) + '; test ! -e ' + shlex.quote(stage) +
+                ' && mkdir -m 700 ' + shlex.quote(stage))
         # Internal partition updates carry the selection in the boot header,
         # allowing encrypted Android userdata to stay completely unmounted.
         with __import__('tempfile').TemporaryDirectory() as temporary:
@@ -182,7 +193,7 @@ def main():
                     hashlib.sha256(head.read_bytes()).hexdigest() + ' ' + str(boot['persist_log_offset'] >> 20)
             # Publish an internal update request only after boot readback passes.
             if layout in ('part', 'sd'):
-                command += '; mv /.e5-update/request.ready /.e5-update/request; sync'
+                command += '; rm -rf ' + shlex.quote(stage) + '; mv /.e5-update/request.ready /.e5-update/request; sync'
             else:
                 command += '; e5-os openwrt'
             command += '; echo "== all uploaded files verified; rebooting"; (sleep 3; reboot) </dev/null >/dev/null 2>&1 &'

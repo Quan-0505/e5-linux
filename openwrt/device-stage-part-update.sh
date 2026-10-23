@@ -2,7 +2,13 @@
 # Prepare only: the mounted root is never overwritten from the running system.
 set -eu
 stage=${1:?upload directory}
-case "$stage" in /tmp/e5-update-*) ;; *) exit 1 ;; esac
+stage_parent=${stage%/*}
+stage_name=${stage##*/}
+case "$stage_parent" in /tmp|/root) ;; *) exit 1 ;; esac
+case "$stage_name" in e5-update-*) ;; *) exit 1 ;; esac
+stage_token=${stage_name#e5-update-}
+case "$stage_token" in *[!0-9a-f]*|'') exit 1 ;; esac
+[ "${#stage_token}" = 32 ] && [ -d "$stage" ] && [ ! -L "$stage" ] || exit 1
 if [ ! -f /etc/e5/part-root ] && [ ! -f /etc/e5/sd-root ]; then
     E5_IMAGE_SIZE=${E5_IMAGE_SIZE:?} sh "$stage/device-install-image.sh" "$stage/openwrt.ext4.gz"
     exit

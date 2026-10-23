@@ -47,6 +47,8 @@ with tempfile.TemporaryDirectory(prefix='e5-update-collect-') as folder:
         print('PASS:', source, 'preserves own modem, audio, touch and Bluetooth files')
 
 stage = (TOP / 'openwrt/device-stage-part-update.sh').read_text()
+assert 'stage_parent=${stage%/*}' in stage and 'stage_parent" in /tmp|/root' in stage
+assert '[ "${#stage_token}" = 32 ]' in stage
 for path in ('etc/daed', 'etc/daed-kdae', 'usr/local/owjdxb', 'etc/init.d/daed',
              'etc/init.d/owjdxb', 'usr/libexec/e5-nodebaby-guard'):
     assert path in stage, ('missing live settings path', path)
