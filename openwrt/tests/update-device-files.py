@@ -45,3 +45,14 @@ with tempfile.TemporaryDirectory(prefix='e5-update-collect-') as folder:
             assert members['lib/firmware/sitronix/st7123.bin'].linkname == '../sitronix_firmware_huaying.dump'
             assert 'lib/firmware/not-device-owned.bin' not in members, source
         print('PASS:', source, 'preserves own modem, audio, touch and Bluetooth files')
+
+stage = (TOP / 'openwrt/device-stage-part-update.sh').read_text()
+for path in ('etc/daed', 'etc/daed-kdae', 'usr/local/owjdxb', 'etc/init.d/daed',
+             'etc/init.d/owjdxb', 'usr/libexec/e5-nodebaby-guard'):
+    assert path in stage, ('missing live settings path', path)
+assert 'e5-network-addons-snapshot' in stage and 'network-addons-software.list' in stage
+update = (TOP / 'tools/e5-update.py').read_text()
+assert "'e5-network-addons-snapshot', 'network-addons-software.list'" in update
+snapshot = (TOP / 'openwrt/network-addons/overlay/usr/libexec/e5-network-addons-snapshot').read_text()
+assert 'kill -STOP' in snapshot and 'trap resume EXIT' in snapshot
+print('PASS: online updater snapshots DAED/NodeBaby state and uploads its helper/exclusions')

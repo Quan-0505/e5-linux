@@ -49,7 +49,10 @@ class OfflineUpdate(unittest.TestCase):
                 **({'etc/e5/sd-root':b'e5-openwrt-sd\n', 'etc/e5/sd-gen':b'7\n'} if kind == 'sd' else {}),
                 'etc/e5/image-version':b'OLD release', 'etc/e5/device-profile':b't551m\n',
                 'etc/e5-infoscreen/plugins/phone/phone.js':b'old phone code',
-                'etc/shadow':b'root:saved-password-hash:\n'})
+                'etc/shadow':b'root:saved-password-hash:\n',
+                'etc/daed/daed.db':b'saved-daed-account-database',
+                'etc/daed/wing.db':b'saved-daed-subscription-database',
+                'etc/daed/wing.db-wal':b'saved-daed-subscription-wal'})
             archive(pending / 'ext4-tools.tar', {'lib/ld-musl-aarch64.so.1':b'#!/bin/sh\nshift 3\nexec /usr/sbin/e2fsck "$@"\n',
                 'usr/sbin/e2fsck':b'placeholder'})
             hashes = ''.join(hashlib.sha256((pending/n).read_bytes()).hexdigest()+'  '+n+'\n'
@@ -108,6 +111,9 @@ reboot() {{ echo REBOOT >> "{root}/calls"; }}
                 self.assertEqual((new/'etc/e5/image-version').read_text(),'new release\n')
                 self.assertEqual((new/'etc/e5-infoscreen/plugins/phone/phone.js').read_text(),'new phone code')
                 self.assertEqual((new/'lib/firmware/wcnmodem.bin').read_bytes(),b'own firmware')
+                self.assertEqual((new/'etc/daed/daed.db').read_bytes(),b'saved-daed-account-database')
+                self.assertEqual((new/'etc/daed/wing.db').read_bytes(),b'saved-daed-subscription-database')
+                self.assertEqual((new/'etc/daed/wing.db-wal').read_bytes(),b'saved-daed-subscription-wal')
                 self.assertEqual(int.from_bytes(device.read_bytes()[1028:1032],'little')*4096,96<<20)
                 if kind == 'sd':
                     self.assertTrue((new/'etc/e5/sd-root').is_file())
