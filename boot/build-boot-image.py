@@ -95,6 +95,10 @@ def slot_info(prio, tries, successful):
     return (prio & 0xf) | ((tries & 0x7) << 4) | ((successful & 1) << 7)
 
 
+def sd_registry_source():
+    return HERE.parent / 'device/linux_device_common/overlay/opt/e5/e5-sd-registry'
+
+
 def initramfs_archive(files, directories):
     directories = set(directories)
     # The kernel's newc extractor does not create missing parent directories.
@@ -197,6 +201,9 @@ def main():
     if len(cmdline) >= 1536:
         sys.exit('command line too long for a boot header v4 (max 1535 bytes)')
 
+    registry = sd_registry_source()
+    if not registry.is_file():
+        sys.exit('Missing shared SD registry script: '+str(registry))
     files = {
         'init': (a.init.read_bytes(), stat.S_IFREG | 0o755),
         'bin/busybox': (a.busybox.read_bytes(), stat.S_IFREG | 0o755),
@@ -204,7 +211,7 @@ def main():
         'etc/misc-bc-slot-a.bin': (slot_a_bc, stat.S_IFREG | 0o644),
         'etc/misc-bc-slot-b-trial.bin': (slot_b_bc, stat.S_IFREG | 0o644),
         'etc/e5/linux-slot': (slot_b_bc[1:2] + b'\n', stat.S_IFREG | 0o644),
-        'etc/sd-registry.sh': ((HERE.parent / 'rootfs/overlay/opt/e5/e5-sd-registry').read_bytes(), stat.S_IFREG | 0o644),
+        'etc/sd-registry.sh': (registry.read_bytes(), stat.S_IFREG | 0o644),
         'etc/f2fs-repair.sh': ((HERE / 'f2fs-repair.sh').read_bytes(), stat.S_IFREG | 0o644),
     }
     dirs = {'bin', 'sbin', 'etc', 'proc', 'sys', 'dev', 'run', 'tmp', 'root', 'config', 'linux-modules'}
