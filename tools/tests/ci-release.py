@@ -265,5 +265,14 @@ class InternalUpdatePackage(unittest.TestCase):
 
 
 
+class MagiskModuleSources(unittest.TestCase):
+    def test_sd_registry_uses_shared_linux_overlay(self):
+        sources = release.magisk_module_sources()
+        self.assertEqual(
+            sources['sd-registry.sh'],
+            TOP / 'device/linux_device_common/overlay/opt/e5/e5-sd-registry')
+        self.assertTrue(sources['sd-registry.sh'].is_file())
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -235,6 +235,15 @@ def verify_internal_update(members, boot):
         raise ValueError('missing internal update software exclusion list')
 
 
+def magisk_module_sources():
+    return {
+        **{p.name: p for p in (TOP / 'magisk/e5-linux-switch').iterdir() if p.name != 'bootctl.c'},
+        'README.md': TOP / 'magisk/README.md',
+        'sd-registry.sh': TOP / 'device/linux_device_common/overlay/opt/e5/e5-sd-registry',
+        'bootchain.sh': TOP / 'tools/android-bootchain.sh',
+    }
+
+
 def verify():
     info = json.loads((RELEASE / 'build.json').read_text())
     audit_root(info)
@@ -303,10 +312,7 @@ def verify():
         raise ValueError('expected one completed Magisk module for the build timestamp')
     module_path = modules[0]
     with zipfile.ZipFile(module_path) as module:
-        expected = {p.name: p.read_bytes() for p in (TOP / 'magisk/e5-linux-switch').iterdir() if p.name != 'bootctl.c'}
-        expected['README.md'] = (TOP / 'magisk/README.md').read_bytes()
-        expected['sd-registry.sh'] = (TOP / 'rootfs/overlay/opt/e5/e5-sd-registry').read_bytes()
-        expected['bootchain.sh'] = (TOP / 'tools/android-bootchain.sh').read_bytes()
+        expected = {name: path.read_bytes() for name, path in magisk_module_sources().items()}
         if set(module.namelist()) != set(expected) | {'e5-bootctl'} or module.testzip() is not None:
             raise ValueError('Magisk module member or CRC mismatch')
         for name, content in expected.items():
