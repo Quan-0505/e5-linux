@@ -109,8 +109,17 @@ for f in shared/network-startup.py overlay/usr/libexec/e5-mm-report-ports \
     [ -s "$COMMON/$f" ] || { echo "Missing shared ModemManager input: $COMMON/$f" >&2; exit 1; }
 done
 
+# Compose the complete pinned base series, then downstream overrides.
+mkdir -p "$WORK/patches/input"
+for p in "$TOP"/device/debian_device_common/patches/modemmanager-[0-9][0-9]-*.patch \
+         "$TOP"/rootfs/deb-patches/modemmanager-[0-9][0-9]-*.patch; do
+    [ ! -f "$p" ] || cp "$p" "$WORK/patches/input/"
+done
+[ -s "$WORK/patches/input/modemmanager-01-unisoc-plugin.patch" ] || {
+    echo "Missing base Unisoc plugin patch" >&2; exit 1;
+}
 n=900
-for p in "$TOP"/rootfs/deb-patches/modemmanager-[0-9][0-9]-*.patch; do
+for p in "$WORK"/patches/input/modemmanager-*.patch; do
     cp "$p" "$WORK/patches/src/$n-e5-$(basename "$p" | sed 's/^modemmanager-//')"
     n=$((n + 1))
 done

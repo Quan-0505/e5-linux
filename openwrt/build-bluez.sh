@@ -29,7 +29,7 @@ for f in config.buildinfo feeds.buildinfo; do
 done
 rm -rf "$WORK/bluez-patches" && mkdir -p "$WORK/bluez-patches"
 n=900
-for p in "$TOP"/rootfs/deb-patches/bluez-0*.patch; do
+for p in "$TOP"/device/debian_device_common/patches/bluez-0*.patch; do
     cp "$p" "$WORK/bluez-patches/$n-e5-$(basename "$p" | sed 's/^bluez-//')"
     n=$((n + 1))
 done

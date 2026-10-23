@@ -30,6 +30,7 @@ def sources(version):
              TOP / 'device/openwrt_device_common/overlay/usr/libexec/e5-network-recovery',
              TOP / 'device/openwrt_device_common/overlay/etc/init.d/e5-network-recovery',
              Path(__file__).resolve()]
+    files += sorted((TOP / 'device/debian_device_common/patches').glob('modemmanager-[0-9][0-9]-*.patch'))
     files += sorted((TOP / 'rootfs/deb-patches').glob('modemmanager-[0-9][0-9]-*.patch'))
     files += sorted((TOP / 'openwrt/patches').glob('modemmanager-package-*.patch'))
     return {'openwrt': version, 'files': {p.relative_to(TOP).as_posix(): checksum(p) for p in files}}
