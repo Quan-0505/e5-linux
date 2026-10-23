@@ -23,7 +23,7 @@ class ReleaseIdentityTest(unittest.TestCase):
             git('commit', '-qm', 'fixture')
             one = IDENTIFY(repo, 't551m', '6.18.54', epoch=1792324800)
             self.assertRegex(one['private_version'], r'^r20261018\.\d{6}-g[0-9a-f]{8}-s[0-9a-f]{8}$')
-            self.assertIn('t551m-openwrt-25.12.5-', one['package_name'])
+            self.assertIn('t551m-openwrt-25.12.6-', one['package_name'])
             self.assertTrue(one['package_name'].endswith('-k6.18.54'))
             self.assertFalse(one['source_dirty'])
             source.write_text('after')
