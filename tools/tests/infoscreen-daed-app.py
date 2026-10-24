@@ -11,7 +11,7 @@ APP = TOP / 'openwrt/infoscreen-plugins/daed'
 shell = shutil.which('sh')
 manifest = json.loads((APP / 'manifest.json').read_text(encoding='utf-8'))
 assert manifest['id'] == 'daed' and manifest['api_version'] == 2
-assert manifest['entry'] == 'index.html' and manifest['version'] == '1.3.2'
+assert manifest['entry'] == 'index.html' and manifest['version'] == '1.4.7'
 assert {'index.html', 'daed.css', 'daed.js', 'manifest.json', 'backend.uc', 'phone-login.html', 'pair-cgi.py'} == {p.name for p in APP.iterdir()}
 
 page = (APP / 'index.html').read_text(encoding='utf-8')
@@ -19,11 +19,17 @@ script = (APP / 'daed.js').read_text(encoding='utf-8')
 backend = (APP / 'backend.uc').read_text(encoding='utf-8')
 phone = (APP / 'phone-login.html').read_text(encoding='utf-8')
 cgi = (APP / 'pair-cgi.py').read_text(encoding='utf-8')
-for label in ('DAED开关', '启动', '停止', '重载', '更新订阅'):
+for label in ('停止代理', '重载配置', '更新订阅', '实时流量'):
     assert label in page
 assert '/sdk/e5.js' in page and 'iframe' not in page
+assert 'class="traffic-card"' in page and 'id="toggle-daed"' in page
+assert 'data-rate-toggle' in page
+assert "'启动代理'" in script
 assert 'id="pairing"' in page and 'id="qr-code"' in page
-assert '代理服务运行中' not in script and "'DAED运行中'" in script and "'DAED已停止'" in script
+assert "'GET /traffic'" in backend and "runtime/overview" in backend
+assert "statusText.textContent = state.running ? '运行中' : '已停止';" in script
+assert "traffic = await window.e5.api('/traffic')" in script
+assert 'trafficHistory' in script and 'setInterval(() => { if (!controlsView.hidden) refreshTraffic(); }, 2000)' in script
 assert 'window.e5.api(\'/pairing\'' in script and "window.e5.api('/pair-status')" in script
 assert "window.e5.api('/subscriptions')" in script and 'sessionStorage' not in script and 'localStorage' not in script
 assert 'function requiresLogin(value)' in script and 'if (result?.ok === false)' in script
@@ -75,7 +81,7 @@ if shell:
         bundled = new / 'etc/e5-infoscreen/plugins/daed'
         bundled.mkdir(parents=True)
         saved.mkdir(parents=True)
-        (bundled / 'manifest.json').write_text('{"version":"1.3.2"}', encoding='utf-8')
+        (bundled / 'manifest.json').write_text('{"version":"1.4.7"}', encoding='utf-8')
         (bundled / 'index.html').write_text('bundled DAED app', encoding='utf-8')
         for file in bundled.iterdir():
             (saved / file.name).write_bytes(file.read_bytes())
@@ -93,7 +99,7 @@ if shell:
             [shell, '-c', restore_function + '\npart_update_restore_bundled_daed_plugin "$1" "$2"\n', 'test', str(new), str(saved)],
             capture_output=True, text=True)
         assert completed.returncode == 0, completed.stderr or completed.stdout
-        assert json.loads((bundled / 'manifest.json').read_text())['version'] == '1.3.2'
+        assert json.loads((bundled / 'manifest.json').read_text())['version'] == '1.4.7'
         assert (bundled / 'index.html').read_text() == 'bundled DAED app'
         assert not (bundled / 'removed-in-new-version.js').exists()
         assert (phone / 'index.html').read_text() == 'user-installed phone app'

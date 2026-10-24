@@ -125,6 +125,25 @@ return function(ctx) {
 	}
 	return {
 		'GET /status': function(req) { return { running: service_running() }; },
+		'GET /traffic': function(req) {
+			let saved = load_token();
+			if (!saved) return { available: false, message: '流量统计需先在手机扫码登录。' };
+			let result = request_daed('GET', 'runtime/overview', saved.token, null);
+			if (result.error) return { available: false, message: '流量统计暂不可用。' };
+			if (result.status == 401 || result.status == 403) {
+				if (fs.stat(TOKEN_FILE)) fs.unlink(TOKEN_FILE);
+				return { available: false, message: '登录已过期，请重新扫码。' };
+			}
+			if (result.status < 200 || result.status >= 300 || result.data.trafficAvailable != true)
+				return { available: false, message: 'daed 暂无可用流量数据。' };
+			return {
+				available: true,
+				downloadRate: int(result.data.downloadRate ?? 0),
+				uploadRate: int(result.data.uploadRate ?? 0),
+				downloadTotal: int(result.data.downloadTotal ?? 0),
+				uploadTotal: int(result.data.uploadTotal ?? 0)
+			};
+		},
 		'POST /pairing': function(req) { return pairing_qr(); },
 		'GET /pair-status': function(req) {
 			let saved = load_token();

@@ -7,7 +7,12 @@
   const pairing = $('#pairing'), subscriptionList = $('#subscription-list');
   const subscriptionMessage = $('#subscription-message'), pairMessage = $('#pair-message');
   const buttons = [...document.querySelectorAll('[data-action]')];
-  let busy = false, confirmStopUntil = 0, pairTimer = 0;
+  const rateButtons = [...document.querySelectorAll('[data-rate-toggle]')];
+  const toggleButton = $('#toggle-daed'), toggleLabel = $('#toggle-label'), statusPill = $('.status-pill');
+  let busy = false, trafficBusy = false, confirmStopUntil = 0, pairTimer = 0, running = null;
+  let rateUnit = 'bits', latestTraffic = null;
+  const trafficHistory = { rx: [], tx: [] };
+  const HISTORY_SIZE = 24;
 
   function setMessage(text, kind = '') { message.textContent = text; message.className = `message ${kind}`.trim(); }
   function setBusy(value) { busy = value; [...document.querySelectorAll('button')].forEach(button => { button.disabled = value; }); }
@@ -24,9 +29,79 @@
   async function refreshStatus() {
     try {
       const state = await window.e5.api('/status');
+      running = !!state.running;
       statusDot.className = `dot ${state.running ? 'on' : 'off'}`;
-      statusText.textContent = state.running ? 'DAED运行中' : 'DAED已停止';
-    } catch (_) { statusDot.className = 'dot off'; statusText.textContent = '暂时无法读取 DAED 状态'; }
+      statusPill.className = `status-pill ${state.running ? 'on' : 'off'}`;
+      statusText.textContent = state.running ? '运行中' : '已停止';
+      toggleButton.classList.toggle('start', !state.running);
+      toggleButton.classList.toggle('stop', !!state.running);
+      toggleButton.querySelector('.symbol').textContent = state.running ? '■' : '▶';
+      if (Date.now() > confirmStopUntil) toggleLabel.textContent = state.running ? '停止代理' : '启动代理';
+    } catch (_) {
+      running = null;
+      statusDot.className = 'dot'; statusPill.className = 'status-pill unknown';
+      statusText.textContent = '状态未知'; toggleLabel.textContent = '刷新状态后操作';
+    }
+  }
+  function formatRate(value) {
+    let display = Math.max(0, Number(value) || 0) * (rateUnit === 'bits' ? 8 : 1);
+    const units = rateUnit === 'bits'
+      ? ['bps', 'Kbps', 'Mbps', 'Gbps']
+      : ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+    let unit = 0;
+    while (display >= 1000 && unit < units.length - 1) { display /= 1000; unit++; }
+    if (display === 0) return `0 ${units[unit]}`;
+    const digits = display >= 100 ? 0 : display >= 10 ? 1 : display >= 1 ? 2 : 3;
+    return `${display.toFixed(digits)} ${units[unit]}`;
+  }
+  function renderRates() {
+    if (!latestTraffic) return;
+    $('#download-rate').textContent = formatRate(latestTraffic.downloadRate);
+    $('#upload-rate').textContent = formatRate(latestTraffic.uploadRate);
+  }
+  function formatBytes(value) {
+    const bytes = Math.max(0, Number(value) || 0);
+    if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+    if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${Math.round(bytes)} B`;
+  }
+  function paintSparkline(kind, value) {
+    const history = trafficHistory[kind];
+    history.push(Math.max(0, Number(value) || 0));
+    if (history.length > HISTORY_SIZE) history.shift();
+    const min = Math.min(...history), max = Math.max(...history);
+    const span = Math.max(max - min, max * 0.2, 1), center = (min + max) / 2;
+    const points = history.length === 1
+      ? `0.0,12.0 100.0,12.0`
+      : history.map((sample, index) => {
+        const x = index * 100 / (history.length - 1);
+        const y = 12 - (sample - center) / span * 18;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ');
+    $(`#${kind === 'rx' ? 'download' : 'upload'}-line`).setAttribute('points', points);
+  }
+  async function refreshTraffic() {
+    if (trafficBusy) return;
+    trafficBusy = true;
+    const note = $('#traffic-note');
+    try {
+      const traffic = await window.e5.api('/traffic');
+      if (!traffic?.available) {
+        latestTraffic = null;
+        note.textContent = traffic?.message || '流量统计暂不可用'; note.hidden = false;
+        $('#download-rate').textContent = '—'; $('#upload-rate').textContent = '—';
+        return;
+      }
+      latestTraffic = traffic;
+      renderRates();
+      $('#download-total').textContent = formatBytes(traffic.downloadTotal);
+      $('#upload-total').textContent = formatBytes(traffic.uploadTotal);
+      paintSparkline('rx', traffic.downloadRate); paintSparkline('tx', traffic.uploadRate);
+      note.hidden = true;
+    } catch (_) {
+      note.textContent = '读取流量失败'; note.hidden = false;
+    } finally { trafficBusy = false; }
   }
   function renderSubscriptions(items) {
     subscriptionList.replaceChildren(); pairing.hidden = true; subscriptionList.hidden = false;
@@ -89,25 +164,30 @@
   async function runAction(action) {
     if (busy) return;
     if (action === 'subscriptions') { await loadSubscriptions(); return; }
-    if (action === 'stop' && Date.now() > confirmStopUntil) {
+    if (action === 'toggle' && running == null) { setMessage('正在读取 DAED 状态，请稍后再试。', 'error'); message.hidden = false; return; }
+    const actualAction = action === 'toggle' ? (running === false ? 'start' : 'stop') : action;
+    if (actualAction === 'stop' && Date.now() > confirmStopUntil) {
       confirmStopUntil = Date.now() + 4000;
-      const label = document.querySelector('[data-action="stop"] span:last-child'); label.textContent = '再按一次停止';
-      setMessage('再次按“再按一次停止”确认，4 秒内有效。');
-      setTimeout(() => { if (Date.now() > confirmStopUntil) { label.textContent = '停止'; confirmStopUntil = 0; } }, 4100); return;
+      toggleLabel.textContent = '再按一次停止';
+      setMessage('再次按下确认停止，4 秒内有效。'); message.hidden = false;
+      setTimeout(() => { if (Date.now() > confirmStopUntil) { toggleLabel.textContent = '停止代理'; confirmStopUntil = 0; } }, 4100); return;
     }
-    confirmStopUntil = 0; document.querySelector('[data-action="stop"] span:last-child').textContent = '停止';
-    const labels = { start: '启动', stop: '停止', reload: '重载' };
-    setBusy(true); setMessage(`正在${labels[action]} DAED…`);
+    confirmStopUntil = 0;
+    const labels = { start: '启动', stop: '停止', reload: '重载配置' };
+    setBusy(true); setMessage(`正在${labels[actualAction]} DAED…`); message.hidden = false;
     try {
-      const result = await window.e5.api('/action', { body: { action } });
+      const result = await window.e5.api('/action', { body: { action: actualAction } });
       if (result?.ok === false) throw new Error(errorMessage(result));
       setMessage(result?.message || '操作已完成。', 'success');
     } catch (error) { setMessage(errorMessage(error), 'error'); }
-    finally { await refreshStatus(); setBusy(false); }
+    finally { await refreshStatus(); await refreshTraffic(); setBusy(false); }
   }
 
-  $('#refresh').addEventListener('click', refreshStatus);
-  $('#exit').addEventListener('click', () => window.e5?.exit());
+  $('#exit')?.addEventListener('click', () => window.e5?.exit());
+  rateButtons.forEach(button => button.addEventListener('click', () => {
+    rateUnit = rateUnit === 'bits' ? 'bytes' : 'bits';
+    renderRates();
+  }));
   buttons.forEach(button => button.addEventListener('click', () => runAction(button.dataset.action)));
   $('#new-qr').addEventListener('click', createQr);
   $('#logout').addEventListener('click', async () => {
@@ -115,9 +195,9 @@
     await showPairing('已退出登录，请重新扫码。');
   });
   document.querySelectorAll('[data-close-view]').forEach(button => button.addEventListener('click', () => { clearInterval(pairTimer); setView('controls'); }));
-  controlsView.querySelector('.controls').setAttribute('data-nav-grid', '');
-  buttons.forEach((button, i) => { button.dataset.row = String(Math.floor(i / 2)); button.dataset.col = String(i % 2); });
-  $('#refresh').dataset.row = '0'; $('#refresh').dataset.col = '0'; $('#refresh').closest('.status').setAttribute('data-nav-grid', '');
+  controlsView.querySelector('.secondary-actions').setAttribute('data-nav-grid', '');
+  toggleButton.dataset.row = '0'; toggleButton.dataset.col = '0';
+  buttons.filter(button => button !== toggleButton).forEach((button, i) => { button.dataset.row = '1'; button.dataset.col = String(i); });
   buttons[0]?.focus();
   window.e5?.onKey(event => {
     if (!['left', 'right', 'up', 'down'].includes(event.kind) || !(document.activeElement instanceof HTMLButtonElement)) return false;
@@ -133,5 +213,7 @@
     all[(index + delta + all.length) % all.length]?.focus(); return true;
   });
   window.e5?.onBack(() => { if (!subscriptionsView.hidden) { clearInterval(pairTimer); setView('controls'); return true; } return false; });
-  refreshStatus(); setInterval(() => { if (!controlsView.hidden) refreshStatus(); }, 15000);
+  refreshStatus(); refreshTraffic();
+  setInterval(() => { if (!controlsView.hidden) refreshStatus(); }, 5000);
+  setInterval(() => { if (!controlsView.hidden) refreshTraffic(); }, 2000);
 })();
