@@ -53,7 +53,7 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 
 **最新发布（2026-10-24）**：[build-20261024-085838-4917a34](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261024-085838-4917a34)，OpenWrt 25.12.6、E5 Linux `6.18.54-e5-gb93bbc3a36fd`、信息屏 1.6.7、DAED 屏幕插件 1.4.7、电话插件 1.5。源码提交为 `4917a3445a883be26a2c9f25e8f0868c6c201290`，对应[构建记录](https://github.com/Quan-0505/e5-linux/actions/runs/40046207659)。
 
-本次 Release 提供完整固件 ZIP、Android/Linux 切换 Magisk ZIP 和独立 Windows 图形安装器 ZIP；未重复上传内容相同的 TAR.GZ。三项资产均已核对 GitHub SHA-256。固件已在 E5 的现有内置 `e5root` 分区上保数据更新并启动验收：OpenWrt、5G 注册、Wi-Fi AP、DAED 和信息屏服务正常；DAED 屏幕插件 1.4.7 与源码哈希一致，状态与流量接口可用，外网 HTTPS 探测成功。本次未使用 TF，未改 GPT、userdata 或 NV。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
+本次 Release 提供完整固件 ZIP、Android/Linux 切换 Magisk ZIP 和独立 Windows 图形安装器 ZIP；未重复上传内容相同的 TAR.GZ。三项资产均已核对 GitHub SHA-256。固件已在 E5 的现有内置 `e5root` 分区上保数据更新并启动验收：OpenWrt 与 5G 注册正常，Wi-Fi 无线电已启用且接口处于 AP 模式，DAED 和信息屏服务运行中；DAED 屏幕插件 1.4.7 与源码哈希一致，状态与流量接口可用，外网 HTTPS 探测成功。本次未使用 TF，未改 GPT、userdata 或 NV。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
 
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
