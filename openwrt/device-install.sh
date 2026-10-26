@@ -65,8 +65,9 @@ if [ -d "$DEST/etc/config" ]; then
             cp -a "$DEST/$p" "$NEW/$p"
         fi
     done
-    # the new image's version and build time, not the kept ones
-    for f in image-version build-time release.json; do
+    # the new image's version and build metadata, not the kept ones
+    rm -f "$NEW/etc/e5/build.json"
+    for f in image-version build-time release.json build.json; do
         tar -xzf "$T" -C "$NEW" ./etc/e5/$f 2>/dev/null || true
     done
 fi

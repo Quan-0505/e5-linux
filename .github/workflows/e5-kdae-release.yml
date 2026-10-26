@@ -283,6 +283,7 @@ jobs:
           python3 openwrt/tests/userdata-size.py
           python3 openwrt/tests/flash-diagnostics.py
           python3 openwrt/tests/install-entrypoints.py
+          python3 openwrt/tests/image-keep-config.py
           E5_TEST_IMAGE="e5-openwrt-base:$E5_WRT_VER" python3 device/openwrt_device_common/tests/gpt-plan.py
           python3 device/openwrt_device_common/tests/voice-audio.py
           python3 device/openwrt_device_common/tests/dual-sms.py
