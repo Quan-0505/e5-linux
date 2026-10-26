@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+# Migrate only the profile fallback. The user's explicit auto_work_mode
+# selection (134, 152, or default) is a separate UCI option and is preserved.
+current=$(uci -q get unisoc_modem.main.auto_work_mode_default 2>/dev/null || :)
+[ "$current" = 134 ] || exit 0
+uci set unisoc_modem.main.auto_work_mode_default='152'
+uci commit unisoc_modem

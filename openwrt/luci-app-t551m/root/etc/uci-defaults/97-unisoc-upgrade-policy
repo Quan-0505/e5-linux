@@ -1,3 +1,4 @@
 #!/bin/sh
 # Keep backup/restore while removing whole-disk firmware flashing.
+/usr/libexec/unisoc-modem/update-auto-mode-default || exit 1
 exec ucode /usr/libexec/unisoc-modem/disable-stock-upgrade /

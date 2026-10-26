@@ -302,7 +302,7 @@ def audit(root, profile, release):
     # The selector is shared by every model. Keep the board's default
     # separate from an explicit 134/152 user override.
     assert re.search(r"^\s*option\s+auto_work_mode\s+['\"]?(default|134|152)['\"]?\s*$", modem, re.M)
-    expected_mode = '152' if profile == 't551m' else '134'
+    expected_mode = '152'
     assert re.search(r"^\s*option\s+auto_work_mode_default\s+['\"]?" + expected_mode + r"['\"]?\s*$", modem, re.M)
     if profile == 'm8':
         assert (root / 'etc/e5/receiver-volume-ceiling').read_text().strip() == '5'

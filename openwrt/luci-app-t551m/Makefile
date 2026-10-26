@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-t551m
 PKG_VERSION:=1.1.0
-PKG_RELEASE:=9
+PKG_RELEASE:=10
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=MU300 Linux contributors
 PKGARCH:=all
@@ -64,6 +64,7 @@ define Package/luci-app-t551m/postinst
 		mkdir -p "$$state"
 		cp -a "$$old"/. "$$state"/
 	fi
+	/usr/libexec/unisoc-modem/update-auto-mode-default || exit 1
 	ucode /usr/libexec/unisoc-modem/disable-channel-analysis || exit 1
 	ucode /usr/libexec/unisoc-modem/disable-stock-upgrade || exit 1
 	rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null
