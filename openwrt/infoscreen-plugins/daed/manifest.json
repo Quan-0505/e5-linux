@@ -3,8 +3,8 @@
   "api_version": 2,
   "version": "1.4.7",
   "name": {
-    "zh": "daed 代理",
-    "en": "daed Proxy"
+    "zh": "DAED 代理",
+    "en": "DAED Proxy"
   },
   "description": {
     "zh": "E5 小屏 DAED 控制、实时流量与订阅管理",

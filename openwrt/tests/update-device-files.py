@@ -53,6 +53,16 @@ for path in ('etc/daed', 'etc/daed-kdae', 'usr/local/owjdxb', 'etc/init.d/daed',
              'etc/init.d/owjdxb', 'usr/libexec/e5-nodebaby-guard'):
     assert path in stage, ('missing live settings path', path)
 assert 'e5-network-addons-snapshot' in stage and 'network-addons-software.list' in stage
+assert 'E5-WPS updates require the existing internal e5root partition' in stage
+validate_variant_layout = runpy.run_path(str(TOP / 'tools/e5-update.py'))['validate_variant_layout']
+validate_variant_layout('standard', 'sd')
+validate_variant_layout('wps', 'part')
+for layout in ('sd', 'image'):
+    try:
+        validate_variant_layout('wps', layout)
+        raise AssertionError('WPS update accepted non-e5root layout: ' + layout)
+    except ValueError as error:
+        assert 'internal e5root' in str(error)
 update = (TOP / 'tools/e5-update.py').read_text()
 assert "'e5-network-addons-snapshot', 'network-addons-software.list'" in update
 snapshot = (TOP / 'openwrt/network-addons/overlay/usr/libexec/e5-network-addons-snapshot').read_text()

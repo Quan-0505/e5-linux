@@ -9,6 +9,8 @@
 #   E5_OUTDIR      the object directory (default: work/build/<kernelversion>, kept between builds)
 #   E5_RELEASE=1   the kernel of a flash package, as build.sh: no e5.openwrt=, into upstream/out-release
 set -eo pipefail
+# An explicit empty value suppresses the SCM fallback + when AUTO is disabled.
+export LOCALVERSION=
 command -v pahole >/dev/null || { echo 'BTF requires pahole (Ubuntu: apt install pahole)' >&2; exit 1; }
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
@@ -25,21 +27,11 @@ export CCACHE_DIR="$TOP/work/ccache"
 echo "== cross gcc $("$X"gcc -dumpversion) ($X)"
 
 cd "$K"
-python3 "$TOP/device/linux_device_common/kernel/display.py" .
-python3 "$TOP/device/linux_device_common/kernel/power.py" .
-python3 "$TOP/device/linux_device_common/kernel/emmc.py" .
-python3 "$TOP/device/linux_device_common/kernel/eic.py" .
-python3 "$TOP/device/linux_device_common/kernel/thermal.py" .
-python3 "$TOP/device/linux_device_common/kernel/sipa.py" .
-python3 "$TOP/device/linux_device_common/kernel/wifi-tx.py" .
-python3 "$TOP/device/linux_device_common/kernel/fuel-gauge.py" .
-python3 "$TOP/device/linux_device_common/kernel/wifi-sae.py" .
-python3 "$TOP/device/linux_device_common/kernel/wifi-stations.py" .
+python3 "$HERE/check-kernel-source.py" .
 KV=$(make -s kernelversion)
 O="${E5_OUTDIR:-$TOP/work/build/$KV}"
 mkdir -p "$O"
 echo "== linux-lts-e5 $KV, $(git log --oneline -1)"
-[ -z "$(git status --porcelain --untracked-files=no)" ] || echo "   (the tree has uncommitted changes: the release gets -dirty)"
 
 CFG=$HERE/e5-mainline.config DEST=$HERE/out
 if [ -n "${E5_RELEASE:-}" ]; then
@@ -50,7 +42,10 @@ if [ -n "${E5_RELEASE:-}" ]; then
     echo "   (release: no e5.openwrt=, into out-release/)"
 fi
 make O="$O" ARCH=arm64 CROSS_COMPILE="$X" allnoconfig >/dev/null
-./scripts/kconfig/merge_config.sh -m -O "$O" "$O/.config" "$CFG" >/dev/null
+# merge_config.sh creates its scratch files in the current directory, which may be a read-only source tree (as in
+# the container build); run it in the writable output directory (all paths below are absolute).
+kernel_merge_config="$PWD/scripts/kconfig/merge_config.sh"
+(cd "$O" && "$kernel_merge_config" -m -O "$O" "$O/.config" "$CFG" >/dev/null)
 # PR #228: NFSv4.1 is a separate prerequisite only on kernels exposing it.
 if grep -q '^config NFS_V4_1$' fs/nfs/Kconfig; then
     scripts/config --file "$O/.config" --enable NFS_V4_1
@@ -83,10 +78,12 @@ cp "$O/arch/arm64/boot/Image" "$O/System.map" "$O/modules.builtin" "$O/modules.b
 cp "$O/.config" $DEST/config
 python3 $HERE/wrap-image.py $DEST/Image $DEST/Image.lk
 cat "$O/include/config/kernel.release" > $DEST/kernel.release
+python3 "$HERE/check-kernel-source.py" . --release-file "$DEST/kernel.release"
 # the modules: flat for the boot image (boot/build-boot-image.py --modules), and as lib/modules/<release> for
 # a root filesystem
 rm -rf "$O/mod" $DEST/modules && mkdir -p $DEST/modules
 make -s O="$O" ARCH=arm64 CROSS_COMPILE="$X" INSTALL_MOD_PATH="$O/mod" INSTALL_MOD_STRIP=1 modules_install
+python3 "$HERE/check-kernel-source.py" .
 find "$O/mod/lib/modules" -name '*.ko' -exec cp {} $DEST/modules/ \;
 tar -C "$O/mod" -cf $DEST/modules.tar lib/modules
 python3 "$HERE/check-container-support.py" "$DEST" --record

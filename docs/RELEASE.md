@@ -5,7 +5,7 @@
 构建主线 OpenWrt 一键刷入包，并将产物发布到该仓库的 Releases。主仓库不再运行发布 workflow。支持两种入口：
 
 - release 仓库的 Actions → **Build and publish OpenWrt** → **Run workflow**。可选择 e5-linux 源码 ref、OpenWrt 版本、
-  内核分支、tag 或 commit；设备仓库、信息屏及插件使用主仓库固定的 submodule 提交，默认发布；关闭 `publish` 只保存构建产物。
+  内核分支、`standard` / `wps` 设备变体、tag 或 commit；设备仓库、信息屏及插件使用主仓库固定的 submodule 提交，默认发布；关闭 `publish` 只保存构建产物。
 - 在 release 仓库推送 `v*` tag。源码由 `E5_SOURCE_REF`（默认 `main`）选择，实际源码提交记录在构建清单中，编译完成后发布同名 Release。
 
 手动构建的 Release tag 为 `build-YYYYMMDD-HHMMSS-<commit>`。包名的时间戳、
@@ -49,6 +49,14 @@ python3 tools/ci-inputs.py create
 实际提交都记录在 `build.json` 中。输入缺失、SHA 不匹配或归档越界会在编译前停止。
 
 ## 构建和发布内容
+
+主线内核来自 `sprd-linux-devs/linux` 的 `e5-6.18` 分支，最低要求提交为
+`b93bbc3a36fd3c1acae0e44b93d909f7fe942182`。构建会检查内核历史和源码干净状态；
+固定版本字符串不带 Git/dirty 后缀，完整内核提交仍记录在 `build.json`。
+检查规则见 [`upstream/check-kernel-source.py`](../upstream/check-kernel-source.py)
+和[内核源码说明](KERNEL-SOURCE.md)。
+
+`wps` 变体只用于已安装内置 `e5root` 的 E5-WPS：仍使用 Rust DAED，不装入节点小宝，并在根镜像和包清单写入 WPS 变体标记。此包只允许匹配设备上的内置分区更新；TF 安装器和首次安装入口会拒绝执行。构建与发布校验会检查变体标记、节点小宝文件缺失及安装动作限制。普通 E5 使用 `standard`，不得将两种变体交叉更新。
 
 构建使用 GitHub 原生 `ubuntu-24.04-arm` runner，编译主线发行内核、打过补丁的
 ModemManager/BlueZ 和通用 OpenWrt 镜像。主线镜像只装入本次内核的音频/WWAN 模块，

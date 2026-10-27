@@ -116,6 +116,11 @@ def update_stage_root(layout):
     return '/root' if layout in ('part', 'sd') else '/tmp'
 
 
+def validate_variant_layout(variant, layout):
+    if variant == 'wps' and layout != 'part':
+        raise ValueError('E5-WPS updates require the existing internal e5root partition')
+
+
 def main():
     import paramiko
     p = argparse.ArgumentParser(description=__doc__)
@@ -126,7 +131,12 @@ def main():
     p.add_argument('--check-only', action='store_true', help='validate the connected device without staging or flashing')
     a = p.parse_args()
     files = a.package / 'files'
-    profile = json.loads((files / 'device-profile.json').read_text())['profile'] if (files / 'device-profile.json').exists() else 'e5'
+    manifest_path = files / 'device-profile.json'
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {'profile': 'e5'}
+    profile = manifest.get('profile')
+    variant = manifest.get('variant', 'standard')
+    if profile != 'e5' or variant not in {'standard', 'wps'}:
+        raise ValueError('unsupported device profile or variant')
     client = paramiko.SSHClient()
     # USB-connected devices reuse the same management address. Keep trust
     # within this connection rather than pinning that IP to one installation.
@@ -136,10 +146,22 @@ def main():
     if GUI: GUI.validate_ssh(client)
     stage = None
     try:
-        execute(client, '[ "$(id -u)" = 0 ] && [ "$(cat /etc/e5/device-profile)" = ' + shlex.quote(profile) + ' ]')
+        device_guard = (
+            'if [ "$(id -u)" != 0 ] || [ "$(cat /etc/e5/device-profile 2>/dev/null)" != ' +
+            shlex.quote(profile) + ' ]; then echo "device profile check failed" >&2; exit 1; fi; '
+            'actual_variant=standard; '
+            'if [ -f /etc/e5/device-variant ]; then case "$(cat /etc/e5/device-variant)" in '
+            'standard) actual_variant=standard ;; wps|e5wps) actual_variant=wps ;; '
+            '*) echo "unknown firmware variant" >&2; exit 1 ;; esac; '
+            'elif grep -q e5wps /etc/e5/image-version 2>/dev/null; then actual_variant=wps; fi; '
+            'if [ "$actual_variant" != ' + shlex.quote(variant) + ' ]; then '
+            'echo "firmware variant check failed" >&2; exit 1; fi'
+        )
+        execute(client, device_guard)
         # Detection and capacity checks precede uploads and all boot writes.
         layout = execute(client, 'if [ -f /etc/e5/part-root ]; then echo part; '
             'elif [ -f /etc/e5/sd-root ]; then echo sd; else echo image; fi').strip()
+        validate_variant_layout(variant, layout)
         capacity_env = ''
         if layout == 'image':
             capacity = image_capacity(client)
@@ -188,7 +210,8 @@ def main():
                 'flock -n 8 || { echo "another upgrade is running"; exit 1; }; '
                 'export E5_UPGRADE_LOCK_HELD=1; ' +
                 capacity_env + 'E5_IMAGE_SIZE=' + str(a.raw_size) + ' E5_IMAGE_SHA256=' + shlex.quote(a.raw_sha256) +
-                ' E5_UPDATE_PROFILE=' + shlex.quote(profile) + ' sh ' + stage + '/device-stage-part-update.sh ' + stage)
+                ' E5_UPDATE_PROFILE=' + shlex.quote(profile) + ' E5_UPDATE_VARIANT=' + shlex.quote(variant) +
+                ' sh ' + stage + '/device-stage-part-update.sh ' + stage)
             command += '; sh ' + stage + '/device-flash-boot.sh ' + stage + '/boot-head.img ' + \
                     hashlib.sha256(head.read_bytes()).hexdigest() + ' ' + str(boot['persist_log_offset'] >> 20)
             # Publish an internal update request only after boot readback passes.

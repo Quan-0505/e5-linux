@@ -287,7 +287,7 @@ docker run --rm --platform linux/arm64 \
     -v "$OVERLAY":/in/overlay:ro -v "$TOP/device/linux_device_common/overlay/opt/e5":/in/opt-e5:ro \
     -v "$TOP/device/openwrt_device_common/packages.list":/in/packages.list:ro \
     -v "$WORK/release.json":/in/release.json:ro \
-    -v "$TOP":/in/feature-source:ro -e E5_FEATURES="$FEATURES" -e E5_UI_CACHE=/tmp/e5-ui-cache \
+    -v "$TOP":/in/feature-source:ro -e E5_FEATURES="$FEATURES" -e E5_VARIANT="${E5_VARIANT:-standard}" -e E5_UI_CACHE=/tmp/e5-ui-cache \
     -e E5_INFOSCREEN=/in/infoscreen -e E5_INFOSCREEN_PLUGINS=/in/infoscreen-plugins \
     -v "$OUT":/in/apk:ro -v "$BUSYBOX":/in/busybox:ro -v "$WORK/logdw":/in/logdw:ro \
     -v "$WORK/e5-vibrate":/in/e5-vibrate:ro -v "${INFOSCREEN:-$WORK/no-infoscreen}":/in/infoscreen:ro \
@@ -416,7 +416,7 @@ printf "E5\n" > $R/etc/hostname
 cp -a /in/overlay/. $R/
 rm -f $R/.device-overlay.json
 # Separate public add-ons: never copy a live device state directory.
-python3 /in/feature-source/tools/stage-network-addons.py --root $R
+python3 /in/feature-source/tools/stage-network-addons.py --root $R --variant "$E5_VARIANT"
 if [ "$CONTAINERS" = 1 ]; then
     python3 $R/usr/libexec/e5-container-setup --root $R
 fi

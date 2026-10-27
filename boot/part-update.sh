@@ -8,11 +8,27 @@ part_update_restore_bundled_daed_plugin() {
     mkdir -p "$target" && cp -a "$saved/." "$target/"
 }
 
+part_update_variant() {
+    local root=$1 value=
+    if [ -f "$root/etc/e5/device-variant" ]; then
+        value=$(cat "$root/etc/e5/device-variant") || return 1
+    elif [ -f "$root/etc/e5/image-version" ] && grep -q e5wps "$root/etc/e5/image-version"; then
+        value=wps
+    else
+        value=standard
+    fi
+    case "$value" in
+        standard) echo standard ;;
+        wps|e5wps) echo wps ;;
+        *) return 1 ;;
+    esac
+}
+
 part_update_pending() {
     [ ! -e /run/tf-update-conflict ] || return 1
     [ -s /run/part-update-pending ] || return 0
     local dev= node disk mp=/part-update-old ram=/run/part-update
-    local KIND=part VERSION= CID= ROOT_BYTES= RAW_BYTES= RAW_SHA256= PROFILE= kv actual want got producer writer rc1 rc2
+    local KIND=part VERSION= CID= ROOT_BYTES= RAW_BYTES= RAW_SHA256= PROFILE= VARIANT= kv actual want got producer writer rc1 rc2 actual_variant
     dev=$(cat /run/part-update-pending)
     node=${dev##*/}
     mkdir -p "$mp"
@@ -28,6 +44,7 @@ part_update_pending() {
             VERSION=*) VERSION=${kv#*=} ;; CID=*) CID=${kv#*=} ;;
             ROOT_BYTES=*) ROOT_BYTES=${kv#*=} ;; RAW_BYTES=*) RAW_BYTES=${kv#*=} ;;
             RAW_SHA256=*) RAW_SHA256=${kv#*=} ;; PROFILE=*) PROFILE=${kv#*=} ;;
+            VARIANT=*) VARIANT=${kv#*=} ;;
             *) umount "$mp"; part_fail 'unknown update request field'; return 1 ;;
         esac
     done
@@ -38,9 +55,12 @@ part_update_pending() {
     esac
     case "$ROOT_BYTES:$RAW_BYTES" in *[!0-9:]*|:*|*:) umount "$mp"; part_fail 'invalid update size'; return 1 ;; esac
     case "$RAW_SHA256" in *[!0-9a-f]*|'') umount "$mp"; part_fail 'invalid image hash'; return 1 ;; esac
+    case "$VARIANT" in standard|wps) ;; *) umount "$mp"; part_fail 'invalid update variant'; return 1 ;; esac
+    actual_variant=$(part_update_variant "$mp") || { umount "$mp"; part_fail 'invalid current image variant'; return 1; }
     if [ "$VERSION" != 1 ] || [ "$CID" != "$(cat /sys/class/block/$disk/device/cid)" ] ||
        [ "$ROOT_BYTES" != "$(blockdev --getsize64 "$dev")" ] ||
        [ "$PROFILE" != "$(cat "$mp/etc/e5/device-profile")" ] ||
+       [ "$VARIANT" != "$actual_variant" ] ||
        [ ! -f "$mp/etc/e5/$KIND-root" ] || [ "$RAW_BYTES" -le 0 ] || [ "$RAW_BYTES" -gt "$ROOT_BYTES" ]; then
         umount "$mp"; part_fail 'update device/geometry verification'; return 1
     fi
@@ -90,7 +110,7 @@ part_update_pending() {
     mount -t ext4 "$dev" /part-update-new || { part_fail 'new root mount'; return 1; }
     local new=/part-update-new name
     mkdir -p "$ram/new-version" "$ram/new-phone" "$ram/new-daed"
-    for name in image-version image-form build-time build.json feature-port.json device-profile release.json network-addons.json; do
+    for name in image-version image-form build-time build.json feature-port.json device-profile device-variant release.json network-addons.json; do
         [ ! -f "$new/etc/e5/$name" ] || cp "$new/etc/e5/$name" "$ram/new-version/"
     done
     cp -a "$new/etc/e5-infoscreen/plugins/phone/." "$ram/new-phone/" || return 1
@@ -114,8 +134,17 @@ part_update_pending() {
         rm -f "$new/etc/e5/part-root" "$new/etc/e5/part-autoboot" "$new/etc/e5/part-trial" "$new/etc/e5/sd-trial"
         [ -f "$new/etc/e5/sd-root" ] || { part_fail 'TF boot marker'; return 1; }
     fi
+    # Reapply image identity after restoring user settings, so an old marker
+    # cannot disguise a package built for a different device variant.
+    if [ -f "$ram/new-version/device-variant" ]; then
+        cp "$ram/new-version/device-variant" "$new/etc/e5/device-variant"
+    else
+        rm -f "$new/etc/e5/device-variant"
+    fi
+    actual_variant=$(part_update_variant "$new") || { part_fail 'invalid new image variant'; return 1; }
     [ -x "$new/sbin/init" ] && [ -s "$new/lib/firmware/wcnmodem.bin" ] &&
-        [ "$PROFILE" = "$(cat "$new/etc/e5/device-profile")" ] || { part_fail 'restored system verification'; return 1; }
+        [ "$PROFILE" = "$(cat "$new/etc/e5/device-profile")" ] &&
+        [ "$VARIANT" = "$actual_variant" ] || { part_fail 'restored system verification'; return 1; }
     (cd "$new" && find etc lib/firmware opt/e5/android -type f -exec sha256sum '{}' ';') > "$ram/restored.sha256" || {
         part_fail 'restored file manifest'; return 1;
     }

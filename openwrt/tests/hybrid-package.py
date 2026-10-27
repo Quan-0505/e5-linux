@@ -112,6 +112,22 @@ class Package(unittest.TestCase):
                 with self.assertRaises(ValueError): finish['finalize'](package, 'e5', root / 'bootctl')
                 self.assertFalse((package / 'customize.sh').exists())
 
+    def test_wps_variant_requires_and_preserves_explicit_manifest(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); package = self.fixture(root, 'e5')
+            manifest = {'profile': 'e5', 'android_models': ['E5'], 'variant': 'wps'}
+            (package / 'files/device-profile.json').write_text(json.dumps(manifest))
+            finish['finalize'](package, 'e5', root / 'bootctl', variant='wps')
+            self.assertEqual(json.loads((package / 'files/device-profile.json').read_text()), manifest)
+            self.assertIn('VARIANT=wps', (package / 'files/tf-install.env').read_text())
+            self.assertIn('internal e5root update package', (package / 'module.prop').read_text())
+            self.assertIn('abort', (package / 'customize.sh').read_text(encoding='utf-8'))
+            self.assertIn('不要在 Magisk 中安装', (package / 'START-HERE.md').read_text(encoding='utf-8'))
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); package = self.fixture(root, 'e5')
+            with self.assertRaisesRegex(ValueError, 'package profile mismatch'):
+                finish['finalize'](package, 'e5', root / 'bootctl', variant='wps')
+
 
 class Firmware(unittest.TestCase):
     def test_native_conversion_matches_existing_tools_and_imports_unicode_hotspot(self):

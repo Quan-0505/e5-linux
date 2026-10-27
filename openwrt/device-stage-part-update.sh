@@ -9,6 +9,30 @@ case "$stage_name" in e5-update-*) ;; *) exit 1 ;; esac
 stage_token=${stage_name#e5-update-}
 case "$stage_token" in *[!0-9a-f]*|'') exit 1 ;; esac
 [ "${#stage_token}" = 32 ] && [ -d "$stage" ] && [ ! -L "$stage" ] || exit 1
+[ "$(cat /etc/e5/device-profile)" = "${E5_UPDATE_PROFILE:?}" ]
+expected_variant=${E5_UPDATE_VARIANT:?}
+case "$expected_variant" in
+    standard|wps) ;;
+    *) echo 'unsupported update variant' >&2; exit 1 ;;
+esac
+actual_variant=standard
+if [ -f /etc/e5/device-variant ]; then
+    case "$(cat /etc/e5/device-variant)" in
+        standard) actual_variant=standard ;;
+        wps|e5wps) actual_variant=wps ;;
+        *) echo 'unknown installed firmware variant' >&2; exit 1 ;;
+    esac
+elif grep -q e5wps /etc/e5/image-version 2>/dev/null; then
+    actual_variant=wps
+fi
+[ "$actual_variant" = "$expected_variant" ] || {
+    echo 'firmware variant does not match this device' >&2; exit 1;
+}
+if [ "$expected_variant" = wps ]; then
+    [ -f /etc/e5/part-root ] && [ ! -f /etc/e5/sd-root ] || {
+        echo 'E5-WPS updates require the existing internal e5root partition' >&2; exit 1;
+    }
+fi
 if [ ! -f /etc/e5/part-root ] && [ ! -f /etc/e5/sd-root ]; then
     E5_IMAGE_SIZE=${E5_IMAGE_SIZE:?} sh "$stage/device-install-image.sh" "$stage/openwrt.ext4.gz"
     exit
@@ -28,7 +52,6 @@ else
     [ "$(cat /sys/class/block/$disk/device/type)" = SD ]
 fi
 [ "$(awk '$2=="/" {print $1}' /proc/mounts | tail -1)" = "$dev" ]
-[ "$(cat /etc/e5/device-profile)" = "${E5_UPDATE_PROFILE:?}" ]
 bytes=$(( $(cat "/sys/class/block/$node/size") * 512 ))
 [ "${E5_IMAGE_SIZE:?}" -le "$bytes" ]
 case "${E5_IMAGE_SHA256:?}" in *[!0-9a-f]*|'') exit 1 ;; esac
@@ -80,7 +103,7 @@ cid=$(cat "/sys/class/block/$disk/device/cid")
 {
     echo VERSION=1; echo KIND="$kind"; echo CID="$cid"; echo ROOT_BYTES="$bytes"
     echo RAW_BYTES="$E5_IMAGE_SIZE"; echo RAW_SHA256="$E5_IMAGE_SHA256"
-    echo PROFILE="$E5_UPDATE_PROFILE"
+    echo PROFILE="$E5_UPDATE_PROFILE"; echo VARIANT="$E5_UPDATE_VARIANT"
 } > request.ready
 sync
 echo '== staged offline root update (no partition changes); settings and firmware saved'

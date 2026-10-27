@@ -62,6 +62,16 @@ PY
 )
 NAME=e5-openwrt-flash-$VER-$STAMP-$GIT
 MAINLINE=${E5_MAINLINE:-}
+VARIANT=${E5_VARIANT:-standard}
+case "$VARIANT" in
+    standard|wps) ;;
+    *) echo "unsupported E5_VARIANT: $VARIANT" >&2; exit 1 ;;
+esac
+if [ "$VARIANT" = wps ] && [ -z "$MAINLINE" ]; then
+    echo 'E5-WPS packages require the verified mainline kernel build' >&2
+    exit 1
+fi
+export E5_VARIANT="$VARIANT"
 KOUT=${E5_UPSTREAM_OUT:-$TOP/upstream/out-release}
 if [ -n "$MAINLINE" ]; then
     NAME=e5-openwrt-flash-$VER-mainline-$STAMP-$GIT
@@ -80,6 +90,9 @@ if [ -n "$MAINLINE" ]; then
     fi
 elif [ ! -f "$IMG" ] || [ -n "${E5_REBUILD:-}" ]; then
     E5_STANDALONE=1 E5_DEVICE_FILES=0 bash "$HERE/build-rootfs.sh"
+fi
+if [ "$VARIANT" = wps ]; then
+    NAME="$NAME-e5wps"
 fi
 echo "== checking the image for device files"
 S0=$(mktemp -d)
@@ -175,8 +188,12 @@ if [ ! -O "$P/files/e5-bootctl" ]; then
     echo 'make-flash-bundle: e5-bootctl must belong to the packaging user' >&2
     exit 1
 fi
-printf '%s\n' '{"profile":"e5","android_models":["E5"]}' > "$P/files/device-profile.json"
-python3 "$HERE/bundle/finalize-package.py" "$P" --profile e5 --bootctl "$P/files/e5-bootctl"
+if [ "$VARIANT" = wps ]; then
+    printf '%s\n' '{"profile":"e5","android_models":["E5"],"variant":"wps"}' > "$P/files/device-profile.json"
+else
+    printf '%s\n' '{"profile":"e5","android_models":["E5"]}' > "$P/files/device-profile.json"
+fi
+python3 "$HERE/bundle/finalize-package.py" "$P" --profile e5 --variant "$VARIANT" --bootctl "$P/files/e5-bootctl"
 
 # macOS tar otherwise adds AppleDouble files that are absent from the ZIP.
 COPYFILE_DISABLE=1 tar -C "$S" -czf "$OUT/$NAME.tar.gz.part" "$NAME"

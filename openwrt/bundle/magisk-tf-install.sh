@@ -18,6 +18,7 @@ preflight() {
     sha256sum -c files/SHA256SUMS > "$STATE/package-check.log"
     . "$P/files/tf-install.env"
     [ "$(id -u)" = 0 ] || fail 'root required'
+    [ "${VARIANT:-standard}" = standard ] || fail 'E5-WPS packages are internal e5root updates only; TF install is disabled'
     [ "$(getprop ro.product.model)" = "$ANDROID_MODEL" ] || fail 'wrong device model for this package'
     case "$(getprop ro.boot.slot_suffix)" in
         _a) ANDROID_SLOT=a; LINUX_SLOT=b ;; _b) ANDROID_SLOT=b; LINUX_SLOT=a ;;

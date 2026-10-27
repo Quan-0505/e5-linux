@@ -36,8 +36,10 @@ def add_android_switcher(package):
     shutil.copy2(source / 'README.md', package / 'docs/ANDROID-SWITCHER.md')
 
 
-def finalize(package, profile, bootctl):
+def finalize(package, profile, bootctl, variant='standard'):
     package, bootctl = Path(package), Path(bootctl)
+    if variant not in {'standard', 'wps'}:
+        raise ValueError('unsupported package variant')
     add_android_switcher(package)
     files = package / 'files'
     for name in ('OpenWrt-Installer.py', 'START-HERE.md', 'files/android-bootchain.sh',
@@ -52,7 +54,10 @@ def finalize(package, profile, bootctl):
     if helper[:6] != b'\x7fELF\x02\x01' or helper[18:20] != b'\xb7\x00':
         raise ValueError('e5-bootctl must be an ARM64 ELF executable')
     manifest = json.loads((files / 'device-profile.json').read_text())
-    if manifest != {'profile': profile, 'android_models': [MODELS[profile]]}:
+    expected_manifest = {'profile': profile, 'android_models': [MODELS[profile]]}
+    if variant == 'wps':
+        expected_manifest['variant'] = 'wps'
+    if manifest != expected_manifest:
         raise ValueError('package profile mismatch')
     boot = json.loads((files / 'boot.json').read_text())
     if digest(files / 'boot.img') != boot['sha256'] or boot.get('overlay_files') != 0:
@@ -78,20 +83,38 @@ def finalize(package, profile, bootctl):
     private = json.loads(release_path.read_text()) if release_path.is_file() else {}
     module_version = private.get('image_version', '1.0')
     module_code = int(private.get('build_epoch', 1))
+    module_name = (MODELS[profile] + ' E5-WPS internal update package (Magisk install blocked)'
+                   if variant == 'wps' else MODELS[profile] + ' OpenWrt TF Installer')
+    module_description = ('E5-WPS internal e5root update package; Magisk installation is blocked.\n'
+                          if variant == 'wps' else
+                          'ERASES THE SELECTED TF PARTITION (or unpartitioned card) and deploys OpenWrt. Android userdata is preserved. Reboot manually.\n')
     (package / 'module.prop').write_text(
-        f'id=e5_openwrt_tf_{profile}\nname={MODELS[profile]} OpenWrt TF Installer\n'
+        f'id=e5_openwrt_tf_{profile}\nname={module_name}\n'
         f'version={module_version}\nversionCode={module_code}\nauthor=e5-linux contributors\n'
-        'description=ERASES THE SELECTED TF PARTITION (or unpartitioned card) and deploys OpenWrt. Android userdata is preserved. Reboot manually.\n',
+        'description=' + module_description,
         encoding='utf-8', newline='\n')
-    values = {'PROFILE': profile, 'ANDROID_MODEL': MODELS[profile],
+    values = {'PROFILE': profile, 'VARIANT': variant, 'ANDROID_MODEL': MODELS[profile],
               'DEFAULT_SSID': {'e5': 'E5', 't551m': 'T551M', 'm8': 'M8', 't512n': 'T512N', 'yuanhang41s':'Yuanhang41S', 'k1':'K1'}[profile] + '-OpenWrt',
               'SLOT_ROLES_VERSION':str(boot.get('slot_roles_version',0)),
               'RAW_BYTES': str(size), 'RAW_SHA256': raw_hash.hexdigest(),
               'BOOT_BYTES': str((files / 'boot.img').stat().st_size), 'BOOT_SHA256': boot['sha256']}
     (files / 'tf-install.env').write_text(''.join(k + '=' + shlex.quote(v) + '\n' for k, v in values.items()), newline='\n')
-    guide = (package / 'START-HERE.md').read_text(encoding='utf-8')
-    (package / 'START-HERE.md').write_text(guide.replace('@MODEL@', MODELS[profile]).replace('@PROFILE@', profile),
-                                         encoding='utf-8', newline='\n')
+    if variant == 'wps':
+        (package / 'customize.sh').write_text(
+            '#!/system/bin/sh\n'
+            "abort 'E5-WPS 固件包仅用于现有内置 e5root 更新，禁止 TF 安装。'\n",
+            encoding='utf-8', newline='\n')
+        guide = ('# E5-WPS 内置系统更新\n\n'
+                 '本包仅适用于已运行 OpenWrt、根布局为内置 `e5root` 的 E5-WPS。\n\n'
+                 '请解压后运行 `OpenWrt-Installer.exe --update`，或使用图形安装器的“更新”入口。'
+                 '更新会保留设置及设备固件，并写入现有 `e5root` 与 Linux 启动槽。\n\n'
+                 '**不要在 Magisk 中安装本包，不要选择 TF 首装、userdata、分区安装或重装入口。**\n\n'
+                 '此变体保留 Rust DAED 并移除节点小宝。安装器会核对 WPS 变体和内置分区；'
+                 '普通 E5 或其他机型会被拒绝。\n')
+    else:
+        guide = (package / 'START-HERE.md').read_text(encoding='utf-8')
+        guide = guide.replace('@MODEL@', MODELS[profile]).replace('@PROFILE@', profile)
+    (package / 'START-HERE.md').write_text(guide, encoding='utf-8', newline='\n')
     sums = files / 'SHA256SUMS'
     hashes = {p.relative_to(package).as_posix(): digest(p) for p in sorted(package.rglob('*'))
               if p.is_file() and p != sums and p.name != 'SHA256SUMS' and '__pycache__' not in p.parts}
@@ -121,6 +144,7 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('package', type=Path)
     p.add_argument('--profile', choices=MODELS)
+    p.add_argument('--variant', choices=('standard', 'wps'), default='standard')
     p.add_argument('--bootctl', type=Path)
     p.add_argument('--zip-only', type=Path, help='archive an already finalized package')
     a = p.parse_args()
@@ -129,4 +153,4 @@ if __name__ == '__main__':
     else:
         if not a.profile or not a.bootctl:
             p.error('--profile and --bootctl are required unless --zip-only is used')
-        finalize(a.package, a.profile, a.bootctl)
+        finalize(a.package, a.profile, a.bootctl, a.variant)

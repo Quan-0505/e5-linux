@@ -79,6 +79,9 @@ def prepare():
     ver = os.environ.get('E5_WRT_VER', '25.12.6')
     if not re.fullmatch(r'\d+\.\d+\.\d+', ver):
         raise ValueError('invalid OpenWrt version')
+    variant = os.environ.get('E5_VARIANT', 'standard')
+    if variant not in {'standard', 'wps'}:
+        raise ValueError('invalid E5 device variant')
     sources = {name: {'repository': repo, 'revision': revision(path)} for name, repo, path in [
         ('e5-linux', os.environ.get('E5_SOURCE_REPOSITORY', 'sprd-linux-devs/e5-linux'), TOP),
         ('kernel', 'sprd-linux-devs/linux', TOP / 'linux-lts-e5'),
@@ -89,6 +92,7 @@ def prepare():
         sources[path.name] = {'repository': 'sprd-linux-devs/' + path.name, 'revision': revision(path)}
     RELEASE.mkdir(parents=True, exist_ok=True)
     info = {'build_epoch': epoch, 'build_started_at': started.isoformat(timespec='seconds'),
+            'variant': variant,
             'timestamp': stamp, 'openwrt_version': ver, 'sources': sources,
             'bootstrap_sha256': os.environ.get('E5_CI_INPUTS_SHA256'),
             'run_url': os.environ.get('E5_RUN_URL'),
@@ -100,7 +104,8 @@ def prepare():
         with open(env, 'a') as stream:
             stream.write(f'E5_BUILD_EPOCH={epoch}\n')
             stream.write('KBUILD_BUILD_TIMESTAMP=' + started.strftime('%a %b %d %H:%M:%S %z %Y') + '\n')
-    outputs({'timestamp': stamp, 'release_tag': f'build-{stamp}-{sources["e5-linux"]["revision"][:7]}'})
+    tag_variant = '-e5wps' if variant == 'wps' else ''
+    outputs({'timestamp': stamp, 'release_tag': f'build-{stamp}-{sources["e5-linux"]["revision"][:7]}{tag_variant}'})
     print(info['build_started_at'])
 
 
@@ -163,6 +168,7 @@ def audit_root(info):
               'www/e5-daed-login/index.html', 'www/cgi-bin/e5-daed-pair',
               'etc/e5/build-time', 'etc/machine-id', 'usr/bin/openssl', 'etc/e5/feature-port.json',
               'sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab'}
+    wanted.add('etc/e5/device-variant')
     with tarfile.open(rootfs, 'r|gz') as archive:
         for entry in archive:
             name = entry.name.removeprefix('./')
@@ -208,6 +214,11 @@ def audit_root(info):
         raise ValueError('root image build time differs from CI compile start')
     if 'usr/bin/openssl' not in versions:
         raise ValueError('OpenWrt image is missing openssl-util (/usr/bin/openssl)')
+    variant_marker = versions.get('etc/e5/device-variant', b'').strip()
+    if info.get('variant', 'standard') == 'wps' and variant_marker != b'e5wps':
+        raise ValueError('WPS root filesystem variant marker missing or invalid')
+    if info.get('variant', 'standard') == 'standard' and variant_marker:
+        raise ValueError('standard E5 root filesystem carries a WPS marker')
     if versions.get('etc/machine-id', b'').strip():
         raise ValueError('generic image has a machine ID')
     info.update({'kernel_release': kernel, 'infoscreen_version': versions['usr/share/e5-infoscreen/VERSION'].decode().strip(),
@@ -252,7 +263,8 @@ def verify():
                        ('infoscreen', TOP / 'ci/infoscreen'), ('plugins', TOP / 'ci/infoscreen-plugins')]:
         if revision(path) != info['sources'][name]['revision']:
             raise ValueError('source revision changed: ' + name)
-    glob = f'e5-openwrt-flash-{info["openwrt_version"]}-mainline-{info["timestamp"]}-*.tar.gz'
+    suffix = '-e5wps' if info.get('variant', 'standard') == 'wps' else ''
+    glob = f'e5-openwrt-flash-{info["openwrt_version"]}-mainline-{info["timestamp"]}-*{suffix}.tar.gz'
     candidates = list((TOP / 'out/openwrt').glob(glob))
     if len(candidates) != 1:
         raise ValueError('expected exactly one completed bundle for this build timestamp')
@@ -270,7 +282,9 @@ def verify():
             if name in members:
                 raise ValueError('duplicate bundle member: ' + name)
             stream = archive.extractfile(entry)
-            if name in ('SHA256SUMS', 'files/SHA256SUMS', 'files/VERSION', 'files/boot.json'):
+            if name in ('SHA256SUMS', 'files/SHA256SUMS', 'files/VERSION', 'files/boot.json',
+                        'files/device-profile.json', 'files/tf-install.env',
+                        'customize.sh', 'START-HERE.md'):
                 content = stream.read()
                 data[name] = content
                 members[name] = hashlib.sha256(content).hexdigest()
@@ -291,6 +305,20 @@ def verify():
         if members[name] != file_digest(path):
             raise ValueError('bundle uses a different build output: ' + name)
     boot = json.loads(data['files/boot.json'])
+    profile_manifest = json.loads(data['files/device-profile.json'])
+    expected_profile = {'profile': 'e5', 'android_models': ['E5']}
+    if info.get('variant', 'standard') == 'wps':
+        expected_profile['variant'] = 'wps'
+    if profile_manifest != expected_profile:
+        raise ValueError('bundle device variant mismatch')
+    tf_values = dict(line.split('=', 1) for line in data['files/tf-install.env'].decode().splitlines())
+    if tf_values.get('VARIANT', 'standard') != info.get('variant', 'standard'):
+        raise ValueError('installer variant mismatch')
+    if info.get('variant', 'standard') == 'wps':
+        if b"abort 'E5-WPS" not in data['customize.sh']:
+            raise ValueError('Magisk TF installation is not blocked for E5-WPS')
+        if '不要在 Magisk 中安装' not in data['START-HERE.md'].decode():
+            raise ValueError('E5-WPS package instructions are missing the internal-update warning')
     verify_internal_update(members, boot)
     if boot['overlay_files'] or boot['sha256'] != members['files/boot.img']:
         raise ValueError('boot image contains an overlay or mismatches its manifest')
@@ -330,18 +358,26 @@ def verify():
     (RELEASE / 'SHA256SUMS').write_text(''.join(f'{item["sha256"]}  {name}\n' for name, item in info['assets'].items()))
     (RELEASE / 'build.json').write_text(json.dumps(info, indent=2) + '\n')
     refs = '\n'.join(f'- {name}: `{item["repository"]}@{item["revision"]}`' for name, item in info['sources'].items())
+    install_instructions = (
+        '此 E5-WPS 固件包仅用于已运行 OpenWrt 的 E5-WPS，通过内部 e5root 更新入口保留设置升级；'
+        '不要用于普通 E5，也不要用 TF 安装器安装。\n\n'
+        if info.get('variant', 'standard') == 'wps' else
+        '完整固件 ZIP 可在 Android Magisk 内安装到 TF 卡（清空整卡），'
+        '也可解压后运行 `OpenWrt-Installer.exe` 或 `launchers/start-installer.sh`。'
+        '详细使用指南在包内顶层 `START-HERE.md`，已安装系统用更新入口保留设置。\n\n')
     (RELEASE / 'release-notes.md').write_text(
         f'编译时间（UTC+8）：**{info["build_started_at"]}**\n\n'
         f'OpenWrt {info["openwrt_version"]} · 内核 `{info["kernel_release"]}` · '
         f'信息屏 {info["infoscreen_version"]} · 电话插件 {info["phone_version"]}\n\n'
-        '完整固件 ZIP 可在 Android Magisk 内安装到 TF 卡（清空整卡），'
-        '也可解压后运行 `OpenWrt-Installer.exe` 或 `launchers/start-installer.sh`。'
-        '详细使用指南在包内顶层 `START-HERE.md`，已安装系统用更新入口保留设置。\n\n'
-        '另附的小型 e5-linux-switch Magisk ZIP 仅用于手动切回已安装的 Linux，不负责首次部署。\n\n'
-        '镜像不含设备固件和 Android vendor 运行库；安装器从目标设备提取。'
-        'CI 已验证文件和模块一致性，硬件实测仍需在 E5 上进行。\n\n'
+        + ('E5-WPS 内置存储更新包：保留 Rust DAED，移除节点小宝，并由更新器校验 WPS 变体。\n\n'
+           if info.get('variant', 'standard') == 'wps' else '')
+        + install_instructions
+        + '另附的小型 e5-linux-switch Magisk ZIP 仅用于手动切回已安装的 Linux，不负责首次部署。\n\n'
+        + '镜像不含设备固件和 Android vendor 运行库；安装器从目标设备提取。'
+        + 'CI 已验证文件和模块一致性，硬件实测仍需在 E5 上进行。\n\n'
         f'源码版本：\n\n{refs}\n\n[构建记录]({info.get("run_url")})\n')
-    outputs({'bundle_name': stem, 'release_title': 'E5 OpenWrt ' + info['build_started_at']})
+    title_prefix = 'E5-WPS OpenWrt ' if info.get('variant', 'standard') == 'wps' else 'E5 OpenWrt '
+    outputs({'bundle_name': stem, 'release_title': title_prefix + info['build_started_at']})
     print('Verified release:', stem)
 
 

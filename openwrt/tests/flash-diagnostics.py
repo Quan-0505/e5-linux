@@ -95,6 +95,22 @@ class Diagnostics(unittest.TestCase):
                         flash.android_checks()
                     su.assert_not_called()
 
+    def test_wps_variant_allows_only_internal_update_and_read_only_actions(self):
+        profile = {'profile': 'e5', 'android_models': ['E5'], 'variant': 'wps'}
+        for action in ('tf', 'data', 'part', 'reinstall_part', 'resume_part', 'boot_openwrt', 'menu'):
+            args = SimpleNamespace(**{name: False for name in (
+                'update', 'check', 'verify_package', 'tf', 'data', 'part',
+                'reinstall_part', 'resume_part', 'boot_openwrt', 'menu')})
+            setattr(args, action, True)
+            with self.subTest(action=action), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                flash.enforce_variant_action(profile, args)
+        for action in ('update', 'check', 'verify_package'):
+            args = SimpleNamespace(**{name: False for name in (
+                'update', 'check', 'verify_package', 'tf', 'data', 'part',
+                'reinstall_part', 'resume_part', 'boot_openwrt', 'menu')})
+            setattr(args, action, True)
+            flash.enforce_variant_action(profile, args)
+
     def control(self, a=0x9f, b=0x1e):
         data = bytearray(32)
         data[:10] = b'_a\0\0BCAB\x01\x02'

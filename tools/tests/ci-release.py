@@ -76,7 +76,7 @@ class Bootstrap(unittest.TestCase):
 
 
 class RootAudit(unittest.TestCase):
-    def audit(self, files, staged_vendor=None, kernel_out=None, nonexec=()):
+    def audit(self, files, staged_vendor=None, kernel_out=None, nonexec=(), variant='standard'):
         with tempfile.TemporaryDirectory() as temp:
             top = Path(temp)
             (top / 'work/openwrt').mkdir(parents=True)
@@ -117,7 +117,7 @@ class RootAudit(unittest.TestCase):
                                 'usr/libexec/e5-infoscreen/plugin', 'usr/libexec/e5-infoscreen/update') and name not in nonexec:
                         entry.mode = 0o755
                     archive.addfile(entry, io.BytesIO(data))
-            info = {'openwrt_version': '25.12.6', 'build_epoch': 123}
+            info = {'openwrt_version': '25.12.6', 'build_epoch': 123, 'variant': variant}
             def stage_nv(root):
                 (root / 'opt/e5/vendor-start.sh').write_bytes(b'isolated NV fixture')
             env = {'E5_UPSTREAM_OUT': str(top / kernel_out)} if kernel_out else {}
@@ -157,6 +157,21 @@ class RootAudit(unittest.TestCase):
         info = self.audit(self.files())
         self.assertEqual(info['phone_version'], '1.4')
         self.assertEqual(info['daed_screen_app_version'], '1.0.0')
+
+    def test_wps_variant_marker_passes(self):
+        files = self.files()
+        files['etc/e5/device-variant'] = b'e5wps\n'
+        self.audit(files, variant='wps')
+
+    def test_wps_variant_marker_required(self):
+        with self.assertRaisesRegex(ValueError, 'WPS root filesystem variant marker'):
+            self.audit(self.files(), variant='wps')
+
+    def test_standard_root_rejects_wps_marker(self):
+        files = self.files()
+        files['etc/e5/device-variant'] = b'e5wps\n'
+        with self.assertRaisesRegex(ValueError, 'standard E5 root filesystem carries a WPS marker'):
+            self.audit(files)
 
     def test_expected_e5_shortcut_overlay_passes(self):
         self.audit(self.files())

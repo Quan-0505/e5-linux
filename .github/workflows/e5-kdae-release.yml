@@ -1,5 +1,5 @@
 name: Build and publish OpenWrt
-run-name: OpenWrt ${{ inputs.openwrt_version || '25.12.6' }} 路 ${{ github.ref_name }}
+run-name: OpenWrt ${{ inputs.openwrt_version || '25.12.6' }} ${{ inputs.variant || 'standard' }} 路 ${{ github.ref_name }}
 
 on:
   push:
@@ -17,6 +17,14 @@ on:
       kernel_ref:
         description: linux-lts-e5 branch, tag or commit
         default: e5-6.18
+        required: true
+      variant:
+        description: Device image variant
+        type: choice
+        options:
+          - standard
+          - wps
+        default: standard
         required: true
       publish:
         description: Publish a GitHub Release after validation
@@ -38,6 +46,7 @@ env:
   TZ: CST-8
   E5_SOURCE_REPOSITORY: Quan-0505/e5-linux
   E5_WRT_VER: ${{ inputs.openwrt_version || '25.12.6' }}
+  E5_VARIANT: ${{ inputs.variant || 'standard' }}
 
 jobs:
   block-package:
@@ -277,6 +286,7 @@ jobs:
           [ -n "$checksum" ] || { echo '::error::No checksum for OpenWrt rootfs'; exit 1; }
           printf '%s  %s\n' "$checksum" "work/openwrt/$file" | sha256sum --check
           docker import --platform linux/arm64 "work/openwrt/$file" "e5-openwrt-base:$E5_WRT_VER"
+          python3 upstream/tests/test_kernel_source.py
           python3 upstream/test_usb_ncm.py linux-lts-e5
           python3 tools/tests/android-bootchain.py
           python3 device/openwrt_device_common/tests/block-probe.py
@@ -333,6 +343,7 @@ jobs:
         run: |
           python3 tools/stage-network-addons.py --fetch
           python3 tools/tests/network-addons.py
+          python3 tools/tests/network-addons-variants.py
       - name: Compile the release kernel
         env:
           E5_RELEASE: '1'
@@ -421,6 +432,7 @@ jobs:
       - name: Assemble the generic mainline flash bundles
         env:
           E5_MAINLINE: '1'
+          E5_VARIANT: ${{ inputs.variant || 'standard' }}
           E5_TOOLS_BUILD_IMAGE: e5-mainline-build
           OPENWRT_GUI_ARTIFACT: ${{ github.workspace }}/e5-linux/installer/artifacts/windows
           OPENWRT_GUI_MACOS_ARTIFACT: ${{ github.workspace }}/e5-linux/installer/artifacts/macos-arm64
@@ -430,7 +442,7 @@ jobs:
           export E5_INFOSCREEN_PLUGINS="$GITHUB_WORKSPACE/e5-linux/ci/infoscreen-plugins"
           bash openwrt/make-flash-bundle.sh 2>&1 | tee out/release/bundle-build.log
       - name: Verify add-ons in the actual generated root filesystem
-        run: python3 tools/stage-network-addons.py --verify-archive work/openwrt/e5-openwrt-$E5_WRT_VER-generic-rootfs.tar.gz
+        run: python3 tools/stage-network-addons.py --variant "$E5_VARIANT" --verify-archive work/openwrt/e5-openwrt-$E5_WRT_VER-generic-rootfs.tar.gz
       - name: Package Android to Linux Magisk module
         run: bash magisk/build.sh
       - name: Validate release archives and sources

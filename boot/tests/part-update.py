@@ -22,7 +22,7 @@ def archive(path, files):
 
 
 class OfflineUpdate(unittest.TestCase):
-    def exercise(self, fault='ok', kind='part', raw_card=False):
+    def exercise(self, fault='ok', kind='part', raw_card=False, variant='standard'):
         with tempfile.TemporaryDirectory(prefix='e5-offline-update-') as folder:
             root = Path(folder)
             old = root / 'old'; new = root / 'new'; ram = root / 'run'
@@ -30,6 +30,11 @@ class OfflineUpdate(unittest.TestCase):
             (old / 'etc/e5').mkdir(parents=True)
             (old / 'etc/e5/part-root').write_text('e5root /dev/mmcblk0\n')
             (old / 'etc/e5/device-profile').write_text('t551m\n')
+            old_variant = ('wps' if variant == 'standard' else 'standard') if fault == 'variant-old' else variant
+            new_variant = ('wps' if variant == 'standard' else 'standard') if fault == 'variant-new' else variant
+            if old_variant == 'wps':
+                (old / 'etc/e5/device-variant').write_text('e5wps\n')
+                (old / 'etc/e5/image-version').write_text('legacy e5wps image\n')
             if kind == 'sd':
                 (old / 'etc/e5/part-root').unlink()
                 (old / 'etc/e5/sd-root').write_text('e5-openwrt-sd\n')
@@ -37,7 +42,9 @@ class OfflineUpdate(unittest.TestCase):
             (base / 'etc/e5-infoscreen/plugins/phone').mkdir(parents=True)
             (base / 'etc/e5-infoscreen/plugins/phone/phone.js').write_text('new phone code')
             (base / 'etc/e5/device-profile').write_text('t551m\n')
-            (base / 'etc/e5/image-version').write_text('new release\n')
+            (base / 'etc/e5/image-version').write_text('new e5wps release\n' if new_variant == 'wps' else 'new release\n')
+            if new_variant == 'wps':
+                (base / 'etc/e5/device-variant').write_text('e5wps\n')
             (base / 'sbin').mkdir(); (base / 'sbin/init').write_text('#!/bin/sh\n'); (base / 'sbin/init').chmod(0o755)
             image = root / 'image'
             subprocess.run(['mke2fs','-q','-t','ext4','-b','4096','-d',str(base),str(image),'64M'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
@@ -47,6 +54,7 @@ class OfflineUpdate(unittest.TestCase):
                 'opt/e5/android/vendor/bin/modem_control':b'#!/bin/sh\n'})
             archive(pending / 'settings.tar', {'etc/config/wireless':'自己的热点'.encode(),
                 **({'etc/e5/sd-root':b'e5-openwrt-sd\n', 'etc/e5/sd-gen':b'7\n'} if kind == 'sd' else {}),
+                **({'etc/e5/device-variant':b'e5wps\n'} if old_variant == 'wps' else {}),
                 'etc/e5/image-version':b'OLD release', 'etc/e5/device-profile':b't551m\n',
                 'etc/e5-infoscreen/plugins/phone/phone.js':b'old phone code',
                 'etc/shadow':b'root:saved-password-hash:\n',
@@ -59,7 +67,7 @@ class OfflineUpdate(unittest.TestCase):
                 for n in ('openwrt.ext4.gz','firmware.tar','settings.tar','ext4-tools.tar'))
             (pending / 'SHA256SUMS').write_text(hashes)
             cid = 'b'*32
-            (pending / 'request').write_text(f'VERSION=1\n'+('KIND=sd\n' if kind == 'sd' else '')+f'CID={cid}\nROOT_BYTES={96<<20}\nRAW_BYTES={len(raw)}\nRAW_SHA256={hashlib.sha256(raw).hexdigest()}\nPROFILE=t551m\n')
+            (pending / 'request').write_text(f'VERSION=1\n'+('KIND=sd\n' if kind == 'sd' else '')+f'CID={cid}\nROOT_BYTES={96<<20}\nRAW_BYTES={len(raw)}\nRAW_SHA256={hashlib.sha256(raw).hexdigest()}\nPROFILE=t551m\nVARIANT={variant}\n')
             name = ('mmcblk1' if raw_card else 'mmcblk1p1') if kind == 'sd' else 'mmcblk0p71'
             disk = name.split('p')[0]
             device = root / 'dev' / name; device.parent.mkdir()
@@ -108,7 +116,10 @@ reboot() {{ echo REBOOT >> "{root}/calls"; }}
                 self.assertIn('REBOOT',calls)
                 self.assertEqual((new/'etc/config/wireless').read_text(),'自己的热点')
                 self.assertIn('saved-password-hash',(new/'etc/shadow').read_text())
-                self.assertEqual((new/'etc/e5/image-version').read_text(),'new release\n')
+                self.assertEqual((new/'etc/e5/image-version').read_text(),
+                    'new e5wps release\n' if variant == 'wps' else 'new release\n')
+                if variant == 'wps':
+                    self.assertEqual((new/'etc/e5/device-variant').read_text(),'e5wps\n')
                 self.assertEqual((new/'etc/e5-infoscreen/plugins/phone/phone.js').read_text(),'new phone code')
                 self.assertEqual((new/'lib/firmware/wcnmodem.bin').read_bytes(),b'own firmware')
                 self.assertEqual((new/'etc/daed/daed.db').read_bytes(),b'saved-daed-account-database')
@@ -122,6 +133,10 @@ reboot() {{ echo REBOOT >> "{root}/calls"; }}
                     self.assertFalse((new/'etc/e5/sd-trial').exists())
             elif fault in ('write', 'grow', 'readback'):
                 self.assertNotEqual(result.returncode,0); self.assertNotIn('REBOOT',calls)
+            elif fault == 'variant-new':
+                self.assertNotEqual(result.returncode,0,result.stdout+result.stderr)
+                self.assertIn('WRITE',calls)
+                self.assertNotIn('REBOOT',calls)
             else:
                 self.assertNotEqual(result.returncode,0,result.stdout+result.stderr)
                 self.assertNotIn('WRITE',calls)
@@ -140,6 +155,10 @@ reboot() {{ echo REBOOT >> "{root}/calls"; }}
     def test_tf_request_cannot_overwrite_emmc(self): self.exercise('emmc', kind='sd')
     def test_tf_wrong_card_never_writes(self): self.exercise('cid', kind='sd')
     def test_tf_corrupt_payload_never_writes(self): self.exercise('corrupt', kind='sd')
+    def test_wps_internal_update_preserves_matching_variant(self): self.exercise(variant='wps')
+    def test_wps_package_cannot_update_standard_device(self): self.exercise('variant-old', variant='wps')
+    def test_standard_package_cannot_update_wps_device(self): self.exercise('variant-old', variant='standard')
+    def test_new_root_variant_must_match_request(self): self.exercise('variant-new', variant='wps')
     def test_normal_boot_without_request_performs_no_mount_or_write(self):
         with tempfile.TemporaryDirectory() as folder:
             code = SOURCE.replace('/run/',folder+'/')

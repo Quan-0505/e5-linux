@@ -118,7 +118,7 @@
     setView('subscriptions'); subscriptionMessage.textContent = '正在读取订阅…'; subscriptionMessage.className = 'message';
     try {
       const result = await window.e5.api('/subscriptions');
-      if (requiresLogin(result)) { await showPairing(result.error || '请用手机扫码登录 daed。'); return; }
+      if (requiresLogin(result)) { await showPairing(result.error || '请用手机扫码登录 DAED。'); return; }
       if (result?.ok === false) throw new Error(errorMessage(result));
       renderSubscriptions(Array.isArray(result?.subscriptions) ? result.subscriptions : []);
     } catch (error) {
@@ -126,7 +126,7 @@
       else { subscriptionMessage.textContent = errorMessage(error); subscriptionMessage.className = 'message error'; }
     }
   }
-  async function showPairing(text = '请用手机扫码登录 daed。') {
+  async function showPairing(text = '请用手机扫码登录 DAED。') {
     clearInterval(pairTimer); pairing.hidden = false; subscriptionList.hidden = true;
     subscriptionMessage.textContent = ''; pairMessage.textContent = text;
     await createQr();

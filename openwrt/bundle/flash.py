@@ -208,9 +208,19 @@ def package_profile():
         value = json.load(stream)
     if value.get('profile') not in ('e5', 't551m', 'm8', 't512n', 'yuanhang41s', 'k1') or not value.get('android_models'):
         die('invalid package device profile')
+    if value.get('variant', 'standard') not in ('standard', 'wps'):
+        die('invalid package device variant')
+    if value.get('variant') == 'wps' and value.get('profile') != 'e5':
+        die('E5-WPS variant is valid only for the E5 profile')
     if value['profile'] == 'k1' and value['android_models'] != ['angelcare K1']:
         die('K1 package model identity differs')
     return value
+
+
+def enforce_variant_action(profile, args):
+    if profile and profile.get('variant') == 'wps' and not (
+            args.update or args.check or args.verify_package):
+        die('E5-WPS package is for internal e5root updates only; first install, TF, userdata, and partition actions are disabled')
 
 
 def default_hotspot_name():
@@ -1434,6 +1444,7 @@ def main():
     if (a.menu or not any((a.tf, a.data, a.part, a.reinstall_part, a.resume_part,
                           a.update, a.boot_openwrt, a.check, a.verify_package))) and not choose_install_action(a):
         return False
+    enforce_variant_action(package_profile(), a)
     if a.image_size is not None and not a.data:
         ap.error('--image-size requires --data / install-userdata')
     if a.part_size is not None and not a.part:
