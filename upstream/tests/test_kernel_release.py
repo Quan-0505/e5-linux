@@ -25,6 +25,16 @@ class KernelRelease(unittest.TestCase):
         self.assertIn('CONFIG_LOCALVERSION_AUTO=n', config)
         self.assertNotIn('CONFIG_LOCALVERSION_AUTO=y', config)
 
+    def test_network_addon_kernel_capabilities(self):
+        config = (TOP / 'upstream/e5-mainline.config').read_text().splitlines()
+        required = (
+            'NETKIT', 'VETH', 'BPF_SYSCALL', 'BPF_JIT', 'DEBUG_INFO_BTF',
+            'NET_CLS_ACT', 'NET_CLS_BPF', 'NET_SCH_INGRESS', 'NET_ACT_BPF', 'TUN',
+        )
+        for option in required:
+            with self.subTest(option=option):
+                self.assertIn(f'CONFIG_{option}=y', config)
+
     def test_builder_environment(self):
         # Execute each actual preamble with a conflicting inherited suffix.
         for name in BUILDERS:
