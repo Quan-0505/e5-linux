@@ -55,7 +55,11 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 
 本次 Release 提供完整固件 ZIP、Android/Linux 切换 Magisk ZIP 和独立 Windows 图形安装器 ZIP；未重复上传内容相同的 TAR.GZ。三项资产均已核对 GitHub SHA-256。固件已在 E5 的现有内置 `e5root` 分区上保数据更新并启动验收：OpenWrt 与 5G 注册正常，Wi-Fi 无线电已启用且接口处于 AP 模式，DAED 和信息屏服务运行中；DAED 屏幕插件 1.4.7 与源码哈希一致，状态与流量接口可用，外网 HTTPS 探测成功。本次未使用 TF，未改 GPT、userdata 或 NV。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
 
-**2026-10-26 E5 上游同步候选：**移植了 ModemManager 的三项修复（SIPC 端口枚举完成条件、空 `C5GREG` 注册信息解析、副卡可选 IMSI 延后到主数据连接建立后读取），并将各机型新装默认网络模式统一为 152。已有明确选择 134 或 152 的配置会保留；升级只迁移机型默认回退值。NCM 忙队列刷新修复已包含在当前源码。此候选正在构建与 E5 验证，尚未作为新 Release 发布；本仓库的 E5 镜像不包含单独的 LYM-10K 机型适配。细节见[2026-10-26 上游同步记录](docs/UPSTREAM-20261026.zh-CN.md)。
+**2026-10-26 E5 上游同步：**移植了 ModemManager 的三项修复（SIPC 端口枚举完成条件、空 `C5GREG` 注册信息解析、副卡可选 IMSI 延后到主数据连接建立后读取），并将各机型新装默认网络模式统一为 152。已有明确选择 134 或 152 的配置会保留；升级只迁移机型默认回退值。NCM 忙队列刷新修复已包含在当前源码。本仓库的 E5 镜像不包含单独的 LYM-10K 机型适配。细节见[2026-10-26 上游同步记录](docs/UPSTREAM-20261026.zh-CN.md)。
+
+**2026-10-27 构建与实机状态：**源码 `caf35cb1e7aac7f394f71837df9e6fb62945b280` 的构建 [Actions 40422643233](https://github.com/Quan-0505/e5-linux/actions/runs/40422643233) 已通过，固件及安装包哈希校验通过，`publish=false`，未创建 Release。构建候选文件为 `e5-openwrt-flash-25.12.6-mainline-20261027-081810-caf35cb-dirty.zip`（SHA-256：`b23e86c0075e4cf1eb6192c279a56c28c5a8dfa5082f0272096d06c9d7d54950`），位于该 Actions run 的 `flash-release-40422643233-1` artifact。此次还修正了升级器对旧 `/etc/e5/build.json` 的处理，回归测试已纳入构建。
+
+E5 已在现有内置 `e5root` 分区安装并启动前一候选（源码 `966b56d19235802eda85a42331a6616dbb8aa81a`）；OpenWrt 25.12.6、E5 内核、DAED、信息屏、NodeBaby 和 ModemManager 均已启动。`caf35cb` 是更新器元数据修复候选，尚未刷入实机。目前没有 SIM，因此无法验收蜂窝注册、数据连接和短信；该候选不作为 Release 发布。设备时钟已校准并写入 RTC，NTP 配置会在设备重新联网后同步。
 
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
