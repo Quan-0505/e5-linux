@@ -28,6 +28,7 @@ echo "== cross gcc $("$X"gcc -dumpversion) ($X)"
 
 cd "$K"
 python3 "$HERE/check-kernel-source.py" .
+python3 "$TOP/tools/prepare-release-kernel.py" . --check
 KV=$(make -s kernelversion)
 O="${E5_OUTDIR:-$TOP/work/build/$KV}"
 mkdir -p "$O"

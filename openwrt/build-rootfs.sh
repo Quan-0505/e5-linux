@@ -17,19 +17,19 @@
 #    build-bluez.sh;
 #  * the Argon theme for LuCI (jerrykuku/luci-theme-argon, its release's apk
 #    packages, pinned by version and sha256 below) with its settings page;
-#  * device/openwrt_device_common/overlay/: the procd services for the hardware, the first-boot
+#  * openwrt/overlay/: the procd services for the hardware, the first-boot
 #    configuration, the ModemManager glue, the sysupgrade guard;
-#  * from the Debian image's overlay (device/linux_device_common/overlay/opt/e5): the scripts both
+#  * from the Debian image's overlay (rootfs/overlay/opt/e5): the scripts both
 #    systems share -- the baseband's vendor chroot, the regulatory database,
 #    the USB gadget guard, e5-next-boot, e5-os, e5-at;
 #  * a full static busybox (the boot image's own) for the applets OpenWrt's
-#    leaves out, logdw (device/openwrt_device_common/src/logdw.c) for the vendor chroot's log, and
-#    e5-vibrate (device/openwrt_device_common/src/e5-vibrate.c) for the motor, e5-ctl-raw
-#    (device/openwrt_device_common/src/e5-ctl-raw.c) for the audio DSP's profile selects, and
-#    e5-modemd (device/openwrt_device_common/src/e5-modemd.c) for the CP's resets;
+#    leaves out, logdw (openwrt/src/logdw.c) for the vendor chroot's log, and
+#    e5-vibrate (openwrt/src/e5-vibrate.c) for the motor, e5-ctl-raw
+#    (openwrt/src/e5-ctl-raw.c) for the audio DSP's profile selects, and
+#    e5-modemd (openwrt/src/e5-modemd.c) for the CP's resets;
 #  * the speaker: the 24 vendor audio modules of the kernel build (out_linux)
 #    in /lib/modules/<release>/audio, alsa-utils, the card's UCM profile
-#    (device/linux_device_e5/overlay/usr/share/alsa/ucm2), e5-audio-dsp, and e5-volume;
+#    (rootfs/overlay/usr/share/alsa/ucm2), e5-audio-dsp, and e5-volume;
 #
 # The firmware and the Android vendor subset are not in the tarball: they are
 # the Debian root's, bound in at boot (overlay/lib/preinit/05_e5_debian_root).
@@ -40,7 +40,7 @@
 # puts it there).  What the tree would take from the Debian root is in the
 # image then:
 #
-#  * the firmware pulled from the device (device/linux_device_common/overlay/lib/firmware:
+#  * the firmware pulled from the device (rootfs/overlay/lib/firmware:
 #    rootfs/pull-wcn-firmware.sh, pull-audio-firmware.sh, and the Debian-signed
 #    regulatory.db) -> /lib/firmware;
 #  * the Android vendor subset (work/android-subset,
@@ -72,13 +72,7 @@ set -euo pipefail
 VER=${E5_WRT_VER:-25.12.6}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(cd "$HERE/.." && pwd)"
-python3 "$TOP/tools/device-layout.py" check --system openwrt --model e5 >/dev/null
-PRIVATE_OVERLAY="$TOP/work/device-files/e5/overlay"
-if [ "${E5_DEVICE_FILES:-1}" != 0 ] && [ -d "$PRIVATE_OVERLAY" ]; then
-    OVERLAY=$(python3 "$TOP/tools/device-layout.py" overlay --system openwrt --model e5 --private-overlay "$PRIVATE_OVERLAY")
-else
-    OVERLAY=$(python3 "$TOP/tools/device-layout.py" overlay --system openwrt --model e5)
-fi
+OVERLAY="$HERE/overlay"
 WORK="$TOP/work/openwrt"
 OUT="$TOP/out/openwrt"
 URL=https://downloads.openwrt.org/releases/$VER/targets/armsr/armv8
@@ -98,12 +92,14 @@ FEATURES=${E5_FEATURES:-0}
 if [ "$FEATURES" = 1 ]; then
     [ -n "$INFOSCREEN" ] || { echo 'E5_FEATURES=1 requires the E5_INFOSCREEN base package' >&2; exit 1; }
     [ -n "${E5_ROOT_MODULES:-}" ] && [ "${E5_ROOT_MODULES_ONLY:-0}" = 1 ] || {
-        echo 'E5_FEATURES=1 requires the matching device/linux_device_e5 mainline module archive' >&2; exit 1; }
+        echo 'E5_FEATURES=1 requires the matching devices/e5 mainline module archive' >&2; exit 1; }
+    python3 "$TOP/devices/t551m/build-at-client.py"
+    python3 "$TOP/devices/t551m/build-at-owner.py"
 fi
 DEFAULT_IMAGE_MB=1024
 [ "$CONTAINERS" != 1 ] || DEFAULT_IMAGE_MB=2048
 IMAGE_MB=${E5_IMAGE_MB:-$DEFAULT_IMAGE_MB}
-FIRMWARE=${E5_FIRMWARE:-$OVERLAY/lib/firmware}
+FIRMWARE=${E5_FIRMWARE:-$TOP/rootfs/overlay/lib/firmware}
 ANDROID=${E5_ANDROID_SUBSET:-$TOP/work/android-subset}
 KBUILD=${E5_KBUILD:-$TOP/out_linux}
 mkdir -p "$WORK" "$OUT"
@@ -143,8 +139,8 @@ have=$(shasum -a 256 "$WORK/$TARBALL" 2>/dev/null || sha256sum "$WORK/$TARBALL")
 [ -n "$want" ] && [ "${have%% *}" = "$want" ] || { echo "checksum mismatch for $TARBALL" >&2; exit 1; }
 
 # logdw, e5-vibrate, e5-ctl-raw and e5-modemd, static: OpenWrt has no compiler of its own
-docker run --rm --platform linux/arm64 -v "$TOP/device/openwrt_device_common/src":/src:ro \
-    -v "$TOP/device/openwrt_device_common/shared":/at-source:ro -v "$WORK":/out "${E5_TOOLS_BUILD_IMAGE:-alpine:3.22}" \
+docker run --rm --platform linux/arm64 -v "$TOP/openwrt/src":/src:ro \
+    -v "$TOP/devices/t551m":/at-source:ro -v "$WORK":/out "${E5_TOOLS_BUILD_IMAGE:-alpine:3.22}" \
     sh -euc 'if ! command -v gcc >/dev/null; then apk add -q gcc musl-dev linux-headers >/dev/null; fi
         gcc -static -Os -s -o /out/logdw /src/logdw.c &&
         gcc -static -Os -s -Wall -o /out/e5-vibrate /src/e5-vibrate.c &&
@@ -152,7 +148,7 @@ docker run --rm --platform linux/arm64 -v "$TOP/device/openwrt_device_common/src
         gcc -static -Os -s -Wall -o /out/e5-modemd /src/e5-modemd.c &&
         gcc -static -Os -s -Wall -Wextra -o /out/e5-sim-probe /src/e5-sim-probe.c &&
         gcc -std=c11 -static -Os -s -Wall -Wextra -Werror -o /out/t551m-at /at-source/at-client.c'
-python3 "$TOP/device/openwrt_device_common/shared/build-at-client.py" --binary "$WORK/t551m-at"
+python3 "$TOP/devices/t551m/build-at-client.py" --binary "$WORK/t551m-at"
 
 # what a standalone image carries of the device's own (the Debian root's in the
 # directory form); an empty directory each otherwise
@@ -284,15 +280,14 @@ VERSION=$(python3 "$TOP/tools/release-identity.py" --profile e5 \
     --epoch "${E5_BUILD_EPOCH:-$(date +%s)}" --output "$WORK/release.json" --field image_version)
 
 docker run --rm --platform linux/arm64 \
-    -v "$OVERLAY":/in/overlay:ro -v "$TOP/device/linux_device_common/overlay/opt/e5":/in/opt-e5:ro \
-    -v "$TOP/device/openwrt_device_common/packages.list":/in/packages.list:ro \
+    -v "$OVERLAY":/in/overlay:ro -v "$TOP/rootfs/overlay/opt/e5":/in/opt-e5:ro \
     -v "$WORK/release.json":/in/release.json:ro \
     -v "$TOP":/in/feature-source:ro -e E5_FEATURES="$FEATURES" -e E5_VARIANT="${E5_VARIANT:-standard}" -e E5_UI_CACHE=/tmp/e5-ui-cache \
     -e E5_INFOSCREEN=/in/infoscreen -e E5_INFOSCREEN_PLUGINS=/in/infoscreen-plugins \
     -v "$OUT":/in/apk:ro -v "$BUSYBOX":/in/busybox:ro -v "$WORK/logdw":/in/logdw:ro \
     -v "$WORK/e5-vibrate":/in/e5-vibrate:ro -v "${INFOSCREEN:-$WORK/no-infoscreen}":/in/infoscreen:ro \
     -v "${SCREEN_PLUGINS:-$WORK/no-infoscreen}":/in/infoscreen-plugins:ro \
-    -v "$WORK/e5-ctl-raw":/in/e5-ctl-raw:ro -v "$OVERLAY/usr/share/alsa":/in/alsa:ro \
+    -v "$WORK/e5-ctl-raw":/in/e5-ctl-raw:ro -v "$TOP/rootfs/overlay/usr/share/alsa":/in/alsa:ro \
     -v "$WORK/e5-modemd":/in/e5-modemd:ro \
     -v "$WORK/e5-sim-probe":/in/e5-sim-probe:ro \
     -v "$BLOCK_APK":/in/block-mount-guarded.apk:ro \
@@ -332,7 +327,7 @@ apk_retry add --allow-untrusted /in/apk/bluez-libs-*.apk /in/apk/bluez-daemon-*.
 # (alsa-utils: aplay and amixer for the speaker, e5-audio-dsp and e5-volume)
 # (curl: the webhook of the SMS forward, /usr/libexec/e5-sms)
 apk_retry add --allow-untrusted /in/wifi-sae/*.apk >/dev/null
-apk_retry add $(sed -e "s/#.*//" -e "/^[[:space:]]*$/d" /in/packages.list) >/dev/null
+apk_retry add iwinfo iw-full ip-full bash mount-utils luci-proto-modemmanager dbus-utils alsa-utils curl openssl-util msmtp r8152-firmware ttyd luci-app-ttyd luci-i18n-ttyd-tr >/dev/null
 # The E5 screen authenticated Daed adapter uses the ucode filesystem module
 # for short-lived, permission-restricted curl request files.
 apk_retry add ucode-mod-fs iw-full >/dev/null
@@ -346,7 +341,7 @@ openssl version
 # init script (which forbids loading the modules a connecting device needs)
 apk_retry add pulseaudio-daemon-avahi pulseaudio-tools >/dev/null
 # Reuse the tested Debian hostless FE_ST_VOICE backend for cellular audio.
-apk_retry add python3 python3-sqlite3 tc-full ip-full >/dev/null
+apk_retry add python3 python3-sqlite3 tc-full ip-full glib2 libjson-c5 alsa-lib rpcd-mod-ucode ucode-mod-rtnl ucode-mod-nl80211 >/dev/null
 if [ "$CONTAINERS" = 1 ]; then
     # Do not run dockerd post-install scripts inside the build container.
     apk add --no-scripts docker dockerd iptables-nft ip6tables-nft resize2fs >/dev/null
@@ -492,7 +487,7 @@ rm -f $R/etc/rc.d/*pulseaudio
 # (the cage package kiosk service: cog on http://localhost/, which is LuCI,
 # shown at every boot before the info screen session takes the panel)
 rm -f $R/etc/rc.d/*cage
-for s in e5-hw e5-vendor e5-modemd e5-sipc-wwan e5-telnetd e5-boot-ok e5-sms-notify e5-charge e5-apn-auto e5-network-recovery e5-luci e5-audio e5-voice-audio e5-hfp e5-bt bluetoothd dbus modemmanager e5-usb-watch ttyd $screen; do
+for s in e5-hw e5-vendor e5-modemd e5-sipc-wwan e5-telnetd e5-boot-ok e5-sms-notify e5-charge unisoc-battery e5-apn-auto e5-network-recovery e5-mm-state e5-luci e5-audio e5-voice-audio e5-hfp e5-bt bluetoothd dbus modemmanager e5-usb-watch ttyd $screen; do
     n=$(sed -n "s/^START=//p" $R/etc/init.d/$s)
     ln -sf ../init.d/$s $R/etc/rc.d/S$n$s
 done
@@ -521,9 +516,9 @@ cp /in/release.json $R/etc/e5/release.json
 if [ -n "$E5_BUILD_EPOCH" ]; then printf "%s\n" "$E5_BUILD_EPOCH" > $R/etc/e5/build-time
 else date -u +%s > $R/etc/e5/build-time; fi
 if [ "$E5_FEATURES" = 1 ]; then
-    python3 /in/feature-source/device/openwrt_device_e5/stage.py --root $R
+    python3 /in/feature-source/devices/e5/stage.py --root $R
 elif [ -n "$screen" ]; then
-    python3 /in/feature-source/device/openwrt_device_common/shared/ui.py --root $R --profile e5
+    python3 /in/feature-source/devices/t551m/ui.py --root $R --profile e5
 fi
 # Apply the E5 DAED keypad shortcut after all info-screen staging. The shared
 # staging step copies upstream files into the root and would otherwise erase

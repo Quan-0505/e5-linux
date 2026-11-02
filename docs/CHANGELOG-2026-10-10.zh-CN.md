@@ -38,11 +38,11 @@ E5 尚未完成这批新增硬件功能的实机验证。
 - 旧账本保留为 `state-v1.json`；历史合并量归入旧账本最后统计的卡槽，
   不复制到另一卡。此前混合历史无法事后准确拆分。
 
-代码入口：[`sim-status.py`](../ci/infoscreen/root/usr/libexec/t551m-sim-status)、
-[`sims.uc`](../ci/infoscreen/tests/fixtures/sims.uc)、
-[`mu300dash`](../device/openwrt_device_common/luci-app-t551m/root/usr/libexec/rpcd/mu300dash)、
-[`lock-control`](../device/openwrt_device_common/luci-app-t551m/root/usr/libexec/unisoc-modem/lock-control)、
-[`traffic`](../device/openwrt_device_common/luci-app-t551m/root/usr/libexec/unisoc-modem/traffic)。
+代码入口：[`sim-status.py`](../devices/common/infoscreen/sim-status.py)、
+[`sims.uc`](../devices/common/infoscreen/sims.uc)、
+[`mu300dash`](../openwrt/luci-app-t551m/root/usr/libexec/rpcd/mu300dash)、
+[`lock-control`](../openwrt/luci-app-t551m/root/usr/libexec/unisoc-modem/lock-control)、
+[`traffic`](../openwrt/luci-app-t551m/root/usr/libexec/unisoc-modem/traffic)。
 
 ## 2. 屏幕与看板体验
 
@@ -70,10 +70,10 @@ E5 尚未完成这批新增硬件功能的实机验证。
 - 短信转发页“最近的转发”设置最大高度，超过后在区域内滚动，并支持键盘聚焦，
   避免记录累计后把整页不断拉长。
 
-代码入口：[`app.js`](../ci/infoscreen/root/usr/share/e5-infoscreen/www/app.js)、
-[`mobile.js`](../ci/infoscreen/root/usr/share/e5-infoscreen/www/mobile.js)、
-[`home.js`](../device/openwrt_device_common/luci-app-t551m/htdocs/luci-static/resources/view/mu300/home.js)、
-[`locks.js`](../device/openwrt_device_common/luci-app-t551m/htdocs/luci-static/resources/view/mu300/locks.js)。
+代码入口：[`app.js`](../devices/common/infoscreen/base/app.js)、
+[`mobile.js`](../devices/common/infoscreen/mobile.js)、
+[`home.js`](../openwrt/luci-app-t551m/htdocs/luci-static/resources/view/mu300/home.js)、
+[`locks.js`](../openwrt/luci-app-t551m/htdocs/luci-static/resources/view/mu300/locks.js)。
 
 ## 3. 后台开销与待机相关优化
 
@@ -265,5 +265,5 @@ KVM 已实际执行 ARM64 客体并验证 MMIO 退出；Docker 已验证资源�
 功能已验证后，本次提交收尾只整理文档和 Git，不再重复刷机或操作真实通话。
 
 本提交不包含私有固件、NV 数据、设备访问凭据、用户短信／联系人、实机截图或镜像。
-详细构建及硬件验证沿革见 [设备说明](../device/linux_device_t551m/README.md) 和
-[屏幕说明](../ci/infoscreen/docs/device-ui.zh-CN.md)。
+详细构建及硬件验证沿革见 [设备说明](../devices/t551m/README.md) 和
+[屏幕说明](../devices/common/infoscreen/README.md)。

@@ -40,3 +40,6 @@ msgstr "Ringtones & notifications"
 
 msgid "接入点 APN"
 msgstr "Access points (APN)"
+
+msgid "基带NV设置"
+msgstr "Baseband NV settings"

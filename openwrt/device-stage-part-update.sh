@@ -2,13 +2,10 @@
 # Prepare only: the mounted root is never overwritten from the running system.
 set -eu
 stage=${1:?upload directory}
-stage_parent=${stage%/*}
-stage_name=${stage##*/}
-case "$stage_parent" in /tmp|/root) ;; *) exit 1 ;; esac
-case "$stage_name" in e5-update-*) ;; *) exit 1 ;; esac
-stage_token=${stage_name#e5-update-}
-case "$stage_token" in *[!0-9a-f]*|'') exit 1 ;; esac
-[ "${#stage_token}" = 32 ] && [ -d "$stage" ] && [ ! -L "$stage" ] || exit 1
+case "${E5_NV_POLICY:-preserve}" in preserve|original) ;; *) exit 2 ;; esac
+case "$stage" in /.e5-upload-*) token=${stage#/.e5-upload-} ;; *) exit 1 ;; esac
+case "$token" in ''|*[!0-9a-f]*) exit 1 ;; esac
+[ "${#token}" = 32 ] && [ ! -L "$stage" ]
 [ "$(cat /etc/e5/device-profile)" = "${E5_UPDATE_PROFILE:?}" ]
 expected_variant=${E5_UPDATE_VARIANT:?}
 case "$expected_variant" in
@@ -34,7 +31,7 @@ if [ "$expected_variant" = wps ]; then
     }
 fi
 if [ ! -f /etc/e5/part-root ] && [ ! -f /etc/e5/sd-root ]; then
-    E5_IMAGE_SIZE=${E5_IMAGE_SIZE:?} sh "$stage/device-install-image.sh" "$stage/openwrt.ext4.gz"
+    E5_IMAGE_SIZE=${E5_IMAGE_SIZE:?} E5_NV_ARCHIVE="$stage/nv.tar" sh "$stage/device-install-image.sh" "$stage/openwrt.ext4.gz"
     exit
 fi
 exec 9>/run/e5-part-update.lock
@@ -61,6 +58,11 @@ gzip -t "$stage/openwrt.ext4.gz"
 mkdir -p /.e5-update
 chmod 700 /.e5-update
 cp "$stage/openwrt.ext4.gz" "$stage/ext4-tools.tar" /.e5-update/
+if [ "${E5_NV_POLICY:-preserve}" = original ]; then
+    [ -s "$stage/nv.tar" ]
+    cp "$stage/nv.tar" /.e5-update/nv-original.tar
+    (cd /.e5-update && sha256sum nv-original.tar > nv-original.sha256)
+fi
 view=$(mktemp -d /tmp/e5-update-view.XXXXXX)
 trap 'umount "$view" 2>/dev/null || :; rmdir "$view" 2>/dev/null || :' EXIT
 mount --bind / "$view"
@@ -87,6 +89,11 @@ for name in etc/config etc/shadow etc/passwd etc/group etc/dropbear etc/e5 etc/e
     etc/init.d/daed-dns usr/libexec/e5-daed-dns etc/rc.d/S96daed-dns etc/rc.d/K9daed-dns; do
     [ ! -e "$name" ] || settings="$settings $name"
 done
+# Preserve policy's NV archive already includes this entire history. Original
+# recovery builds a fresh NV archive, so retain the old history in settings.
+if { [ "${E5_NV_POLICY:-preserve}" = original ] || [ ! -d opt/e5/nv ]; } && [ -e etc/e5-nv ]; then
+    settings="$settings etc/e5-nv"
+fi
 sh "$stage/e5-network-addons-snapshot" "$view" /.e5-update/settings.tar \
     "$stage/network-addons-software.list" $settings
 cd /
@@ -96,14 +103,22 @@ tar -tf settings.tar >/dev/null; tar -tf firmware.tar >/dev/null; tar -tf ext4-t
 sha256sum openwrt.ext4.gz firmware.tar settings.tar ext4-tools.tar > SHA256SUMS
 sha256sum -c SHA256SUMS
 payload=$(du -k openwrt.ext4.gz firmware.tar settings.tar ext4-tools.tar | awk '{s+=$1} END {print s}')
-[ "$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)" -gt "$((payload + 262144))" ] || {
-    echo 'not enough memory for offline update; request not armed' >&2; exit 1;
+nv_kib=0
+if [ -f "$stage/nv.tar" ]; then nv_kib=$(du -k "$stage/nv.tar" | awk '{print $1}'); fi
+# The desktop snapshot and running browser/services disappear on reboot. Do
+# not compare their current MemAvailable with the *offline* payload budget.
+# Early initramfs still checks its actual MemAvailable before any root write.
+total_kib=$(awk '/MemTotal:/ {print $2}' /proc/meminfo)
+required_kib=$((payload + nv_kib + 262144))
+[ "$total_kib" -gt "$required_kib" ] || {
+    echo "not enough physical memory for offline update: need ${required_kib} KiB, total ${total_kib} KiB; request not armed" >&2; exit 1;
 }
 cid=$(cat "/sys/class/block/$disk/device/cid")
 {
     echo VERSION=1; echo KIND="$kind"; echo CID="$cid"; echo ROOT_BYTES="$bytes"
     echo RAW_BYTES="$E5_IMAGE_SIZE"; echo RAW_SHA256="$E5_IMAGE_SHA256"
     echo PROFILE="$E5_UPDATE_PROFILE"; echo VARIANT="$E5_UPDATE_VARIANT"
+    if [ "${E5_NV_POLICY:-preserve}" = original ]; then echo NV_POLICY=original; fi
 } > request.ready
 sync
 echo '== staged offline root update (no partition changes); settings and firmware saved'

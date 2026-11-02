@@ -12,7 +12,7 @@ SPEC.loader.exec_module(MODULE)
 
 class BootInputs(unittest.TestCase):
     def test_sd_registry_comes_from_shared_linux_overlay(self):
-        expected = REPO/'device/linux_device_common/overlay/opt/e5/e5-sd-registry'
+        expected = REPO/'rootfs/overlay/opt/e5/e5-sd-registry'
         source = MODULE.sd_registry_source()
         self.assertEqual(source, expected)
         self.assertTrue(source.is_file(), f'missing required boot input: {source}')

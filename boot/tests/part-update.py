@@ -4,6 +4,8 @@ import gzip
 import hashlib
 import io
 import os
+import runpy
+import struct
 from pathlib import Path
 import subprocess
 import tarfile
@@ -22,10 +24,11 @@ def archive(path, files):
 
 
 class OfflineUpdate(unittest.TestCase):
-    def exercise(self, fault='ok', kind='part', raw_card=False, variant='standard'):
+    def exercise(self, fault='ok', kind='part', raw_card=False, variant='standard', nv_present=False, original=False, ram_after_nv=None):
         with tempfile.TemporaryDirectory(prefix='e5-offline-update-') as folder:
             root = Path(folder)
             old = root / 'old'; new = root / 'new'; ram = root / 'run'
+            (old/'dev').mkdir(parents=True)
             pending = old / '.e5-update'; pending.mkdir(parents=True)
             (old / 'etc/e5').mkdir(parents=True)
             (old / 'etc/e5/part-root').write_text('e5root /dev/mmcblk0\n')
@@ -35,10 +38,28 @@ class OfflineUpdate(unittest.TestCase):
             if old_variant == 'wps':
                 (old / 'etc/e5/device-variant').write_text('e5wps\n')
                 (old / 'etc/e5/image-version').write_text('legacy e5wps image\n')
+            nv_source = TOP/'openwrt/luci-app-t551m/root/usr/lib/e5/nv_persistence.py'
+            nv = runpy.run_path(str(nv_source))
+            if nv_present:
+                python = old/'usr/bin/python3'; python.parent.mkdir(parents=True)
+                python.write_text('#!/bin/sh\n'); python.chmod(0o755)
+                store = old/'opt/e5/nv'; store.mkdir(parents=True)
+                data = struct.pack('<4I',0x4e56,2,0xfffe,1).ljust(512,b'\0')+b'\1\0calibration tail'
+                for name in nv['NAMES']:
+                    (store/name).write_bytes(data if name.startswith(('nr_fixnv','nr_runtimenv')) else b'opaque factory NV')
+                nv['atomic_json'](store/'factory-sha256.json',{n:nv['digest'](store/n) for n in nv['NAMES']})
+                if original:
+                    (old/'etc/e5/modem-slot').write_text('b')
+                    with (pending/'nv-original.tar').open('wb') as stream:
+                        nv['factory_archive'](old,stream,{n:store/n for n in nv['NAMES']})
+                    (pending/'nv-original.sha256').write_text(nv['digest'](pending/'nv-original.tar')+'  nv-original.tar\n')
+                    (store/'nr_fixnv1_a').write_bytes(b'bad working NV')
+                if fault=='nv-corrupt': (store/'nr_fixnv1_a').write_bytes(b'corrupt')
             if kind == 'sd':
                 (old / 'etc/e5/part-root').unlink()
                 (old / 'etc/e5/sd-root').write_text('e5-openwrt-sd\n')
             base = root / 'base'; (base / 'etc/e5').mkdir(parents=True)
+            (base/'dev').mkdir()
             (base / 'etc/e5-infoscreen/plugins/phone').mkdir(parents=True)
             (base / 'etc/e5-infoscreen/plugins/phone/phone.js').write_text('new phone code')
             (base / 'etc/e5/device-profile').write_text('t551m\n')
@@ -68,6 +89,8 @@ class OfflineUpdate(unittest.TestCase):
             (pending / 'SHA256SUMS').write_text(hashes)
             cid = 'b'*32
             (pending / 'request').write_text(f'VERSION=1\n'+('KIND=sd\n' if kind == 'sd' else '')+f'CID={cid}\nROOT_BYTES={96<<20}\nRAW_BYTES={len(raw)}\nRAW_SHA256={hashlib.sha256(raw).hexdigest()}\nPROFILE=t551m\nVARIANT={variant}\n')
+            if original:
+                with (pending/'request').open('a') as request:request.write('NV_POLICY=original\n')
             name = ('mmcblk1' if raw_card else 'mmcblk1p1') if kind == 'sd' else 'mmcblk0p71'
             disk = name.split('p')[0]
             device = root / 'dev' / name; device.parent.mkdir()
@@ -94,13 +117,19 @@ class OfflineUpdate(unittest.TestCase):
             helpers = root / 'helpers'
             helpers.write_text('part_progress_start() { :; }; part_stop() { :; }; part_fail() { echo "FAIL $*"; return 1; };\n'+
                 ('part_grow_ext4() { return 1; }\n' if fault == 'grow' else grow))
+            nv_helpers=root/'nv-preserve.sh'
+            nv_helpers.write_text((TOP/'boot/nv-preserve.sh').read_text().replace('/etc/nv-persistence.py',str(nv_source))
+                                  .replace('/run/nv-preserve.err',str(root/'nv-preserve.err')))
             code = SOURCE
             for a,b in (('/part-update-old',str(mountpoint)),('/part-update-new',str(new)),('/run/',str(ram)+'/'),
                 ('/proc/',str(root / 'proc')+'/'),('/sys/',str(root / 'sys')+'/'),('/dev/',str(root / 'dev')+'/'),
-                ('/etc/part-progress.sh',str(helpers)),('/etc/misc-bc-slot-b-trial.bin',str(root / 'bc'))):
+                ('/etc/part-progress.sh',str(helpers)),('/etc/nv-preserve.sh',str(nv_helpers)),('/etc/misc-bc-slot-b-trial.bin',str(root / 'bc'))):
                 code = code.replace(a,b)
-            harness = f'''
-mount() {{ for dest; do :; done; if [ "$dest" = "{mountpoint}" ]; then cp -a "{old}/." "$dest/"; else debugfs -R "rdump / $dest" "{device}" >/dev/null 2>&1; fi; }}
+            memory_hook=f'rc=$?; printf "MemAvailable: {ram_after_nv} kB\\n" > "{root}/proc/meminfo"; return "$rc";' if ram_after_nv is not None else ''
+            du_hook='du() { [ "$1" != -k ] || shift; for p; do case "$p" in */nv.tar|*/opt/e5/nv) printf "327680 %s\\n" "$p";; *) command du -k "$p";; esac; done; }\n' if ram_after_nv is not None else ''
+            harness = du_hook+f'''
+mount() {{ [ "$1" != --bind ] || return 0; for dest; do :; done; if [ "$dest" = "{mountpoint}" ]; then cp -a "{old}/." "$dest/"; else debugfs -R "rdump / $dest" "{device}" >/dev/null 2>&1; fi; }}
+chroot() {{ nvroot=$1; shift 2; command python3 "$@" --root "$nvroot"; {memory_hook} }}
 umount() {{ echo "unmount $1" >> "{root}/calls"; {'[ "$1" != "'+str(new)+'" ] || printf corrupt > "'+str(new)+'/lib/firmware/wcnmodem.bin";' if fault == 'readback' else ':;'} }}
 blockdev() {{ [ "$1" != --getsize64 ] || echo {96<<20}; }}
 dd() {{ echo WRITE >> "{root}/calls"; {'return 1;' if fault == 'write' else 'command dd "$@";'} }}
@@ -125,6 +154,12 @@ reboot() {{ echo REBOOT >> "{root}/calls"; }}
                 self.assertEqual((new/'etc/daed/daed.db').read_bytes(),b'saved-daed-account-database')
                 self.assertEqual((new/'etc/daed/wing.db').read_bytes(),b'saved-daed-subscription-database')
                 self.assertEqual((new/'etc/daed/wing.db-wal').read_bytes(),b'saved-daed-subscription-wal')
+                if nv_present:
+                    for name in (*nv['NAMES'],'factory-sha256.json'):
+                        if original and name=='nr_fixnv1_a':self.assertEqual((new/'opt/e5/nv'/name).read_bytes(),data)
+                        else:self.assertEqual((new/'opt/e5/nv'/name).read_bytes(),(old/'opt/e5/nv'/name).read_bytes())
+                    self.assertTrue(nv['verify_preserved'](new))
+                    self.assertEqual(len(list((new/'etc/e5-nv/backups').iterdir())),1)
                 self.assertEqual(int.from_bytes(device.read_bytes()[1028:1032],'little')*4096,96<<20)
                 if kind == 'sd':
                     self.assertTrue((new/'etc/e5/sd-root').is_file())
@@ -143,6 +178,12 @@ reboot() {{ echo REBOOT >> "{root}/calls"; }}
                 self.assertNotIn('REBOOT',calls)
 
     def test_update_preserves_capacity_settings_firmware_and_new_phone_code(self): self.exercise()
+    def test_internal_update_preserves_complete_nv_and_origin(self): self.exercise(nv_present=True)
+    def test_allocated_nv_archive_is_not_counted_against_remaining_ram(self): self.exercise(nv_present=True,ram_after_nv=550000)
+    def test_tf_update_preserves_complete_nv_and_origin(self): self.exercise(kind='sd',nv_present=True)
+    def test_invalid_nv_stops_before_overwriting_old_root(self): self.exercise('nv-corrupt',nv_present=True)
+    def test_confirmed_original_nv_recovers_invalid_work_internal(self): self.exercise(nv_present=True,original=True)
+    def test_confirmed_original_nv_recovers_invalid_work_tf(self): self.exercise(nv_present=True,original=True,kind='sd')
     def test_wrong_device_never_writes(self): self.exercise('cid')
     def test_low_ram_never_writes(self): self.exercise('ram')
     def test_corrupt_payload_never_writes(self): self.exercise('corrupt')

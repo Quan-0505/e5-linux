@@ -19,8 +19,8 @@ spec.loader.exec_module(package)
 class PackageState(unittest.TestCase):
     def test_real_shared_stager_and_helpers_are_fingerprinted(self):
         inputs = package.sources('25.12.6')['files']
-        common = TOP / 'device/openwrt_device_common'
-        stager = common / 'shared/network-startup.py'
+        common = TOP / 'openwrt'
+        stager = TOP / 'devices/t551m/network-startup.py'
         self.assertIn(stager.relative_to(TOP).as_posix(), inputs)
         stage = runpy.run_path(str(stager))['patch_root']
         with tempfile.TemporaryDirectory() as directory:

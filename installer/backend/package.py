@@ -13,8 +13,39 @@ def safe_file(root, name):
     return path
 
 
+def locate_package(directory):
+    """Normalize a user-selected root, APP or payload folder, never search CWD."""
+    selected = Path(directory).expanduser().resolve()
+    if not selected.is_dir():
+        raise ValueError('Select a fully extracted package folder, not a ZIP / 请选择完整解压的安装包目录，不能选择 ZIP: ' + str(selected))
+
+    def has_layout(root):
+        return (root/'desktop/manifest.json').is_file() or (root/'files/device-profile.json').is_file()
+
+    # An incomplete root is still this package: report its missing file rather
+    # than choosing another release nested inside it.
+    def is_package(root):
+        return has_layout(root) or (root/'OpenWrt-Installer.py').is_file()
+
+    if is_package(selected):
+        return selected
+    app = next((p for p in (selected, *selected.parents) if p.suffix.lower() == '.app'), None)
+    if app:
+        selected = app.parent
+    elif selected.name in ('files', 'desktop'):
+        selected = selected.parent
+    if is_package(selected):
+        return selected
+    candidates = [p for p in selected.iterdir() if p.is_dir() and has_layout(p)]
+    if len(candidates) == 1:
+        return candidates[0].resolve()
+    if candidates:
+        raise ValueError('Multiple OpenWrt packages found; select the exact release folder / 此目录包含多个安装包，请明确选择其中一个安装包目录')
+    raise ValueError('No extracted OpenWrt package found; select the folder containing OpenWrt-Installer.py and files or desktop / 未找到解压后的安装包，请选择包含 OpenWrt-Installer.py 和 files 或 desktop 的目录: ' + str(selected))
+
+
 def inspect_package(directory):
-    root = Path(directory).resolve()
+    root = locate_package(directory)
     mu = root / 'desktop/manifest.json'
     if mu.is_file():
         manifest = json.loads(mu.read_text(encoding='utf-8'))
@@ -27,10 +58,12 @@ def inspect_package(directory):
     else:
         profile_data = json.loads(safe_file(root, 'files/device-profile.json').read_text())
         adapter, profile, layout, kernel = 'e5', profile_data['profile'], 'e5root-ext4', 'e5-boot-v2'
-        if profile not in ('e5', 'm8', 't551m', 't512n', 'yuanhang41s', 'k1'):
+        if profile not in ('e5', 'm8', 't551m', 't512n', 'yuanhang41s', 'k1', 'lym10k'):
             raise ValueError('Unsupported device profile / 不支持的机型')
         if profile == 'k1' and profile_data.get('android_models') != ['angelcare K1']:
             raise ValueError('K1 package model identity differs / K1 安装包型号不匹配')
+        if profile == 'lym10k' and profile_data.get('android_models') != ['LYM-10K']:
+            raise ValueError('LYM-10K package model identity differs / LYM-10K 安装包型号不匹配')
         checks = {}
         for line in safe_file(root, 'files/SHA256SUMS').read_text().splitlines():
             digest, name = line.split(None, 1)

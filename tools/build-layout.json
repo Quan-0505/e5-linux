@@ -1,6 +1,11 @@
 {
   "format": 1,
   "base": "{workspace}/base/e5",
+  "native_screen": {
+    "volume": "e5-openwrt-src",
+    "toolchain": "toolchain-aarch64_generic_gcc-14.3.0_musl",
+    "image": "debian:trixie"
+  },
   "defaults": "{repo}/work/e5-port/clean-openwrt-base.tar",
   "busybox": "{repo}/work/t551m/busybox",
   "block_apk": "{repo}/out/openwrt/block-mount-guarded.apk",
@@ -39,6 +44,11 @@
       "kernel": "{workspace}/k1/kernel",
       "stock_boot": "{repo}/dumps/k1-stock-20261020/boot_b.img",
       "misc_head": "{repo}/dumps/k1-stock-20261020/misc-head.bin"
+    },
+    "lym10k": {
+      "kernel": "{workspace}/kernels/lym10k",
+      "stock_boot": "/mnt/d/随身WiFi/岭燕老头乐/燕子备份/燕子备份/boot_b.bin",
+      "misc_head": "/mnt/d/随身WiFi/岭燕老头乐/燕子备份/燕子备份/misc.bin"
     }
   }
 }

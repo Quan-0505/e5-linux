@@ -9,7 +9,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 repo = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(repo / 'openwrt/overlay/usr/lib/e5'))
+sys.path.insert(0, str(repo / 'openwrt/tests/reference'))
 from e5_call_events import CallEvents
 import e5_power_events
 
@@ -53,7 +53,7 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == '/':
             return self.reply(b'<script src="/transport.js"></script>', 'text/html')
         if self.path == '/transport.js':
-            return self.reply((repo / 'devices/t551m/infoscreen/transport.js').read_bytes(), 'text/javascript')
+            return self.reply((repo / 'devices/common/infoscreen/transport.js').read_bytes(), 'text/javascript')
         reads.append((self.path, bool(self.headers.get('User-Agent'))))
         if self.path == '/api/slow':
             time.sleep(.8)

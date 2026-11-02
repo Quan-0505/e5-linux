@@ -68,3 +68,6 @@ __pycache__/
 # Older checkouts may still hold private firmware and identity in these retired paths.
 /rootfs/overlay/
 /openwrt/overlay/
+
+# Retired split source checkouts are kept locally but never packaged.
+/device/

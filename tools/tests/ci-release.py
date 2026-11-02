@@ -26,6 +26,17 @@ def module(name):
 
 inputs = module('ci-inputs')
 release = module('ci-release')
+SCREEN_SOURCES = release.screen_overlay_sources()
+SHARED = TOP / 'devices/common/infoscreen'
+SCREEN_FILES = {
+    'base/session': 'usr/libexec/e5-infoscreen/session',
+    'base/service': 'etc/init.d/e5-infoscreen',
+    'base/update': 'usr/libexec/e5-infoscreen/update',
+    'base/plugin': 'usr/libexec/e5-infoscreen/plugin',
+}
+SCREEN_FILES.update({'phone/' + p.name: 'etc/e5-infoscreen/plugins/phone/' + p.name
+                     for p in (SHARED / 'phone').iterdir() if p.is_file()})
+
 
 
 class Bootstrap(unittest.TestCase):
@@ -82,7 +93,7 @@ class RootAudit(unittest.TestCase):
             (top / 'work/openwrt').mkdir(parents=True)
             (top / 'upstream/out-release').mkdir(parents=True)
             (top / 'upstream/out-release/kernel.release').write_text('6.18-e5\n')
-            (top / 'device/linux_device_common/overlay/opt/e5').mkdir(parents=True)
+            (top / 'rootfs/overlay/opt/e5').mkdir(parents=True)
             for name in release.BLOCK_SOURCES + (
                     'build-hostapd.sh', 'build-hostapd-inner.sh', 'hostapd.Dockerfile',
                     'patch-hostapd-sae.py', 'hostapd-unisoc-sae.h',
@@ -95,13 +106,12 @@ class RootAudit(unittest.TestCase):
             files['lib/netifd/hostapd-unisoc.sh'] = (TOP / 'openwrt/hostapd-unisoc.sh').read_bytes()
             files['usr/share/ucode/wifi/unisoc-sae.uc'] = (TOP / 'openwrt/hostapd-unisoc.uc').read_bytes()
             for name in ('vendor-start.sh', 'e5-modem-coldboot'):
-                (top / 'device/linux_device_common/overlay/opt/e5' / name).write_bytes(b'startup fixture')
+                (top / 'rootfs/overlay/opt/e5' / name).write_bytes(b'startup fixture')
                 files = {**files, 'opt/e5/' + name: b'startup fixture'}
-            screen_source = TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen'
-            for name in ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js'):
-                target = top / 'ci/infoscreen/root/usr/share/e5-infoscreen' / name
+            for source in SCREEN_FILES:
+                target = top / 'devices/common/infoscreen' / source
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes((screen_source / name).read_bytes())
+                target.write_bytes((SHARED / source).read_bytes())
             if staged_vendor is not None:
                 files.update({'etc/e5/feature-port.json': b'{"profile":"e5"}',
                               'opt/e5/vendor-start.sh': staged_vendor})
@@ -121,7 +131,7 @@ class RootAudit(unittest.TestCase):
             def stage_nv(root):
                 (root / 'opt/e5/vendor-start.sh').write_bytes(b'isolated NV fixture')
             env = {'E5_UPSTREAM_OUT': str(top / kernel_out)} if kernel_out else {}
-            with patch.object(release, 'TOP', top), patch.object(release.subprocess, 'check_output', return_value=''), \
+            with patch.object(release, 'screen_overlay_sources', return_value=SCREEN_SOURCES), patch.object(release, 'TOP', top), patch.object(release.subprocess, 'check_output', return_value=''), \
                  patch.object(release.runpy, 'run_path', return_value={'stage_nv': stage_nv, 'build_id': lambda: wifi_id}), \
                  patch.dict(release.os.environ, env):
                 release.audit_root(info)
@@ -142,12 +152,15 @@ class RootAudit(unittest.TestCase):
                 'etc/e5/block-mount.build-id': (release.block_build_id() + '\n').encode(),
                 'sbin/block': b'block', 'lib/libblkid-tiny.so': b'library', 'etc/init.d/fstab': b'init',
                 'etc/e5/build-time': b'123', 'lib/modules/6.18-e5/modem/sipc_wwan.ko': b'module'}
-        source = TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen'
+        for source, target in SCREEN_FILES.items():
+            files[target] = (SHARED / source).read_bytes().replace(b'\r\n', b'\n')
+        for name, content in SCREEN_SOURCES.items():
+            files['usr/share/e5-infoscreen/' + name] = content.replace('\r\n', '\n').encode()
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             for name in ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js'):
                 target = root / name; target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes((source / name).read_bytes())
+                target.write_text(SCREEN_SOURCES[name], encoding='utf8', newline='\n')
             subprocess.run([sys.executable, str(TOP / 'tools/patch-e5-daed-shortcut.py'), str(root)], check=True)
             for name in ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js'):
                 files['usr/share/e5-infoscreen/' + name] = (root / name).read_bytes()
@@ -155,7 +168,7 @@ class RootAudit(unittest.TestCase):
 
     def test_same_release_and_epoch_pass(self):
         info = self.audit(self.files())
-        self.assertEqual(info['phone_version'], '1.4')
+        self.assertEqual(info['phone_version'], '1.5')
         self.assertEqual(info['daed_screen_app_version'], '1.0.0')
 
     def test_wps_variant_marker_passes(self):
@@ -285,7 +298,7 @@ class MagiskModuleSources(unittest.TestCase):
         sources = release.magisk_module_sources()
         self.assertEqual(
             sources['sd-registry.sh'],
-            TOP / 'device/linux_device_common/overlay/opt/e5/e5-sd-registry')
+            TOP / 'rootfs/overlay/opt/e5/e5-sd-registry')
         self.assertTrue(sources['sd-registry.sh'].is_file())
 
 

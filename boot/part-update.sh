@@ -28,7 +28,7 @@ part_update_pending() {
     [ ! -e /run/tf-update-conflict ] || return 1
     [ -s /run/part-update-pending ] || return 0
     local dev= node disk mp=/part-update-old ram=/run/part-update
-    local KIND=part VERSION= CID= ROOT_BYTES= RAW_BYTES= RAW_SHA256= PROFILE= VARIANT= kv actual want got producer writer rc1 rc2 actual_variant
+    local KIND=part VERSION= CID= ROOT_BYTES= RAW_BYTES= RAW_SHA256= PROFILE= VARIANT= NV_POLICY=preserve kv actual want got producer writer rc1 rc2 actual_variant
     dev=$(cat /run/part-update-pending)
     node=${dev##*/}
     mkdir -p "$mp"
@@ -45,6 +45,7 @@ part_update_pending() {
             ROOT_BYTES=*) ROOT_BYTES=${kv#*=} ;; RAW_BYTES=*) RAW_BYTES=${kv#*=} ;;
             RAW_SHA256=*) RAW_SHA256=${kv#*=} ;; PROFILE=*) PROFILE=${kv#*=} ;;
             VARIANT=*) VARIANT=${kv#*=} ;;
+            NV_POLICY=original) NV_POLICY=original ;;
             *) umount "$mp"; part_fail 'unknown update request field'; return 1 ;;
         esac
     done
@@ -65,11 +66,36 @@ part_update_pending() {
         umount "$mp"; part_fail 'update device/geometry verification'; return 1
     fi
     # Copy EVERY payload off the old root before unmounting/overwriting it.
-    actual=$(du -k "$mp/.e5-update/"* | awk '{s+=$1} END {print s}')
+    if [ "$NV_POLICY" = original ]; then
+        actual=$(du -k "$mp/.e5-update/"* 2>/dev/null | awk '{s+=$1} END {print s}')
+    else
+        actual=$(du -k "$mp/.e5-update/"* "$mp/opt/e5/nv" "$mp/etc/e5-nv" 2>/dev/null | awk '{s+=$1} END {print s}')
+    fi
     if [ "$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)" -le "$((actual + 262144))" ]; then
         umount "$mp"; part_fail 'insufficient update RAM'; return 1
     fi
     mkdir -p "$ram"
+    if [ "$NV_POLICY" = original ]; then
+        . /etc/nv-preserve.sh
+        [ "$(wc -l < "$mp/.e5-update/nv-original.sha256")" = 1 ] &&
+            [ "$(awk '{print $2}' "$mp/.e5-update/nv-original.sha256")" = nv-original.tar ] &&
+            (cd "$mp/.e5-update" && sha256sum -c nv-original.sha256) &&
+            cp "$mp/.e5-update/nv-original.tar" "$ram/nv.tar" &&
+            sha256sum "$ram/nv.tar" > "$ram/nv.tar.sha256" || {
+            umount "$mp"; part_fail 'confirmed original NV archive invalid'; return 1;
+        }
+    elif [ -e "$mp/opt/e5/nv" ] || [ -L "$mp/opt/e5/nv" ]; then
+        . /etc/nv-preserve.sh
+        nv_archive_offline "$mp" "$ram/nv.tar" || {
+            umount "$mp"; part_fail 'NV preservation failed; old root kept'; return 1;
+        }
+        # nv.tar is already in tmpfs and therefore already deducted from
+        # MemAvailable. Budget only the files still to be copied, not NV twice.
+        actual=$(du -k "$mp/.e5-update/"* | awk '{s+=$1} END {print s}')
+        [ "$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)" -gt "$((actual + 262144))" ] || {
+            umount "$mp"; part_fail 'insufficient NV preservation RAM'; return 1;
+        }
+    fi
     cp "$mp/.e5-update/"* "$ram/" || { umount "$mp"; part_fail 'RAM payload copy'; return 1; }
     umount "$mp" || { part_fail 'old root still mounted'; return 1; }
     cd "$ram"
@@ -118,6 +144,9 @@ part_update_pending() {
         cp -a "$new/etc/e5-infoscreen/plugins/daed/." "$ram/new-daed/" || return 1
     fi
     tar -xf firmware.tar -C "$new" && tar -xf settings.tar -C "$new" || { part_fail 'restore archives'; return 1; }
+    if [ -f "$ram/nv.tar" ]; then
+        nv_restore_offline "$new" "$ram/nv.tar" || { part_fail 'NV restore/readback failed'; return 1; }
+    fi
     cp -a "$ram/new-phone/." "$new/etc/e5-infoscreen/plugins/phone/"
     part_update_restore_bundled_daed_plugin "$new" "$ram/new-daed" || {
         part_fail 'bundled DAED info-screen restore'; return 1;
@@ -145,7 +174,7 @@ part_update_pending() {
     [ -x "$new/sbin/init" ] && [ -s "$new/lib/firmware/wcnmodem.bin" ] &&
         [ "$PROFILE" = "$(cat "$new/etc/e5/device-profile")" ] &&
         [ "$VARIANT" = "$actual_variant" ] || { part_fail 'restored system verification'; return 1; }
-    (cd "$new" && find etc lib/firmware opt/e5/android -type f -exec sha256sum '{}' ';') > "$ram/restored.sha256" || {
+    (cd "$new" && find etc lib/firmware opt/e5 -type f -exec sha256sum '{}' ';') > "$ram/restored.sha256" || {
         part_fail 'restored file manifest'; return 1;
     }
     sync

@@ -46,6 +46,7 @@ class Package(unittest.TestCase):
         files = package / 'files'
         (files / 'boot.img').write_bytes(b'fake boot payload')
         (files / 'ext4-tools.tar').write_bytes(b'ext4 tools fixture; never executed')
+        (files / 'install-lock-tools.tar').write_bytes(b'lock tools fixture; never executed')
         (files / 'boot.json').write_text(json.dumps({'overlay_files': 0, 'sha256': finish['digest'](files / 'boot.img')}))
         (files / 'device-profile.json').write_text(json.dumps({'profile': profile, 'android_models': [finish['MODELS'][profile]]}))
         (files / 'VERSION').write_text('hybrid fixture\n')
@@ -71,7 +72,8 @@ class Package(unittest.TestCase):
         for profile in finish['MODELS']:
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder); package = self.fixture(root, profile)
-                hashes = finish['finalize'](package, profile, root / 'bootctl')
+                with patch.dict(finish['finalize'].__globals__, {'add_diff_studio': lambda p:None}):
+                    hashes = finish['finalize'](package, profile, root / 'bootctl')
                 self.assertEqual({p.name for p in package.iterdir() if p.is_file()},
                                  {'OpenWrt-Installer.py', 'START-HERE.md', 'customize.sh', 'module.prop', 'skip_mount'})
                 self.assertEqual(len(list(package.rglob('*.ext4.gz'))), 1)
@@ -109,7 +111,8 @@ class Package(unittest.TestCase):
                 elif damage == 'boot': (package / 'files/boot.img').write_bytes(b'different boot')
                 elif damage == 'busybox': (package / 'files/busybox').write_bytes(b'not static ARM64')
                 else: (package / 'files/busybox').unlink()
-                with self.assertRaises(ValueError): finish['finalize'](package, 'e5', root / 'bootctl')
+                with patch.dict(finish['finalize'].__globals__, {'add_diff_studio': lambda p:None}):
+                    with self.assertRaises(ValueError): finish['finalize'](package, 'e5', root / 'bootctl')
                 self.assertFalse((package / 'customize.sh').exists())
 
     def test_wps_variant_requires_and_preserves_explicit_manifest(self):
@@ -184,8 +187,8 @@ class NativeStages(unittest.TestCase):
                 self.assertEqual((root / 'calls').read_text().splitlines(), expected)
                 self.assertEqual(result.returncode, 0 if stop is None else 1)
 
-    def test_wrong_model_slot_or_lock_state_is_rejected_before_block_operations(self):
-        for model, slot, unlocked in [('T551M', '_a', 'orange'), ('E5', '_b', 'orange'), ('E5', '_a', 'green')]:
+    def test_wrong_model_or_unusable_slot_is_rejected_before_block_operations(self):
+        for model, slot, unlocked in [('T551M', '_a', 'green'), ('E5', '_b', 'green'), ('E5', '_x', 'green')]:
             with self.subTest(model=model, slot=slot, unlocked=unlocked), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder); package = root / 'package'; (package / 'files').mkdir(parents=True)
                 (package / 'files/tf-install.env').write_text('ANDROID_MODEL=E5\n')

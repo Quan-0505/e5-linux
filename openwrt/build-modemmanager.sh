@@ -117,7 +117,7 @@ done
 
 # Compose the complete pinned base series, then downstream overrides.
 mkdir -p "$WORK/patches/input"
-for p in "$TOP"/device/debian_device_common/patches/modemmanager-[0-9][0-9]-*.patch \
+for p in "$TOP"/rootfs/deb-patches/modemmanager-[0-9][0-9]-*.patch \
          "$TOP"/rootfs/deb-patches/modemmanager-[0-9][0-9]-*.patch; do
     [ ! -f "$p" ] || cp "$p" "$WORK/patches/input/"
 done

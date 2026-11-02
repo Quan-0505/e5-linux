@@ -44,20 +44,22 @@ def file_digest(path):
 
 def e5_shortcut_overlay_hashes():
     """Return exact hashes for the E5 keypad overlay applied after screen staging."""
-    source = TOP / 'ci/infoscreen/root/usr/share/e5-infoscreen'
     relative = ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js')
-    if not all((source / name).is_file() for name in relative):
-        raise ValueError('info-screen sources required to verify the E5 keypad overlay are missing')
+    generated = screen_overlay_sources()
     patcher = Path(__file__).resolve().with_name('patch-e5-daed-shortcut.py')
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)
         for name in relative:
             target = root / name
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes((source / name).read_bytes())
+            target.write_text(generated[name], encoding='utf-8', newline='\n')
         subprocess.run([sys.executable, str(patcher), str(root)],
                        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         return {'usr/share/e5-infoscreen/' + name: file_digest(root / name) for name in relative}
+
+
+def screen_overlay_sources():
+    return runpy.run_path(str(TOP / 'devices/common/infoscreen/stage.py'))['sources']()
 
 
 def revision(path):
@@ -88,12 +90,11 @@ def prepare():
         ('infoscreen', 'Enceka/infoscreen', TOP / 'ci/infoscreen'),
         ('plugins', 'Enceka/infoscreen-plugins', TOP / 'ci/infoscreen-plugins'),
     ]}
-    for path in sorted((TOP / 'device').glob('*_device_*')):
-        sources[path.name] = {'repository': 'sprd-linux-devs/' + path.name, 'revision': revision(path)}
     RELEASE.mkdir(parents=True, exist_ok=True)
     info = {'build_epoch': epoch, 'build_started_at': started.isoformat(timespec='seconds'),
             'variant': variant,
             'timestamp': stamp, 'openwrt_version': ver, 'sources': sources,
+            'kernel_policy': json.loads((RELEASE / 'kernel-policy.json').read_text()) if (RELEASE / 'kernel-policy.json').is_file() else None,
             'bootstrap_sha256': os.environ.get('E5_CI_INPUTS_SHA256'),
             'run_url': os.environ.get('E5_RUN_URL'),
             'release_repository': os.environ.get('GITHUB_REPOSITORY'),
@@ -112,9 +113,7 @@ def prepare():
 def audit_root(info):
     expected = {}
     for source, root, relative, prefix in [
-        ('openwrt-common', TOP / 'device/openwrt_device_common', 'overlay', ''),
-        ('openwrt-device', TOP / 'device/openwrt_device_e5', 'overlay', ''),
-        ('linux-device', TOP / 'device/linux_device_e5', 'overlay', ''),
+        ('openwrt-common', TOP, 'openwrt/overlay', ''),
         ('infoscreen', TOP / 'ci/infoscreen', 'root', ''),
         ('plugins', TOP / 'ci/infoscreen-plugins', 'plugins/phone', 'etc/e5-infoscreen/plugins/phone/'),
     ]:
@@ -143,12 +142,23 @@ def audit_root(info):
         expected['www/e5-daed-login/index.html'] = file_digest(daed_plugin / 'phone-login.html')
         expected['www/cgi-bin/e5-daed-pair'] = file_digest(daed_plugin / 'pair-cgi.py')
     # These shared startup files are copied from the Debian overlay, rather
-    # than device/openwrt_device_common/overlay. Verify the selective cold-start adapter as well.
+    # than openwrt/overlay. Verify the selective cold-start adapter as well.
     for name in ('vendor-start.sh', 'e5-modem-coldboot'):
-        expected['opt/e5/' + name] = file_digest(TOP / 'device/linux_device_common/overlay/opt/e5' / name)
+        expected['opt/e5/' + name] = file_digest(TOP / 'rootfs/overlay/opt/e5' / name)
     expected['etc/e5/block-mount.build-id'] = hashlib.sha256((block_build_id() + '\n').encode()).hexdigest()
     # E5 applies a repository-maintained keypad patch after copying upstream
     # info-screen sources into the image. Verify the patched files byte-for-byte.
+    for name, content in screen_overlay_sources().items():
+        expected['usr/share/e5-infoscreen/' + name] = hashlib.sha256(content.replace('\r\n', '\n').encode()).hexdigest()
+    shared = TOP / 'devices/common/infoscreen'
+    for source, target in [('base/session', 'usr/libexec/e5-infoscreen/session'),
+                           ('base/service', 'etc/init.d/e5-infoscreen'),
+                           ('base/update', 'usr/libexec/e5-infoscreen/update'),
+                           ('base/plugin', 'usr/libexec/e5-infoscreen/plugin')]:
+        expected[target] = hashlib.sha256((shared / source).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+    for source in (shared / 'phone').iterdir():
+        if source.is_file():
+            expected['etc/e5-infoscreen/plugins/phone/' + source.name] = hashlib.sha256(source.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
     expected.update(e5_shortcut_overlay_hashes())
     wifi_id = runpy.run_path(str(TOP / 'openwrt/wifi-sae-state.py'))['build_id']()
     expected['etc/e5/wifi-sae.build-id'] = hashlib.sha256((wifi_id + '\n').encode()).hexdigest()
@@ -196,8 +206,8 @@ def audit_root(info):
             for name in ('etc/init.d', 'etc/rc.d', 'opt/e5'):
                 (root / name).mkdir(parents=True, exist_ok=True)
             vendor = root / 'opt/e5/vendor-start.sh'
-            vendor.write_bytes((TOP / 'device/linux_device_common/overlay/opt/e5/vendor-start.sh').read_bytes())
-            runpy.run_path(str(TOP / 'device/openwrt_device_common/shared/staging.py'))['stage_nv'](root)
+            vendor.write_bytes((TOP / 'rootfs/overlay/opt/e5/vendor-start.sh').read_bytes())
+            runpy.run_path(str(TOP / 'devices/e5/stage.py'))['stage_nv'](root)
             expected['opt/e5/vendor-start.sh'] = file_digest(vendor)
     missing = set(expected) - set(found)
     different = [name for name in expected if name in found and expected[name] != found[name]]
@@ -250,7 +260,7 @@ def magisk_module_sources():
     return {
         **{p.name: p for p in (TOP / 'magisk/e5-linux-switch').iterdir() if p.name != 'bootctl.c'},
         'README.md': TOP / 'magisk/README.md',
-        'sd-registry.sh': TOP / 'device/linux_device_common/overlay/opt/e5/e5-sd-registry',
+        'sd-registry.sh': TOP / 'rootfs/overlay/opt/e5/e5-sd-registry',
         'bootchain.sh': TOP / 'tools/android-bootchain.sh',
     }
 

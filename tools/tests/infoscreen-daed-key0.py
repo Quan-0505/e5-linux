@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import shutil
+import runpy
 import subprocess
 import sys
 import tempfile
@@ -19,17 +20,12 @@ FILES = (
 
 with tempfile.TemporaryDirectory(prefix="e5-shortcuts-") as temp:
     root = Path(temp)
+    generated = runpy.run_path(str(TOP / 'devices/common/infoscreen/stage.py'))['sources']()
     for source_name in FILES:
-        data = subprocess.run(
-            ["git", "-C", str(SCREEN), "show", f"HEAD:{source_name}"],
-            check=True,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-        ).stdout
-        path = root / source_name.removeprefix("root/usr/share/e5-infoscreen/")
+        name = source_name.removeprefix("root/usr/share/e5-infoscreen/")
+        path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(data, encoding="utf-8")
+        path.write_text(generated[name], encoding="utf-8")
 
     subprocess.run([sys.executable, str(PATCHER), str(root)], check=True)
     patched = {name: (root / name).read_text(encoding="utf-8") for name in ("www/app.js", "www/mobile.js", "settings.uc", "api.uc")}
@@ -67,8 +63,8 @@ with tempfile.TemporaryDirectory(prefix="e5-shortcuts-") as temp:
 builder = (TOP / "openwrt/build-rootfs.sh").read_text(encoding="utf-8")
 patch_call = 'tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen"'
 assert patch_call in builder
-assert builder.index('python3 /in/feature-source/device/openwrt_device_common/shared/ui.py --root $R --profile e5') < builder.index(patch_call)
-assert builder.index('python3 /in/feature-source/device/openwrt_device_e5/stage.py --root $R') < builder.index(patch_call)
+assert builder.index('python3 /in/feature-source/devices/t551m/ui.py --root $R --profile e5') < builder.index(patch_call)
+assert builder.index('python3 /in/feature-source/devices/e5/stage.py --root $R') < builder.index(patch_call)
 # The screen was already hotpatched with the earlier fixed 0 -> DAED mapping
 # on the E5. Keep support for that live state so the settings can be tested
 # without first restoring the older app.js.

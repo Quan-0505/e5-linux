@@ -23,7 +23,7 @@ import zipfile
 TOP = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
 OWNER = 'e5-linux-build-release-v1'
-PROFILES = ('e5', 't551m', 'm8', 't512n', 'yuanhang41s', 'k1')
+PROFILES = ('e5', 't551m', 'm8', 't512n', 'yuanhang41s', 'k1', 'lym10k')
 COMMON = ('base', 'defaults', 'busybox', 'block_apk', 'wifi_apks')
 
 
@@ -31,7 +31,16 @@ def write_json(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + '.new')
     temporary.write_text(json.dumps(value, indent=2) + '\n', encoding='utf-8')
-    temporary.replace(path)
+    # Windows readers of a DrvFS status file can briefly deny its replacement.
+    # Keep publication atomic; retry sharing/access contention for at most 1 s.
+    for attempt in range(21):
+        try:
+            temporary.replace(path)
+            return
+        except PermissionError:
+            if attempt == 20:
+                raise
+            time.sleep(0.05)
 
 
 def layout(config, workspace, profiles, repo=TOP):
@@ -178,6 +187,16 @@ def verify_archive(path):
                     h.update(chunk)
             if h.hexdigest() != wanted:
                 raise ValueError('ZIP checksum mismatch: ' + name)
+        required = {'OpenWrt-Diff-Studio.exe','OpenWrt-Diff-Studio.py',
+                    'OpenWrt-Diff-Studio.app/Contents/MacOS/openwrt-installer',
+                    'tools/backend/openwrt-backend.exe','tools/macos/backend/openwrt-backend'}
+        tool = json.loads(archive.read('diff-tool.json'))
+        if tool.get('protocol') != 1 or not required.issubset(tool.get('files', {})):
+            raise ValueError('Diff Studio missing native entries/runtime')
+        for name, wanted in tool['files'].items():
+            if (name not in required and not name.startswith(('backend/', 'tools/backend/',
+                    'tools/macos/backend/', 'OpenWrt-Diff-Studio.app/'))) or manifest.get(name) != wanted:
+                raise ValueError('Diff Studio runtime scope/checksum mismatch: ' + name)
 
 
 class Task:
@@ -261,13 +280,54 @@ def package(task, common, rows):
     print('Verified release: ' + str(destination))
 
 
+def refresh_installers(task, common, rows, source):
+    if source is None:raise ValueError('Supply --source-release for installer-only refresh')
+    source=source.resolve()
+    if source.parent!=(TOP/'out/releases').resolve() or source.name.startswith('.'):
+        raise ValueError('Use a published local release under out/releases')
+    base=json.loads((source/'BUILD-RUN.json').read_text())
+    if base.get('state')!='verified':raise ValueError('Installer refresh source is not verified')
+    assets={row['profile']:row for row in base['assets']}
+    selected={}
+    for profile in rows:
+        row=assets[profile];path=source/row['file']
+        if path.resolve().parent!=source or digest(path)!=row['sha256']:
+            raise ValueError('Source archive checksum/path mismatch: '+profile)
+        verify_archive(path);selected[profile]=path
+    identify=runpy.run_path(str(TOP/'tools/release-identity.py'))['identify']
+    before=identify(TOP,'e5','6.18.54')
+    parent=TOP/'out/releases';pending=parent/('.building-'+task.id);pending.mkdir()
+    task.save(pending_output=str(pending),build_type='installer-refresh',base_release=str(source))
+    refresh=runpy.run_path(str(TOP/'tools/refresh-release-installers.py'))['refresh']
+    outputs=[]
+    temporary_parent=task.workspace/'tmp';temporary_parent.mkdir(parents=True,exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='e5-release-',dir=temporary_parent) as temporary:
+        tools=Path(temporary)/'ext4-tools.tar'
+        task.run('installer-tools',[sys.executable,TOP/'openwrt/prepare-ext4-tools.py','--root',common['base'],'--include-lock','--out',tools])
+        for profile,path in selected.items():
+            target=pending/(path.stem+'-installer-g'+before['source_commit'][:8]+'.zip')
+            refresh(path,target,tools,before);verify_archive(target)
+            checksum=digest(target)
+            (pending/(target.name+'.sha256')).write_text(checksum+'  '+target.name+'\n')
+            outputs.append({'profile':profile,'file':target.name,'bytes':target.stat().st_size,'sha256':checksum})
+            task.save(assets=outputs,stage=profile+'-installer-refresh')
+            print('Installer verified: '+profile,flush=True)
+    if identify(TOP,'e5','6.18.54')['source_fingerprint']!=before['source_fingerprint']:
+        raise ValueError('Sources changed during installer refresh; output stays unpublished')
+    write_json(pending/'BUILD-RUN.json',{**task.data,'state':'verified','source':before,'assets':outputs})
+    destination=parent/task.id;pending.rename(destination)
+    task.save(state='complete',output=str(destination),assets=outputs)
+    print('Verified release: '+str(destination))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('plan', 'check', 'package', 'run', 'status', 'clean-staging'))
+    parser.add_argument('action', choices=('plan', 'check', 'package', 'refresh-installers', 'run', 'status', 'clean-staging'))
     parser.add_argument('--profiles', nargs='+', choices=('all', *PROFILES), default=['all'])
     parser.add_argument('--workspace', type=Path, default=Path.home() / 'openwrt-build')
     parser.add_argument('--config', type=Path, default=TOP / 'tools/build-layout.json')
     parser.add_argument('--label', default='build')
+    parser.add_argument('--source-release',type=Path)
     # Compiler arguments follow -- and are passed without a shell.
     args, command = parser.parse_known_args()
     if command and command[0] == '--': command = command[1:]
@@ -293,6 +353,8 @@ def main():
             if args.action == 'run':
                 if not command: raise ValueError('Supply a real compiler/build command after --')
                 task.run('command', command); task.save(state='complete')
+            elif args.action=='refresh-installers':
+                refresh_installers(task,common,rows,args.source_release)
             else:
                 package(task, common, rows)
         except BaseException as error:

@@ -26,6 +26,7 @@ if [ -z "${E5_IN_CONTAINER:-}" ]; then
         -e TZ=CST-8 -e KBUILD_BUILD_TIMESTAMP="${KBUILD_BUILD_TIMESTAMP:-}" \
         -e E5_OUTPUT_UID="$(id -u)" -e E5_OUTPUT_GID="$(id -g)" \
         "${KERNEL_MOUNTS[@]}" -v e5-mainline-out:/out -v "$HERE":/work \
+        -v "$HERE/..":/source:ro \
         e5-mainline-build bash /work/build.sh "$@"
 fi
 
@@ -33,6 +34,7 @@ fi
 [ -n "${KBUILD_BUILD_TIMESTAMP:-}" ] || unset KBUILD_BUILD_TIMESTAMP
 cd /src/linux
 python3 /work/check-kernel-source.py .
+python3 /source/tools/prepare-release-kernel.py . --check
 KV=$(make -s kernelversion)
 O=/out/$KV
 mkdir -p "$O"

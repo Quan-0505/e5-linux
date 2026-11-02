@@ -1,5 +1,8 @@
 # 本地构建与打包规范
 
+本机 Agent 的完整操作指南见 [AGENT-BUILD.zh-CN.md](AGENT-BUILD.zh-CN.md)。
+Windows/固件在本机完成；Apple Silicon App 可按用户授权使用上游 macOS CI 原生重编，下载后仍须通过源码指纹校验。
+
 本文件是本地多机型构建的入口；`docs/RELEASE.md` 另行说明 GitHub Actions。
 不再用 `work/` 下日期命名的 worker、复制旧 worker 或字符串替换执行旧脚本。
 本规范不启动构建、不迁移目录、不清除历史文件，也不改变设备安装流程。
@@ -9,6 +12,7 @@
 | 内容 | 位置与规则 |
 | --- | --- |
 | 仓库源码 | 当前 E5 Git 工作区，不再额外复制整个仓库 |
+| 共用屏幕源码 | `devices/common/infoscreen/`，所有屏幕机型共用；设备端路径和既有服务名保持不变 |
 | Linux 构建工作区 | 本机既有 `/home/kano/openwrt-build`，不迁往 C 盘 |
 | 内核源码、对象 | 复用工作区的既有缓存；本次不重建或迁移各机型缓存 |
 | 干净公共 rootfs | 工作区 `base/e5` 一份；不得使用含用户配置的实机 root |
@@ -17,7 +21,7 @@
 | 通用临时文件 | 工作区 `tmp/e5-release-*`，每步结束自动删除；不创建日期命名源码/root 缓存 |
 | 任务日志、状态 | 仓库 `out/build-logs/<task>/`，最近任务 `out/build-state/latest.json` |
 | 正式产物 | 仓库 `out/releases/<task>/`，全部机型校验通过才成为正式目录 |
-| Windows/macOS 安装器 | `installer/artifacts/windows-x64`、`installer/artifacts/macos-arm64` |
+| Windows/macOS 安装器 | `installer/artifacts/windows`、`installer/artifacts/macos-arm64` |
 | 排查资料、设备备份 | 仍在既有 `work/`、`dumps/`，不参与自动清理 |
 
 `tools/build-layout.json` 是受版本控制的路径登记表，支持 `{repo}` 与 `{workspace}`。
@@ -64,6 +68,7 @@ python3 tools/build-release.py run --label block-mount -- bash openwrt/build-blo
 | M8 | `devices/m8/build-probe.sh`，完整配套由 `devices/m8/package-kernel.py` 生成 |
 | 远航 41S | `devices/yuanhang41s/build-kernel.py` |
 | K1 | `devices/k1/build-kernel.py` |
+| 岭燕 LYM-10K（bring-up） | `devices/lym10k/build-kernel.sh`，`LYM10K_RELEASE=1` |
 
 各构建器原有的 source、objects、baseline、output 参数仍需显式设置，指向
 已经核对过的缓存；`run` 负责调度、日志，不会替你猜基线或重置源码。
@@ -71,7 +76,7 @@ python3 tools/build-release.py run --label block-mount -- bash openwrt/build-blo
 `include/config/kernel.release`。源码打过其他机型补丁时也不能直接改配置硬编。
 目前没有自动、安全切换所有模型源码基线的实现，禁止冒充“一键全量重编”。
 
-对于只留有远航 41S 源码缓存的这台 WSL，E5、T551M、M8、T512N 现在可以使用
+对于只留有远航 41S 源码缓存的这台 WSL，E5、T551M、M8、T512N、LYM-10K 现在可以使用
 `tools/build-profile-kernel.py`。它在现有缓存上建立 overlayfs 只读底层与各机型
 独立的补丁层，不复制整个源码，不修改原有 41S 文件，也不复用 41S 的对象目录。
 底层的版本和状态由 `tools/build-layout.json` 登记，修改过的源码及新增文件在
@@ -88,6 +93,17 @@ sudo python3 tools/build-release.py run --workspace /home/kano/openwrt-build \
 如果底层源码发生改变，或发现未登记的对象、已挂载的视图或错误所有权，命令会停止，
 不会清空缓存强行套用。所有模型任务仍需使用同一把构建锁；不能在视图挂载期间
 运行其他工具修改其底层。41S 与 K1 继续使用原有已准备缓存和上表构建入口。
+如果底层指纹变化但当前全部变动路径均被已有私有文件或 whiteout 完整遮蔽，
+可先通过同一锁入口执行下面的显式核对。它逐路径核对遮蔽关系、版本、所有权、
+私有 Git 索引和未挂载状态，记录旧/新指纹；只更新登记，不改源码/对象，不编译。
+任何未遮蔽的新路径仍会停止。核对通过后再执行正常模型构建，不使用旧编译件冒充新修复。
+
+```sh
+sudo python3 tools/build-release.py run --workspace /home/kano/openwrt-build \
+  --label e5-source-review -- python3 tools/build-profile-kernel.py \
+  --workspace /home/kano/openwrt-build --profile e5 --review-shadowed-lower
+```
+
 `python3 tools/tests/kernel-overlay.py` 在临时 Git 夹具及真实 overlayfs 上验证隔离、
 复挂与底层变更拒绝，不写模型缓存，不连接设备；需要 Linux root 挂载权限。
 
@@ -111,10 +127,29 @@ sudo python3 tools/build-release.py package --workspace /home/kano/openwrt-build
 6. 全部机型通过、源码指纹未变后，将 `.building-<task>` 原子改名为正式目录。
    内附 `BUILD-RUN.json`，记录源码、任务、日志、文件大小和 SHA-256。
 
+每个正式 ZIP 固定包含 `OpenWrt-Diff-Studio.exe`、Apple Silicon 的
+`OpenWrt-Diff-Studio.app` 和 Python 入口。`tools/package-diff-studio.py` 在最终校验前装入，
+复用已验证的原生 GUI，保持 Mac APP 内部签名内容不变；与安装器共用 `tools` 中的后端，
+不另复制整套运行环境。`diff-tool.json` 只登记补丁工具需要的文件，导出更新器时不会带入
+boot、rootfs 或 ADB。最终 ZIP 校验同时检查这份工具清单；后续打包不再另行手动补塞。
+
 组装过程中仍会编译原有的少量静态辅助程序；不会重编内核、ModemManager、
 hostapd 或 GUI。正式目录本身包含唯一 ZIP，不另保留整份解压发布目录。
 
 ### 4. 查看状态与处理失败
+
+仅安装器脚本／随包工具变化，固件与 boot 不变时，可快速刷新上一份已验证发布：
+
+```sh
+python3 tools/build-release.py refresh-installers --workspace /home/kano/openwrt-build \
+  --profiles all --source-release /absolute/repo/out/releases/<verified-task>
+```
+
+该路径通过同一把工作区锁，只接受带已验证 `BUILD-RUN.json` 的本地正式发布，
+先核对全部输入 ZIP／哈希；生成独立安装锁工具增补包并流式替换安装脚本，不解压 rootfs，
+不重编内核或 GUI。新 ZIP 名带 `-installer-g<提交>`，固件版本及 ext4 工具包保持不变，兼容原有续装记录，
+`files/INSTALLER-REVISION.json` 记录宿主工具修订和原镜像哈希。旧发布不修改；
+全部新 ZIP 校验通过后才发布。固件／boot 变化仍必须使用普通 `package` 路径。
 
 ```sh
 python3 tools/build-release.py status

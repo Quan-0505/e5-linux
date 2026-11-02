@@ -192,7 +192,7 @@ return view.extend({
     <div class="mud-kpi"><b id="mud-cpu">--</b><span>CPU 占用</span><div class="mud-meter"><i id="mud-cpu-bar" style="background:var(--brand,var(--primary,#3b82f6))"></i></div></div>
     <div class="mud-kpi"><b id="mud-ram">--</b><span>内存 · <span class="mud-sub" id="mud-ram-sub">--</span></span><div class="mud-meter"><i id="mud-ram-bar" style="background:var(--info,#0ea5e9)"></i></div></div>
     <div class="mud-kpi"><b id="mud-disk">--</b><span>存储</span><div class="mud-meter"><i id="mud-disk-bar" style="background:var(--warning,#f59e0b)"></i></div></div>
-    <div class="mud-kpi"><b id="mud-batt">--</b><span id="mud-batt-l">电源</span></div>
+    <div class="mud-kpi"><b id="mud-batt">--</b><span id="mud-batt-l" title="功率和电流均为电池净值，不是 USB 输入值；充放电方向按电池电流判断。">电源</span><div class="mud-meter" id="mud-batt-meter" hidden aria-hidden="true"><i id="mud-batt-bar" style="width:0%;background:var(--success,#16a34a)"></i></div></div>
   </div>
   <div id="mud-freqs" class="mud-freqs"></div>
   <div class="mud-cols">
@@ -453,19 +453,24 @@ return view.extend({
 		}
 		var s = st.sig || null;
 		if (s && !s.error && (!c || !c.ts || (s.ts || 0) >= c.ts)) {
-			if (c && s.partial) {
+			/* Never carry another SIM's slow details into a recovered signal. */
+			if (c && c.card != null && s.card != null && c.card !== s.card) c = null;
+			if (c && !c.error && s.partial) {
 				/* 核心首包先更新驻网状态，但不让临时 CESQ 空值擦掉上一份工程信号。 */
 				c = Object.assign({}, c, {
-					ts: s.ts, cfun: s.cfun, reg: s.reg, reg5g: s.reg5g
+					ts: s.ts, card: s.card, cfun: s.cfun, reg: s.reg, reg5g: s.reg5g
 				});
 			} else c = c ? Object.assign({}, c, {
-				ts: s.ts, cfun: s.cfun, reg: s.reg, reg5g: s.reg5g,
+				ts: s.ts, card: s.card, cfun: s.cfun, reg: s.reg, reg5g: s.reg5g,
 				sig_src: s.sig_src, sig: s.sig, lte: s.lte, nr: s.nr
-			}) : s;
+			}) : Object.assign({}, s);
+			/* A newer successful read supersedes the slow tier's old failure. */
+			delete c.error;
 		}
 		this.lastCell = c;
 		/* 慢档数据（邻区/运营商/身份）只在整份缓存的时间戳变化时重绘 */
-		var fullTs = st.cell ? [st.cell.ts, st.cell.partial || 0, st.cell.neigh_pending || 0].join(':') : '';
+		var fullTs = [c && c.card, st.cell && st.cell.ts, st.cell && st.cell.partial || 0,
+			st.cell && st.cell.neigh_pending || 0, c && c.error || ''].join(':');
 		var slowChanged = fullTs !== this.lastFullTs;
 		this.lastFullTs = fullTs;
 
@@ -636,12 +641,16 @@ return view.extend({
 			M.set('disk', pct2 + '%'); M.v('disk-bar').style.width = pct2 + '%';
 		}
 		var p = i.power || {};
+		var batteryPct = p.present && typeof p.capacity === 'number' && Number.isFinite(p.capacity)
+			? Math.max(0, Math.min(100, p.capacity)) : null;
+		M.v('batt-meter').hidden = batteryPct == null;
+		M.v('batt-bar').style.width = (batteryPct == null ? 0 : batteryPct) + '%';
 		if (p.present && p.capacity != null) {
 			M.set('batt', p.capacity + '%');
-			M.set('batt-l', '电源 · ' + (p.status || '') + (p.volt != null ? ' · ' + p.volt + ' V' : '') + (p.usb ? ' · USB' : ''));
+			M.set('batt-l', M.fmtBatterySummary(p));
 		} else {
 			M.set('batt', p.usb ? 'USB' : '--');
-			M.set('batt-l', '电源' + (p.volt != null ? ' · ' + p.volt + ' V' : ''));
+			M.set('batt-l', '电源' + (Number.isFinite(p.volt) ? ' · ' + p.volt.toFixed(2) + ' V' : ''));
 		}
 		M.set('model', i.model || '--');
 		M.set('fwos', i.fw || '--');

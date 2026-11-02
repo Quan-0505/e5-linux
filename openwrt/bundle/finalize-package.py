@@ -11,7 +11,7 @@ import shutil
 import zipfile
 
 HERE = Path(__file__).resolve().parent
-MODELS = {'e5': 'E5', 't551m': 'T551M', 'm8': 'VIPME M8', 't512n': 'T512N', 'yuanhang41s':'ZTE 7546N', 'k1':'angelcare K1'}
+MODELS = {'e5': 'E5', 't551m': 'T551M', 'm8': 'VIPME M8', 't512n': 'T512N', 'yuanhang41s':'ZTE 7546N', 'k1':'angelcare K1', 'lym10k': 'LYM-10K'}
 
 
 def digest(path):
@@ -36,15 +36,20 @@ def add_android_switcher(package):
     shutil.copy2(source / 'README.md', package / 'docs/ANDROID-SWITCHER.md')
 
 
+def add_diff_studio(package):
+    return runpy.run_path(str(HERE.parents[1] / 'tools/package-diff-studio.py'))['attach'](package)
+
+
 def finalize(package, profile, bootctl, variant='standard'):
     package, bootctl = Path(package), Path(bootctl)
     if variant not in {'standard', 'wps'}:
         raise ValueError('unsupported package variant')
     add_android_switcher(package)
+    add_diff_studio(package)
     files = package / 'files'
     for name in ('OpenWrt-Installer.py', 'START-HERE.md', 'files/android-bootchain.sh',
                  'scripts/installer/boot-slots.py',
-                 'files/collect-device-files.sh', 'files/android-loop.sh', 'files/ext4-tools.tar', 'files/busybox', 'scripts/tools/sprd-bt-config.py',
+                 'files/collect-device-files.sh', 'files/android-loop.sh', 'files/ext4-tools.tar', 'files/install-lock-tools.tar', 'files/busybox', 'scripts/tools/sprd-bt-config.py',
                  'scripts/tools/vbc-profile/vbc-profile.py'):
         if not (package / name).is_file():
             raise ValueError('missing package component: ' + name)
@@ -94,7 +99,7 @@ def finalize(package, profile, bootctl, variant='standard'):
         'description=' + module_description,
         encoding='utf-8', newline='\n')
     values = {'PROFILE': profile, 'VARIANT': variant, 'ANDROID_MODEL': MODELS[profile],
-              'DEFAULT_SSID': {'e5': 'E5', 't551m': 'T551M', 'm8': 'M8', 't512n': 'T512N', 'yuanhang41s':'Yuanhang41S', 'k1':'K1'}[profile] + '-OpenWrt',
+              'DEFAULT_SSID': {'e5': 'E5', 't551m': 'T551M', 'm8': 'M8', 't512n': 'T512N', 'yuanhang41s':'Yuanhang41S', 'k1':'K1', 'lym10k':'LYM-10K'}[profile] + '-OpenWrt',
               'SLOT_ROLES_VERSION':str(boot.get('slot_roles_version',0)),
               'RAW_BYTES': str(size), 'RAW_SHA256': raw_hash.hexdigest(),
               'BOOT_BYTES': str((files / 'boot.img').stat().st_size), 'BOOT_SHA256': boot['sha256']}

@@ -31,7 +31,8 @@ function scopedRpc(method, params) {
 	params = params || [];
 	// An AT-backed request may take seconds. Never share its HTTP batch with
 	// rates/status or another SIM's data. Keep the existing polling/cache rules.
-	var call = rpc.declare({object:'mu300dash', method:method, params:params.concat(['slot']), expect:{'':{}}, nobatch:true});
+	var nativeRead = ['status', 'rates', 'cells'].indexOf(method) >= 0;
+	var call = rpc.declare({object:nativeRead?'e5status':'mu300dash', method:method, params:params.concat(['slot']), expect:{'':{}}, nobatch:true});
 	return function() {
 		var args = Array.prototype.slice.call(arguments, 0, params.length);
 		while (args.length < params.length) args.push('');
@@ -84,7 +85,7 @@ var callRates = scopedRpc('rates');
 /* Separate HTTP replies let cached neighbors/config paint during a live AT read. */
 var callCells = scopedRpc('cells');
 var callSignal = scopedRpc('signal');
-var callSysinfo = rpc.declare({ object: 'mu300dash', method: 'sysinfo', expect: { '': {} }, nobatch: true });
+var callSysinfo = rpc.declare({ object: 'e5status', method: 'sysinfo', expect: { '': {} }, nobatch: true });
 var readSimGet = rpc.declare({object:'mu300dash',method:'sim_get',expect:{'':{}},nobatch:true});
 function callSimGet() {
 	var revision = dataSimRevision;
@@ -125,10 +126,21 @@ function waitLockJob(started) {
 		check();
 	});
 }
-var callSmsList = rpc.declare({ object: 'mu300dash', method: 'sms_list', params: [ 'page' ], expect: { '': {} } });
-var callSmsShow = rpc.declare({ object: 'mu300dash', method: 'sms_show', params: [ 'id' ], expect: { '': {} } });
+var callSmsList = (function() {
+	var call = rpc.declare({ object: 'mu300dash', method: 'sms_list', params: [ 'page' ], expect: { '': {} } });
+	return function(page) { return call(String(page || 1)); };
+})();
+var callSmsShow = (function() {
+	var call = rpc.declare({ object: 'mu300dash', method: 'sms_show', params: [ 'id' ], expect: { '': {} } });
+	return function(id) { return call(String(id)); };
+})();
 var callSmsSend = rpc.declare({ object: 'mu300dash', method: 'sms_send', params: [ 'num', 'text', 'card' ], expect: { '': {} } });
-var callSmsDel  = rpc.declare({ object: 'mu300dash', method: 'sms_delete', params: [ 'id', 'sim' ], expect: { '': {} } });
+var callSmsDel = (function() {
+	var call = rpc.declare({ object: 'mu300dash', method: 'sms_delete', params: [ 'id', 'sim' ], expect: { '': {} } });
+	return function(id, sim) {
+		return call(String(id), sim === true || sim === 1 || sim === '1' ? '1' : '0');
+	};
+})();
 var callSmsSync = rpc.declare({ object: 'mu300dash', method: 'sms_sync', expect: { '': {} } });
 var callForwardGet = rpc.declare({ object: 'mu300dash', method: 'forward_get', params: [ 'profile' ], expect: { '': {} } });
 var callForwardStatus = rpc.declare({ object: 'mu300dash', method: 'forward_status', params: [ 'profile' ], expect: { '': {} } });
@@ -138,6 +150,8 @@ var callForwardTest = rpc.declare({ object: 'mu300dash', method: 'forward_test',
 var callTrafficGet = scopedRpc('traffic_get');
 var callTrafficSet = scopedRpc('traffic_set',['payload']);
 var callTrafficClear = rpc.declare({object:'mu300dash',method:'traffic_clear',params:['slot','confirm'],expect:{'':{}}});
+var callTtlGet = rpc.declare({ object: 'mu300dash', method: 'ttl_get', expect: { '': {} } });
+var callTtlSet = rpc.declare({ object: 'mu300dash', method: 'ttl_set', params: [ 'value' ], expect: { '': {} }, nobatch: true });
 var callUsbGet = rpc.declare({ object: 'mu300dash', method: 'usb_get', expect: { '': {} } });
 var callUsbSet = rpc.declare({ object: 'mu300dash', method: 'usb_set', params: [ 'kind', 'value', 'scope', 'auto' ], expect: { '': {} } });
 var callUsbNetList = rpc.declare({ object: 'mu300dash', method: 'usb_net_list', expect: { '': {} } });
@@ -721,6 +735,37 @@ function errorText(value, language) {
 /* END SHARED PLATFORM MESSAGES */
 
 var DASH_I18N = {
+	"AT 通道正忙，正在等待更新…": ["AT channel busy; waiting for an update…", "AT kanalı meşgul; güncelleme bekleniyor…"],
+	"模组尚未返回有效的实时信号": ["The modem has not returned valid live signal data", "Modem henüz geçerli canlı sinyal verisi döndürmedi"],
+	"另一项 TTL 操作正在执行，请稍后重试": ["Another TTL operation is running; please retry shortly", "Başka bir TTL işlemi çalışıyor; biraz sonra yeniden deneyin"],
+	"正数充电，负数放电；显示电池净电流，不是 USB 输入电流。": ["Positive: charging; negative: discharging. Net battery current, not USB input current.", "Pozitif: şarj; negatif: deşarj. USB giriş akımı değil, net pil akımıdır."],
+	"充电": ["Charging", "Şarj"],
+	"放电": ["Discharging", "Deşarj"],
+	"USB供电": ["USB power", "USB gücü"],
+	"电池供电": ["Battery power", "Pil gücü"],
+	"供电来源未知": ["Unknown power source", "Bilinmeyen güç kaynağı"],
+	"功率和电流均为电池净值，不是 USB 输入值；充放电方向按电池电流判断。": ["Power and current are net battery values, not USB input. Direction follows battery current.", "Güç ve akım USB girişini değil, pilin net değerlerini gösterir. Yön pil akımına göre belirlenir."],
+	"当前设置": ["Current setting", "Geçerli ayar"],
+	"固定为 %d": ["Fixed at %d", "%d olarak sabit"],
+	"保持不变（默认）": ["Not changed (default)", "Değiştirilmedi (varsayılan)"],
+	"生效规则": ["Rule in force", "Etkin kural"],
+	"流量卸载": ["Flow offloading", "Akış hızlandırma"],
+	"已启用": ["Enabled", "Etkin"],
+	"已禁用": ["Disabled", "Devre dışı"],
+	"蜂窝网络 TTL": ["Cellular TTL", "Mobil veri TTL"],
+	"设为 %d": ["Set %d", "%d ayarla"],
+	"设置": ["Set", "Ayarla"],
+	"关闭 TTL": ["Turn off TTL", "TTL kapat"],
+	"请输入 1 至 255 的整数": ["Enter an integer from 1 to 255", "1 ile 255 arasında tam sayı girin"],
+	"设置会保留到重启后；默认关闭。": ["Settings persist after reboot; disabled by default.", "Ayarlar yeniden başlatmada korunur; varsayılan kapalıdır."],
+	"操作失败：%s": ["Failed: %s", "Başarısız: %s"],
+	"管理连接已断开": ["Management connection lost", "Yönetim bağlantısı kesildi"],
+	"无法读取 TTL 设置": ["Cannot read TTL settings", "TTL ayarı okunamadı"],
+	"无法应用 TTL 设置": ["Cannot apply TTL settings", "TTL ayarı uygulanamadı"],
+	"TTL 无效": ["Invalid TTL", "Geçersiz TTL"],
+	"设置蜂窝出口数据包的 TTL 和 IPv6 跳数限制；仅影响蜂窝网络，不改变 Wi-Fi 或 USB 局域网。": ["Set the TTL and IPv6 hop limit of cellular outbound packets. Local Wi-Fi and USB traffic are unchanged.", "Hücresel çıkışın TTL ve IPv6 atlama sınırını ayarlar. Yerel Wi-Fi ve USB trafiğini değiştirmez."],
+	"启用后会关闭防火墙流量卸载，可能降低转发性能；关闭 TTL 后恢复由本功能修改的卸载设置。": ["Enabling TTL disables firewall flow offloading and may reduce forwarding performance. Turning TTL off restores offloading settings changed by this feature.", "TTL etkinleştirilince akış hızlandırması kapatılır; performans düşebilir. Kapatıldığında bu özelliğin değiştirdiği ayarlar geri yüklenir."],
+
     "自动模式兼容性": ["Automatic mode compatibility", "Otomatik mod uyumluluğu"],
     "机型默认": ["Model default", "Model varsayılanı"],
     "全制式自动（134，含 2G）": ["All-RAT auto (134, includes 2G)", "Tüm teknolojiler otomatik (134, 2G dahil)"],
@@ -736,6 +781,13 @@ var DASH_I18N = {
     'CPU0 保持在线': ['CPU0 stays online', 'CPU0 açık kalır'],
     'CPU policy is offline; enable its cores before changing frequency': ['CPU policy is offline; enable its cores before changing frequency', 'CPU kümesi çevrimdışı; frekansı değiştirmeden önce çekirdeklerini etkinleştirin'],
     '恢复启动基线': ['Restore boot baseline', 'Başlangıç temelini geri yükle'],
+    "CPU0 深度休眠": ["CPU0 deep idle", "CPU0 derin boşta bekleme"],
+    "允许 CPU0 深度休眠": ["Allow CPU0 deep idle", "CPU0 derin boşta beklemesine izin ver"],
+    "开启有利于空闲省电；关闭优先低延迟。仅改变 CPU0 深层空闲状态，WFI 和其他核心保持原设置。": ["Enable to favor idle power savings; disable to favor low latency. Only CPU0 deep states change; WFI and other cores keep their settings.", "Boştayken enerji tasarrufu için açın; düşük gecikme için kapatın. Yalnızca CPU0 derin durumları değişir; WFI ve diğer çekirdek ayarları korunur."],
+    "设置即时生效并在开机后保留。": ["Changes apply immediately and persist across reboots.", "Ayarlar hemen uygulanır ve yeniden başlatmalarda korunur."],
+    "设置已应用并保存，重启后继续生效。": ["Settings applied and saved for future boots.", "Ayarlar uygulandı ve sonraki açılışlar için kaydedildi."],
+    "无法读取 CPU0 深度休眠状态": ["Cannot read CPU0 deep idle state", "CPU0 derin boşta bekleme durumu okunamıyor"],
+    "CPU0 深度休眠设置失败": ["CPU0 deep idle change failed", "CPU0 derin boşta bekleme ayarı başarısız"],
     "CPU 核心开关": ["CPU core controls", "CPU çekirdek denetimleri"],
     "按内核能力逐核开启或关闭。CPU0 保持在线；关闭核心会降低并行处理能力，是否省电取决于实际负载。": ["Enable or disable individual cores supported by the kernel. CPU0 stays online. Disabling cores reduces parallel capacity; power savings depend on the workload.", "Çekirdek desteğine göre CPU çekirdeklerini açın veya kapatın. CPU0 açık kalır. Çekirdek kapatmak paralel kapasiteyi azaltır; enerji tasarrufu yüke bağlıdır."],
     "仅保存核心开关；不改变调频、调压和温控配置。": ["Save core states only; frequency, voltage and thermal settings are unchanged.", "Yalnızca çekirdek durumlarını kaydeder; frekans, voltaj ve sıcaklık ayarları değişmez."],
@@ -1272,6 +1324,7 @@ var DASH_I18N = {
 	'簇': ['Cluster ', 'Küme '],
 	'否': ['No', 'Hayır'],
     '接入点 APN': ['Access points (APN)', 'Erişim noktaları (APN)'],
+    '基带NV设置': ['Baseband NV settings', 'Temel bant NV ayarları'],
     '请先升级 ModemManager 以支持 APN 鉴权': ['Upgrade ModemManager first to support APN authentication', 'APN kimlik doğrulaması için önce ModemManager’ı yükseltin'],
     '无法读取当前 SIM 身份，请稍后重试': ['Cannot read the current SIM identity; try again later', 'Geçerli SIM kimliği okunamadı; daha sonra tekrar deneyin'],
     '此接入点仍被 SIM 使用，不能删除': ['This profile is still assigned to a SIM and cannot be deleted', 'Bu profil hâlâ bir SIM’e atanmış; silinemez'],
@@ -1731,6 +1784,26 @@ function esc(s) {
 		return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
 	});
 }
+function fmtBatteryCurrent(ua) {
+	if (typeof ua !== 'number' || !Number.isFinite(ua)) return '--';
+	var ma = Math.round(ua / 1000);
+	return (ma > 0 ? '+' : '') + ma + 'mA';
+}
+function fmtBatterySummary(power) {
+	var p = power || {};
+	var current = typeof p.ua === 'number' && Number.isFinite(p.ua) ? p.ua : null;
+	var voltage = typeof p.volt === 'number' && Number.isFinite(p.volt) && p.volt > 0 ? p.volt : null;
+	var amps = current == null ? null : Math.abs(current) / 1000000;
+	// Net battery current determines direction even while connected to USB.
+	var state = current > 0 ? '充电' : current < 0 ? '放电' :
+		({ Charging: '充电', Discharging: '放电', Full: '已充满', 'Not charging': '未充电' }[p.status] || '未知');
+	var watts = amps != null && voltage != null ? (amps * voltage).toFixed(1) : '--';
+	var amperes = amps == null ? '--' : amps.toFixed(amps > 0 && amps < 0.01 ? 3 : 2);
+	var source = p.usb === true || p.usb === 1 ? 'USB供电' :
+		p.usb === false || p.usb === 0 ? '电池供电' : '供电来源未知';
+	return translate(state) + (uiLanguage() === 'zh' ? '' : ' ') + watts + 'W/' + amperes + 'A·' +
+		(voltage == null ? '--' : voltage.toFixed(2)) + 'V·' + translate(source);
+}
 function fmtBytes(b) {
 	if (b == null || isNaN(b)) return '--';
 	var u = [ 'B', 'KB', 'MB', 'GB', 'TB' ], i = 0;
@@ -2184,34 +2257,36 @@ function notify(title, message, opts) {
 	return t;
 }
 
-/* 新短信监视（每个页面 render 时调用一次，内部单例）：
- * 每 5 s 读一次本地池第 1 页（纯文件读，不打 AT），首次只记基线；
- * 之后出现更大的消息 id 且为收件（mt）时，按手机通知样式弹出
- * 「发件人 + 预览」。池子被清空（id 回落）时静默重建基线。 */
+/* One metadata check per five seconds; only read a changed shared inbox.
+ * Keep both SIMs, the silent initial baseline and incoming-only notifications. */
+var callSmsHead = rpc.declare({ object:'e5status', method:'sms_head', nobatch:true, expect:{'':{}} });
 var smsWatch = null;
 function watchSms() {
-	if (smsWatch) return;
-	smsWatch = { seen: null };
-	window.setInterval(function() {
-		Promise.resolve(callSmsList(1)).catch(function() { return {}; }).then(function(r) {
-			r = r || {};
-			var msgs = r.msgs || [], max = 0;
-			msgs.forEach(function(m) {
-				var id = parseInt(m.id, 10) || 0;
-				if (id > max) max = id;
-			});
-			if (!max) return;
-			if (smsWatch.seen == null || max < smsWatch.seen) { smsWatch.seen = max; return; }
-			if (max > smsWatch.seen) {
-				msgs.forEach(function(m) {
-					var id = parseInt(m.id, 10) || 0;
-					if (id > smsWatch.seen && m.dir === 'mt')
-						notify('新短信 · ' + (m.peer || '未知号码'), m.preview || '', { type: 'success' });
-				});
-				smsWatch.seen = max;
-			}
-		});
-	}, 5000);
+    if (smsWatch) return;
+    smsWatch = { seen:null, signature:null, busy:false };
+    window.setInterval(function() {
+        if (document.hidden || smsWatch.busy) return;
+        smsWatch.busy = true;
+        Promise.resolve().then(function() { return callSmsHead(); }).then(function(head) {
+            if (!head || typeof head.signature !== 'string' || head.error) throw new Error('SMS metadata unavailable');
+            if (head.signature === smsWatch.signature) return;
+            return callSmsList(1).then(function(r) {
+                if (!r || !Array.isArray(r.msgs) || r.error) throw new Error('SMS list unavailable');
+                var msgs=r.msgs, max=0;
+                msgs.forEach(function(m) { max=Math.max(max,parseInt(m.id,10)||0); });
+                if (smsWatch.seen != null && max >= smsWatch.seen) {
+                    msgs.forEach(function(m) {
+                        var id=parseInt(m.id,10)||0;
+                        if(id>smsWatch.seen && m.dir==='mt')
+                            notify('新短信 · '+(m.peer || '未知号码'),m.preview || '',{type:'success'});
+                    });
+                }
+                smsWatch.seen=max;
+                // A failed list must not consume a signature: retry next tick.
+                smsWatch.signature=head.signature;
+            });
+        }).catch(function() {}).then(function() { smsWatch.busy=false; });
+    },5000);
 }
 
 function confirmBox(title, message, opts) {
@@ -2279,10 +2354,10 @@ return baseclass.extend({
 	callForwardGet: callForwardGet, callForwardStatus: callForwardStatus,
 	callForwardSet: callForwardSet, callForwardTest: callForwardTest, callForwardClear: callForwardClear,
 	callTrafficGet: callTrafficGet, callTrafficSet: callTrafficSet, callTrafficClear: callTrafficClear,
-	callUsbGet: callUsbGet, callUsbSet: callUsbSet,
+	callTtlGet: callTtlGet, callTtlSet: callTtlSet, callUsbGet: callUsbGet, callUsbSet: callUsbSet,
 	callUsbNetList: callUsbNetList, callUsbNetAdd: callUsbNetAdd,
 	carrierName: carrierName, qLabel: qLabel, qCol: qCol, qScore: qScore,
-	esc: esc, fmtBytes: fmtBytes, fmtTrafficBytes: fmtTrafficBytes, fmtRate: fmtRate, fmtUptime: fmtUptime, PLMN_CN: PLMN_CN,
+	esc: esc, fmtBatteryCurrent: fmtBatteryCurrent, fmtBatterySummary: fmtBatterySummary, fmtBytes: fmtBytes, fmtTrafficBytes: fmtTrafficBytes, fmtRate: fmtRate, fmtUptime: fmtUptime, PLMN_CN: PLMN_CN,
 	uiLanguage: uiLanguage, translate: translate, localize: localize, localizeMenu: localizeMenu,
 	injectCss: injectCss, v: v, set: set, spark: spark, neighborRows: neighborRows,
 	toast: toast, busy: busy, confirmBox: confirmBox, alertBox: alertBox, choiceBox: choiceBox,

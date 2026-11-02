@@ -19,20 +19,23 @@ def sources(version):
              TOP / 'openwrt/tests/modem-port-set-ready.py', TOP / 'openwrt/tests/c5greg-empty-nssai.py',
              TOP / 'openwrt/tests/secondary-sim-metadata.py',
              TOP / 'openwrt/tests/sim-power.py', TOP / 'openwrt/tests/sim-events.py', TOP / 'openwrt/tests/voice-urc.py',
+             TOP / 'openwrt/tests/secondary-sim-metadata.py',
              TOP / 'openwrt/tests/voice-recovery.py', TOP / 'openwrt/tests/voice-hangup.py',
              TOP / 'openwrt/tests/voice-accept.py', TOP / 'openwrt/tests/data-priority-hook.py',
              TOP / 'openwrt/tests/modem-mobility.py',
+             TOP / 'openwrt/tests/modem-port-set-ready.py',
+             TOP / 'openwrt/tests/c5greg-empty-nssai.py',
              TOP / 'openwrt/tests/modem-data-ports.py',
              TOP / 'openwrt/tests/modem-data-port-rules.py',
              TOP / 'openwrt/tests/sim-radio-parser.py',
              TOP / 'openwrt/files/modemmanager-unisoc-renew',
-             TOP / 'device/openwrt_device_common/shared/network-startup.py',
-             TOP / 'device/openwrt_device_common/overlay/usr/libexec/e5-mm-report-ports',
-             TOP / 'device/openwrt_device_common/overlay/etc/hotplug.d/wwan/26-e5-sipa-eth',
-             TOP / 'device/openwrt_device_common/overlay/usr/libexec/e5-network-recovery',
-             TOP / 'device/openwrt_device_common/overlay/etc/init.d/e5-network-recovery',
+             TOP / 'devices/t551m/network-startup.py',
+             TOP / 'openwrt/overlay/usr/libexec/e5-mm-report-ports',
+             TOP / 'openwrt/overlay/etc/hotplug.d/wwan/26-e5-sipa-eth',
+             TOP / 'openwrt/overlay/usr/libexec/e5-network-recovery',
+             TOP / 'openwrt/overlay/etc/init.d/e5-network-recovery',
              Path(__file__).resolve()]
-    files += sorted((TOP / 'device/debian_device_common/patches').glob('modemmanager-[0-9][0-9]-*.patch'))
+    files += sorted((TOP / 'rootfs/deb-patches').glob('modemmanager-[0-9][0-9]-*.patch'))
     files += sorted((TOP / 'rootfs/deb-patches').glob('modemmanager-[0-9][0-9]-*.patch'))
     files += sorted((TOP / 'openwrt/patches').glob('modemmanager-package-*.patch'))
     return {'openwrt': version, 'files': {p.relative_to(TOP).as_posix(): checksum(p) for p in files}}

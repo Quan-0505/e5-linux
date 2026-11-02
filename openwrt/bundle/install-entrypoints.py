@@ -25,7 +25,7 @@ def digest(path):
 
 
 def audio_route_base_source():
-    return HERE.parents[1] / 'device/linux_device_e5/overlay/usr/share/alsa/ucm2/sprdphone-sc273/HiFi.conf'
+    return HERE.parents[1] / 'rootfs/overlay/usr/share/alsa/ucm2/sprdphone-sc273/HiFi.conf'
 
 
 def assemble(package, source=HERE):
