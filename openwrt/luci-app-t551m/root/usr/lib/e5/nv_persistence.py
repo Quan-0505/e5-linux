@@ -32,7 +32,7 @@ import time
 PAIRS = (('nr_fixnv1_a', 'nr_fixnv2_a'), ('nr_fixnv1_b', 'nr_fixnv2_b'),
          ('nr_runtimenv1', 'nr_runtimenv2'))
 
-PROFILES = {'e5', 't551m', 'm8', 't512n', 'yuanhang41s', 'k1', 'lym10k'}
+PROFILES = {'e5', 't551m', 'm8', 't512n', 'yuanhang41s', 'k1', 'lym10k', 'changxing60', 'y60'}
 NAMES = ('nr_fixnv1_a', 'nr_fixnv2_a', 'nr_fixnv1_b', 'nr_fixnv2_b',
          'nr_runtimenv1', 'nr_runtimenv2', 'nr_deltanv_a', 'nr_deltanv_b', 'calinv')
 METHODS = {'status': {}, 'preview': {'direction': ''},
@@ -175,7 +175,7 @@ def safe_directory(path):
 
 
 @contextlib.contextmanager
-def maintenance_lock(root):
+def maintenance_lock(root, *, snapshot=False):
     """Same inode locks as full/diff upgrades; never remove a lock file."""
     with contextlib.ExitStack() as stack:
         for name in ('run/e5-part-update.lock', 'run/e5-upgrade/lock'):
@@ -187,7 +187,11 @@ def maintenance_lock(root):
             held = stack.enter_context(path.open('a'))
             os.chmod(path, 0o600)
             fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        if (Path(root)/'.e5-update/request.ready').exists() or (Path(root)/'.e5-update/request').exists():
+        # A failed preparation can leave request.ready without ever arming an
+        # update. Read-only snapshots are needed to retry that preparation;
+        # they still hold both real mutexes and never bypass an armed request.
+        if ((Path(root)/'.e5-update/request').exists() or
+                not snapshot and (Path(root)/'.e5-update/request.ready').exists()):
             raise NVError('nv_busy')
         yield
 
@@ -448,11 +452,22 @@ class Manager:
             if self.root == Path('/'): raise NVError('nv_fixture_forbidden')
             return self.devices
         result = {}
-        for entry in (self.root/'sys/class/block').glob('mmcblk0p*/uevent'):
+        kind = self.root/'etc/e5/storage-kind'
+        ufs = kind.exists() and kind.read_text().strip() == 'ufs'
+        if ufs:
+            import runpy
+            try:
+                entries = runpy.run_path(str(self.root/'usr/lib/e5/block_storage.py'))['entries'](self.root)
+            except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+                raise NVError('nv_layout_unknown') from error
+        else:
+            entries = (self.root/'sys/class/block').glob('mmcblk0p*/uevent')
+        for entry in entries:
             fields = dict(line.split('=', 1) for line in entry.read_text().splitlines() if '=' in line)
             name = fields.get('PARTNAME'); dev = fields.get('DEVNAME', '')
             if name not in NAMES: continue
-            if name in result or not re.fullmatch(r'mmcblk0p[1-9][0-9]*', dev): raise NVError('nv_layout_unknown')
+            pattern = r'sd[a-z]+[1-9][0-9]*' if ufs else r'mmcblk0p[1-9][0-9]*'
+            if name in result or dev != entry.parent.name or not re.fullmatch(pattern, dev): raise NVError('nv_layout_unknown')
             path = self.root/'dev'/dev
             if path.is_symlink() or not stat.S_ISBLK(path.stat().st_mode): raise NVError('nv_layout_unknown')
             with path.open('rb') as stream:
@@ -922,7 +937,7 @@ if __name__ == '__main__':
     parser.add_argument('--gzip', action='store_true', help='stream a lossless compressed transport archive')
     args = parser.parse_args()
     if args.operation in ('archive', 'factory-archive', 'factory-confirmed'):
-        with maintenance_lock(Path(args.root)) if args.lock else contextlib.nullcontext(), \
+        with maintenance_lock(Path(args.root), snapshot=True) if args.lock else contextlib.nullcontext(), \
                 gzip.GzipFile(fileobj=sys.stdout.buffer, mode='wb', compresslevel=3, mtime=0) if args.gzip else contextlib.nullcontext(sys.stdout.buffer) as output:
             if args.operation == 'factory-confirmed': confirmed_factory_archive(Path(args.root), output)
             elif args.operation == 'factory-archive': factory_archive(Path(args.root), output)

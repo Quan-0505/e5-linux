@@ -20,6 +20,33 @@ function text(v) { return v == null || v === '' ? null : replace(''+v,/[\r\n]/g,
 function device(v) { return type(v)=='string' && v!='.' && v!='..' && match(v,/^[A-Za-z0-9_.:-]{1,15}$/) ? v : null; }
 function exists(p) { return fs.stat(ROOT+p)!=null; }
 function executable(p) { return fs.access(ROOT+p,'x')==true; }
+export function sim_state(slot) {
+    if(!(slot in ['0','1']))return 'unknown';
+    let row=obj('/run/t551m-sims.json')?.sims?.[int(slot)];
+    let now=num(split(rd('/proc/uptime'),' ')[0]);
+    // Reuse the existing per-slot collector; never query AT from an HTTP read.
+    if(type(row)!='object' || row.slot!==int(slot) || (type(row.updated)!='double' && type(row.updated)!='int') ||
+       now==null || now<row.updated || now-row.updated>15)return 'unknown';
+    if(row.present===false && row.registration=='absent')return 'absent';
+    if(row.present===true)return row.registration=='locked'?'locked':'ready';
+    return 'unknown';
+};
+// Equipment identity is independent of SIM presence and the selected view.
+// HTTP reads use RAM files; only this bounded background worker uses the AT owner.
+let equipment_job=null;
+function equipment(atd,slots) {
+    let dir='/run/unisoc-modem-equipment', boot_id=rd('/proc/sys/kernel/random/boot_id');
+    let valid=boot_id!='' && rd(dir+'/boot_id')==boot_id;
+    let values=map(['0','1'],n=>valid && match(rd(dir+'/imei'+n),/^[0-9]{15}$/)?rd(dir+'/imei'+n):null);
+    let stamp=fs.stat(ROOT+dir+'/attempt')?.mtime, age=stamp==null?null:time()-stamp;
+    if(atd && boot_id!='' && !equipment_job && (values[0]==null || (slots=='2' && values[1]==null)) &&
+       (!valid || age==null || age<0 || age>=60)) {
+        equipment_job=uloop.process('/bin/sh',['/usr/libexec/unisoc-modem/dashboard-equipment'],{
+            PATH:'/usr/sbin:/usr/bin:/sbin:/bin',MU300_EQUIPMENT_SLOTS:slots,T551M_AT_CHANNEL:'6'
+        },()=>{equipment_job=null;});
+    }
+    return values;
+};
 function call(bus,o,m) { return bus?.call(o,m,{}) || {}; }
 function net(dev) {
     dev=device(dev);
@@ -222,11 +249,6 @@ export function info(slot) {
     let dns=[];
     for(let w in [wan,wan6])for(let ip in w['dns-server'] || [])if(index(dns,ip)<0)push(dns,ip);
     let atd=exists('/run/t551m-at2/cmd.sock') && index(rd('/proc/net/unix'),'/run/t551m-at2/cmd.sock')>=0;
-    let vpn=rd('/etc/mu300/vpn.conf'), engine=null, enabled=false;
-    for(let line in split(vpn,'\n')) {
-        if(line=='ENABLE=1')enabled=true;
-        if(substr(line,0,7)=='ENGINE=')engine=text(substr(line,7));
-    }
     let ht=replace(wifi.htmode || '',/[^0-9]/g,'');
     return {ts:now,uptime:int(rd('/proc/uptime')),host:text(c.get('system','@system[0]','hostname') || rd('/proc/sys/kernel/hostname')),
         model:text(rd('/tmp/sysinfo/model') || replace(rd('/proc/device-tree/model'),/\x00/g,'')),fw,kernel,
@@ -241,10 +263,10 @@ export function info(slot) {
             country:text(wifi.country),enc:wifi.enc || 'none',hidden:wifi.hidden ?? null,hostapd:hapd.status=='ENABLED'?1:0,
             clients:stations.rows,clients_n:stations.count},
         lan:{leases:length(leases),ip:address(rows4,lan,false),list:leases},
-        modem:{alive:cached.alive && exists('/dev/wwan0at0')?1:0,atd:atd?1:0,data_paused:!viewing || !wan.up?1:0,viewing_data_sim:viewing?1:0,data_sim:data_slot in ['0','1']?int(data_slot):null},
-        boot:boot(),capabilities:{vpn:executable('/etc/init.d/mu300-vpn')?1:0,dualboot:executable('/opt/e5/e5-next-boot')?1:0},
-        conns:conntrack(),traffic:obj('/run/unisoc-modem-traffic/view'+(slot in ['0','1']?'-sim'+slot:'')+'.json'),
-        vpn:{enabled:enabled?1:0,engine,up:exists('/sys/class/net/xtun') || exists('/sys/class/net/sbtun')?1:0}};
+        modem:{alive:cached.alive && exists('/dev/wwan0at0')?1:0,atd:atd?1:0,data_paused:!viewing || !wan.up?1:0,viewing_data_sim:viewing?1:0,data_sim:data_slot in ['0','1']?int(data_slot):null,
+            imeis:equipment(atd,'2'),sims:map(['0','1'],n=>({slot:int(n),state:atd?sim_state(n):'unknown'}))},
+        boot:boot(),capabilities:{dualboot:executable('/opt/e5/e5-next-boot')?1:0},
+        conns:conntrack(),traffic:obj('/run/unisoc-modem-traffic/view'+(slot in ['0','1']?'-sim'+slot:'')+'.json')};
 };
 
 export function rates(slot) {

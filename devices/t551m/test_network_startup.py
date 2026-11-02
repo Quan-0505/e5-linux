@@ -16,7 +16,8 @@ import unittest
 PROTO, LUCI = [Path(p).read_text() for p in sys.argv[1:3]]
 del sys.argv[1:3]
 HERE = Path(__file__).resolve().parent
-PROFILES = runpy.run_path(str(HERE.parents[1]/'tools/build-release.py'))['PROFILES']
+BUILD = runpy.run_path(str(HERE.parents[1]/'tools/build-release.py'))
+PROFILES = (*BUILD['PROFILES'], *BUILD['EXPERIMENTAL_PROFILES'])
 patch_root = runpy.run_path(str(HERE / 'network-startup.py'))['patch_root']
 LOADER = (HERE.parents[1] / 'openwrt/overlay/etc/init.d/e5-sipc-wwan').read_text()
 
@@ -381,7 +382,7 @@ modemmanager_unisoc_block_restart wan unisoc-sipc
         path.parent.mkdir(parents=True, exist_ok=True)
         original = "config core 'main'\n\toption device '/dev/ttyUSB0'\n"
         path.write_text(original)
-        for profile in ('e5', 'm8', 't512n', 'yuanhang41s', 'k1', 'lym10k'):
+        for profile in ('e5', 'm8', 't512n', 'yuanhang41s', 'k1', 'lym10k', 'changxing60'):
             path.write_text(original)
             patch_root(self.root, profile)
             self.assertIn("option auto_work_mode_default '152'", path.read_text())

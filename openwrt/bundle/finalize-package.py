@@ -11,7 +11,7 @@ import shutil
 import zipfile
 
 HERE = Path(__file__).resolve().parent
-MODELS = {'e5': 'E5', 't551m': 'T551M', 'm8': 'VIPME M8', 't512n': 'T512N', 'yuanhang41s':'ZTE 7546N', 'k1':'angelcare K1', 'lym10k': 'LYM-10K'}
+MODELS = {'e5': 'E5', 't551m': 'T551M', 'm8': 'VIPME M8', 't512n': 'T512N', 'yuanhang41s':'ZTE 7546N', 'k1':'angelcare K1', 'lym10k': 'LYM-10K', 'changxing60': 'ZTE 7552N', 'y60': 'CP23NV3'}
 
 
 def digest(path):
@@ -48,7 +48,7 @@ def finalize(package, profile, bootctl, variant='standard'):
     add_diff_studio(package)
     files = package / 'files'
     for name in ('OpenWrt-Installer.py', 'START-HERE.md', 'files/android-bootchain.sh',
-                 'scripts/installer/boot-slots.py',
+                 'scripts/installer/boot-slots.py', 'scripts/installer/storage-api.py', 'scripts/installer/storage-lib.sh', 'scripts/installer/gpt-api.py', 'files/storage.sh',
                  'files/collect-device-files.sh', 'files/android-loop.sh', 'files/ext4-tools.tar', 'files/install-lock-tools.tar', 'files/busybox', 'scripts/tools/sprd-bt-config.py',
                  'scripts/tools/vbc-profile/vbc-profile.py'):
         if not (package / name).is_file():
@@ -99,7 +99,7 @@ def finalize(package, profile, bootctl, variant='standard'):
         'description=' + module_description,
         encoding='utf-8', newline='\n')
     values = {'PROFILE': profile, 'VARIANT': variant, 'ANDROID_MODEL': MODELS[profile],
-              'DEFAULT_SSID': {'e5': 'E5', 't551m': 'T551M', 'm8': 'M8', 't512n': 'T512N', 'yuanhang41s':'Yuanhang41S', 'k1':'K1', 'lym10k':'LYM-10K'}[profile] + '-OpenWrt',
+              'DEFAULT_SSID': {'e5': 'E5', 't551m': 'T551M', 'm8': 'M8', 't512n': 'T512N', 'yuanhang41s':'Yuanhang41S', 'k1':'K1', 'lym10k':'LYM-10K', 'changxing60':'Changxing60', 'y60':'Y60'}[profile] + '-OpenWrt',
               'SLOT_ROLES_VERSION':str(boot.get('slot_roles_version',0)),
               'RAW_BYTES': str(size), 'RAW_SHA256': raw_hash.hexdigest(),
               'BOOT_BYTES': str((files / 'boot.img').stat().st_size), 'BOOT_SHA256': boot['sha256']}
@@ -120,6 +120,11 @@ def finalize(package, profile, bootctl, variant='standard'):
         guide = (package / 'START-HERE.md').read_text(encoding='utf-8')
         guide = guide.replace('@MODEL@', MODELS[profile]).replace('@PROFILE@', profile)
     (package / 'START-HERE.md').write_text(guide, encoding='utf-8', newline='\n')
+    guide = (package / 'START-HERE.md').read_text(encoding='utf-8')
+    if profile == 'y60':
+        guide = (HERE.parents[1] / 'devices/y60/TESTING.zh-CN.md').read_text(encoding='utf-8') + '\n' + guide
+    (package / 'START-HERE.md').write_text(guide.replace('@MODEL@', MODELS[profile]).replace('@PROFILE@', profile),
+                                         encoding='utf-8', newline='\n')
     sums = files / 'SHA256SUMS'
     hashes = {p.relative_to(package).as_posix(): digest(p) for p in sorted(package.rglob('*'))
               if p.is_file() and p != sums and p.name != 'SHA256SUMS' and '__pycache__' not in p.parts}

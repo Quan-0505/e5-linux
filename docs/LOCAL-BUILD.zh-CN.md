@@ -83,6 +83,15 @@ python3 tools/build-release.py run --label block-mount -- bash openwrt/build-blo
 私有视图中恢复到指定 Git 基线，通过干净检查后才调用上表原有准备器／构建器。
 Git 对象库共用，索引、补丁层、对象和模块交付件按机型分开；构建退出时卸载视图。
 
+K1 和远航41S 已有独立的原生源码／对象缓存，登记在 `tools/build-layout.json`
+的 `native_kernel_builds`。它们分别使用 `k1/linux-cache`＋`k1/build`、
+`sources/e5-kernel`＋`objects/e5-family`；后者的名字虽然含 e5-family，
+现有 `.config` 和 release 必须是远航41S，不能当其他机型的共享对象目录。
+两者的完整平台基线均为已验证的 `kernels/m8/config`，输出仍取各 profile 的 kernel 路径。
+通过 `build-release.py run` 调用各自的 `devices/<profile>/build-kernel.py`，
+显式传入登记的 `--kernel`、`--build`、`--base-config`、`--out`；不建立新源码副本。
+远航41S 构建会重放自己的准备流程，之后使用 overlay 视图前需按下述规则核对底层指纹。
+
 ```sh
 sudo python3 tools/build-release.py run --workspace /home/kano/openwrt-build \
   --label e5-kernel -- python3 tools/build-profile-kernel.py \
@@ -146,8 +155,10 @@ python3 tools/build-release.py refresh-installers --workspace /home/kano/openwrt
 ```
 
 该路径通过同一把工作区锁，只接受带已验证 `BUILD-RUN.json` 的本地正式发布，
-先核对全部输入 ZIP／哈希；生成独立安装锁工具增补包并流式替换安装脚本，不解压 rootfs，
-不重编内核或 GUI。新 ZIP 名带 `-installer-g<提交>`，固件版本及 ext4 工具包保持不变，兼容原有续装记录，
+先核对全部输入 ZIP／哈希；生成独立安装锁工具增补包并流式替换安装脚本、两平台原生安装器及 Diff Studio，不解压 rootfs，
+不重编内核。GUI／后端有变化时必须先完成原生构建，刷新入口只消费已通过源码指纹校验的交付件。
+移除旧清单中已被新运行环境淘汰的文件，不累计旧依赖，不增加第二份后端。
+新 ZIP 名带 `-installer-g<提交>`，固件版本及 ext4 工具包保持不变，兼容原有续装记录，
 `files/INSTALLER-REVISION.json` 记录宿主工具修订和原镜像哈希。旧发布不修改；
 全部新 ZIP 校验通过后才发布。固件／boot 变化仍必须使用普通 `package` 路径。
 
@@ -167,3 +178,21 @@ sudo python3 tools/build-release.py clean-staging --workspace /home/kano/openwrt
 
 `run`、`package`、`clean-staging` 使用同一把锁，防止清理与构建并行。旧脚本直接
 执行无法被这把锁管住，所以本地构建必须经过此入口；CI 在独立 runner 继续原流程。
+
+畅行60（`changxing60`，P720S20 UFS 4Kn）已接入相同构建入口；内核仍用登记的 `tools/build-profile-kernel.py --profile changxing60`，正式包用 `--profiles changxing60`。Windows/Mac 安装器必须包含新的存储库；见 [安装接入与验收边界](CHANGXING60-INSTALL.zh-CN.md)。
+
+
+## 公共安装器子模块
+
+installer/ 现在固定引用 https://github.com/kanoqwq/openwrt-tools 的提交。新检出先执行 git submodule update --init --recursive。共享源码、Android 及独立工具构建方法见 installer/docs/BUILD.zh-CN.md；E5/MU300 的 NV、UFS 身份和启动流程继续分开处理。请先在子模块提交，再在父仓库更新 gitlink；不要重新复制一整份安装器。
+
+两个父仓库可通过 OPENWRT_GUI_ARTIFACT 与 OPENWRT_GUI_MACOS_ARTIFACT 复用同一份已校验交付件，无需各编译一次；首次拆分后旧 GUI 指纹应正常拒绝，不能修改旧 build.json 绕过。tools/release-index.py、tools/build-release-index.py、tools/package-diff-studio.py 保留为兼容入口，实际代码由子模块提供。
+
+
+## 根目录 Android 安装器
+
+完整打包及 refresh-installers 均由公共 installer/package_android.py 校验已签名 ARM64 release APK 的源码、ABI 与哈希，发布包根目录固定放 OpenWrt-Tools.apk，构建清单为 docs/GUI-BUILD-android.json，使用说明为 docs/ANDROID-INSTALLER.md。不要把 APK 塞进 tools 或再复制一份。
+
+本机与两个桌面交付件一样复用 E5 的 Android 构建：WSL 设置 OPENWRT_GUI_ANDROID_ARTIFACT=/mnt/d/Git/e5-linux/installer/artifacts/android；Windows 使用 D:/Git/e5-linux/installer/artifacts/android。过期时只重编 Android，不修改 build.json。
+
+Mac 原生构建使用公共安装器仓库的 macos.yml，手动 dispatch 即可；不再在 E5 仓库新建 build/macos-* 快照分支。下载后仍核对公共 sources()。

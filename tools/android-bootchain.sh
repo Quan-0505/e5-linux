@@ -15,7 +15,7 @@ locked=0
 fail() { echo "BOOTCHAIN-ERROR: $*" >&2; exit 1; }
 sha() { sha256sum "$1" | cut -d ' ' -f1; }
 size() { blockdev --getsize64 "$1"; }
-allowed() { case "$1" in uboot|sml|teecfg|trustos|vbmeta) return 0 ;; *) return 1 ;; esac; }
+allowed() { case " $PARTS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 # Validate the live AOSP block, including CRC, without Python on Android.
 check_misc() {
@@ -86,7 +86,16 @@ esac
 # reporting green. Keep this exception scoped to the tested model/board.
 case "$(getprop ro.product.model)" in
     T512N) ;;
+    'ZTE 7552N')
+        [ "$(getprop ro.product.device)" = P720S20 ] || fail 'unknown Changxing60 board'
+        PARTS="$PARTS dtbo vendor_boot" ;;
     'ZTE 7546N') [ "$(getprop ro.product.device)" = P720S11 ] || fail 'unknown 41S board' ;;
+    CP23NV3)
+        [ "$(getprop ro.product.device)" = CP23NV3 ] || fail 'unknown Y60 board'
+        [ "$(getprop ro.boot.verifiedbootstate)" = orange ] || fail 'unlocked bootloader required'
+        # Its base FDT lives in vendor_boot; keep it and DTBO in the same
+        # recipient cohort, including when Android is running from slot B.
+        PARTS="$PARTS dtbo vendor_boot" ;;
     *) [ "$(getprop ro.boot.verifiedbootstate)" = orange ] || fail 'unlocked bootloader required' ;;
 esac
 for part in misc boot_a boot_b l_agdsp_$src; do [ -b "$BY/$part" ] || fail "missing block device: $part"; done

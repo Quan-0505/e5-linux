@@ -1,6 +1,14 @@
 #!/bin/sh
+storage_update_id() {
+    if [ "$(cat /sys/class/block/$1/device/type 2>/dev/null)" = SD ]; then
+        cat /sys/class/block/$1/device/cid
+    else
+        e5_storage_identity "$1"
+    fi
+}
 # Prepare only: the mounted root is never overwritten from the running system.
 set -eu
+. "${1:?upload directory}/storage.sh"
 stage=${1:?upload directory}
 case "${E5_NV_POLICY:-preserve}" in preserve|original) ;; *) exit 2 ;; esac
 case "$stage" in /.e5-upload-*) token=${stage#/.e5-upload-} ;; *) exit 1 ;; esac
@@ -41,7 +49,7 @@ flock -n 9 || { echo 'another partition update is running' >&2; exit 1; }
 kind=part
 [ ! -f /etc/e5/sd-root ] || kind=sd
 dev=$(cat "/run/e5linux/$kind-root-dev")
-node=${dev##*/}; disk=${node%p*}
+node=${dev##*/}; disk=$(e5_storage_root_disk "$node")
 [ -b "$dev" ]
 if [ "$kind" = part ]; then
     grep -qx PARTNAME=e5root "/sys/class/block/$node/uevent"
@@ -49,6 +57,9 @@ else
     [ "$(cat /sys/class/block/$disk/device/type)" = SD ]
 fi
 [ "$(awk '$2=="/" {print $1}' /proc/mounts | tail -1)" = "$dev" ]
+source_profile=${E5_UPDATE_SOURCE_PROFILE:-${E5_UPDATE_PROFILE:?}}
+case "$source_profile:${E5_UPDATE_PROFILE:?}" in *[!a-z0-9:-]*|:*|*:) exit 1 ;; esac
+[ "$(cat /etc/e5/device-profile)" = "$source_profile" ]
 bytes=$(( $(cat "/sys/class/block/$node/size") * 512 ))
 [ "${E5_IMAGE_SIZE:?}" -le "$bytes" ]
 case "${E5_IMAGE_SHA256:?}" in *[!0-9a-f]*|'') exit 1 ;; esac
@@ -72,10 +83,13 @@ firmware=
 for name in lib/firmware/wcnmodem.bin lib/firmware/gnssmodem.bin lib/firmware/wifi_board_config*.ini \
     lib/firmware/tsx_data lib/firmware/l_agdsp_a.img lib/firmware/audio_structure lib/firmware/dsp_vbc \
     lib/firmware/codec.xml \
+    lib/firmware/y60-audio_route.xml lib/firmware/y60-audio_pga.xml \
     lib/firmware/cvs lib/firmware/aw87xxx_acf.bin lib/firmware/sprd \
     lib/firmware/aw883xx_acf.bin lib/firmware/awinic_params.bin \
     lib/firmware/sitronix_firmware_huaying.dump lib/firmware/sitronix \
-    lib/firmware/yuanhang41s-HiFi.conf lib/firmware/yuanhang41s-media-max \
+    lib/firmware/changxing60-audio_config.xml lib/firmware/changxing60-audio_route.xml \
+                   lib/firmware/changxing60-audio_pga.xml lib/firmware/axs15205 \
+                   lib/firmware/yuanhang41s-HiFi.conf lib/firmware/yuanhang41s-media-max \
     lib/firmware/android-firmware-slot opt/e5/android; do
     [ ! -e "$name" ] || firmware="$firmware $name"
 done
@@ -113,11 +127,12 @@ required_kib=$((payload + nv_kib + 262144))
 [ "$total_kib" -gt "$required_kib" ] || {
     echo "not enough physical memory for offline update: need ${required_kib} KiB, total ${total_kib} KiB; request not armed" >&2; exit 1;
 }
-cid=$(cat "/sys/class/block/$disk/device/cid")
+cid=$(storage_update_id "$disk")
 {
     echo VERSION=1; echo KIND="$kind"; echo CID="$cid"; echo ROOT_BYTES="$bytes"
     echo RAW_BYTES="$E5_IMAGE_SIZE"; echo RAW_SHA256="$E5_IMAGE_SHA256"
     echo PROFILE="$E5_UPDATE_PROFILE"; echo VARIANT="$E5_UPDATE_VARIANT"
+    if [ "$source_profile" != "$E5_UPDATE_PROFILE" ]; then echo SOURCE_PROFILE="$source_profile"; fi
     if [ "${E5_NV_POLICY:-preserve}" = original ]; then echo NV_POLICY=original; fi
 } > request.ready
 sync

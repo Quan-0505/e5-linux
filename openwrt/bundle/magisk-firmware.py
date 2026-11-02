@@ -40,6 +40,16 @@ def convert(raw, out, tools, default_ssid, profile=''):
                 'aw883xx_acf.bin','awinic_params.bin','sitronix_firmware_huaying.dump','audio_route.xml','audio_pga.xml')) or (
                 p.name.startswith('wifi_board_config') and p.suffix == '.ini'):
             shutil.copyfile(p, fw / p.name)
+    if profile == 'changxing60':
+        for name in ('audio_config.xml','audio_route.xml','audio_pga.xml'):
+            shutil.copyfile(raw/name, fw/('changxing60-'+name))
+        (fw/'axs15205').mkdir()
+        shutil.copyfile(raw/'axs_firmware_easyquick.bin', fw/'axs15205/easyquick.bin')
+    if profile == 'y60':
+        for name in ('audio_route.xml', 'audio_pga.xml'):
+            shutil.copyfile(raw/name, fw/('y60-'+name))
+        if not (fw/'aw87xxx_acf.bin').is_file() or not (fw/'codec.xml').is_file():
+            raise ValueError('missing recipient Y60 amplifier/codec calibration')
     if not list(fw.glob('wifi_board_config*.ini')):
         raise ValueError('missing Wi-Fi board configuration')
     dsp = (raw / 'l_agdsp_a.img').read_bytes()

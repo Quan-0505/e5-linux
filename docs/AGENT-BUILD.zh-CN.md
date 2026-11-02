@@ -117,3 +117,60 @@ manifest、SHA-256 和单份 boot/rootfs。`.building-*` 不是正式包。
 
 报告每个包的完整路径、构建提交、校验结果及失败项。原生 Mac 冒烟通过不等于
 设备硬件验证；本次本地构建不得擅自连接或刷入用户机器。
+
+畅行60（`changxing60`，P720S20 UFS 4Kn）已接入相同构建入口；内核仍用登记的 `tools/build-profile-kernel.py --profile changxing60`，正式包用 `--profiles changxing60`。Windows/Mac 安装器必须包含新的存储库；见 [安装接入与验收边界](CHANGXING60-INSTALL.zh-CN.md)。
+
+
+## 在线保数据缩容工具
+
+图形安装器的 F2FS 在线缩容使用仓库内置的静态 ARM64 小工具。
+修改 installer/device/f2fs-online.c 后，在既有 WSL 工作区通过固定入口执行：
+
+```sh
+python3 tools/build-release.py run --workspace /home/kano/openwrt-build \
+  --label online-f2fs-helper -- python3 installer/build-online-helper.py
+```
+
+构建器先跑原生 C 回归，再生成 installer/device/f2fs-online-arm64 和 build.json。
+Windows/macOS 原生打包消费同一受源码哈希绑定的工具，不另找 Android Python，
+不为此重编内核或复制 rootfs。源变化必须重编工具及两个原生安装器；禁止修改
+指纹绕过。工作流、证据及硬件验收边界见 ONLINE-F2FS-INSTALL-20261029.zh-CN.md。
+
+
+## 公共安装器子模块
+
+installer/ 现在固定引用 https://github.com/kanoqwq/openwrt-tools 的提交。新检出先执行 git submodule update --init --recursive。共享源码、Android 及独立工具构建方法见 installer/docs/BUILD.zh-CN.md；E5/MU300 的 NV、UFS 身份和启动流程继续分开处理。请先在子模块提交，再在父仓库更新 gitlink；不要重新复制一整份安装器。
+
+两个父仓库可通过 OPENWRT_GUI_ARTIFACT 与 OPENWRT_GUI_MACOS_ARTIFACT 复用同一份已校验交付件，无需各编译一次；首次拆分后旧 GUI 指纹应正常拒绝，不能修改旧 build.json 绕过。tools/release-index.py、tools/build-release-index.py、tools/package-diff-studio.py 保留为兼容入口，实际代码由子模块提供。
+
+
+### 本机共用安装器交付件
+
+当前统一的原生交付件在 D:/Git/e5-linux/installer/artifacts/windows 与 macos-arm64；MU300 原目录的旧交付件仅保留，不用于本轮打包。Windows/WSL 打包前显式设置下面两项（Windows 对应使用 D:/Git/e5-linux/... 路径）：
+
+```sh
+export OPENWRT_GUI_ARTIFACT=/mnt/d/Git/e5-linux/installer/artifacts/windows
+export OPENWRT_GUI_MACOS_ARTIFACT=/mnt/d/Git/e5-linux/installer/artifacts/macos-arm64
+```
+
+这是已选定的共享输入，不是失败后寻找旧缓存；指纹不匹配仍应停止并重编真正变化的组件。两个子模块提交一致，原生交付件的 sources() 必须与各自检出内容一致。不要复制同一份 SDK、源码、Cargo target 或完整 runtime 到另一个构建目录凑路径。
+
+
+## 根目录 Android 安装器
+
+完整打包及 refresh-installers 均由公共 installer/package_android.py 校验已签名 ARM64 release APK 的源码、ABI 与哈希，发布包根目录固定放 OpenWrt-Tools.apk，构建清单为 docs/GUI-BUILD-android.json，使用说明为 docs/ANDROID-INSTALLER.md。不要把 APK 塞进 tools 或再复制一份。
+
+本机与两个桌面交付件一样复用 E5 的 Android 构建：WSL 设置 OPENWRT_GUI_ANDROID_ARTIFACT=/mnt/d/Git/e5-linux/installer/artifacts/android；Windows 使用 D:/Git/e5-linux/installer/artifacts/android。过期时只重编 Android，不修改 build.json。
+
+Mac 原生构建使用公共安装器仓库的 macos.yml，手动 dispatch 即可；不再在 E5 仓库新建 build/macos-* 快照分支。下载后仍核对公共 sources()。
+
+## E5 原厂模板登记（2026-10-31）
+
+原登记的 `work/e5-port/boot-before.img`、`misc-head.bin` 已不存在。
+当前直接使用 `tools/build-layout.json` 登记的荣悦 E5 原厂同组备份，不复制另一份缓存。
+`boot_b.bin` SHA-256 为 `1203d1cf5b0b2f0c02d3ba5d69b38a6677e47e939697cd8fb1a0f533d7baad39`。
+已与 `20261030-142933-root-apk-seven-models-22852` 中通过发布清单／ZIP 文件清单哈希核验的 E5 boot 对照：
+除构建器本就替换的内核／ramdisk 长度、命令行、signature_size 以外，完整头部逐字节一致，
+保留的原厂 vbmeta blob 也逐字节一致。不是拿其他机型或另一个旧内核替代输入。
+同组 `misc.bin` 的 BCAB、CRC、Android 槽位状态已校验；构建器只使用其中的启动控制结构，
+不把整份 misc 备份装进发布包。若登记输入再次缺失，停止检查并重新核实来源。

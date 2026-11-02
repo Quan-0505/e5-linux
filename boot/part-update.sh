@@ -1,3 +1,11 @@
+
+storage_update_id() {
+    if [ "$(cat /sys/class/block/$1/device/type 2>/dev/null)" = SD ]; then
+        cat /sys/class/block/$1/device/cid
+    else
+        e5_storage_identity "$1"
+    fi
+}
 # Sourced by init: replace only the verified, unmounted internal or TF root.
 part_update_restore_bundled_daed_plugin() {
     local new=$1 saved=$2 target=$1/etc/e5-infoscreen/plugins/daed
@@ -28,7 +36,7 @@ part_update_pending() {
     [ ! -e /run/tf-update-conflict ] || return 1
     [ -s /run/part-update-pending ] || return 0
     local dev= node disk mp=/part-update-old ram=/run/part-update
-    local KIND=part VERSION= CID= ROOT_BYTES= RAW_BYTES= RAW_SHA256= PROFILE= VARIANT= NV_POLICY=preserve kv actual want got producer writer rc1 rc2 actual_variant
+    local KIND=part VERSION= CID= ROOT_BYTES= RAW_BYTES= RAW_SHA256= PROFILE= SOURCE_PROFILE= VARIANT= NV_POLICY=preserve kv actual want got producer writer rc1 rc2 actual_variant
     dev=$(cat /run/part-update-pending)
     node=${dev##*/}
     mkdir -p "$mp"
@@ -37,7 +45,7 @@ part_update_pending() {
     . /etc/part-progress.sh
     part_progress_start
     echo '1/5 checking offline update' > /run/part-status
-    node=${dev##*/}; disk=${node%p*}
+    node=${dev##*/}; disk=$(e5_storage_root_disk "$node") || return 1
     for kv in $(cat "$mp/.e5-update/request"); do
         case "$kv" in
             KIND=*) KIND=${kv#*=} ;;
@@ -45,6 +53,7 @@ part_update_pending() {
             ROOT_BYTES=*) ROOT_BYTES=${kv#*=} ;; RAW_BYTES=*) RAW_BYTES=${kv#*=} ;;
             RAW_SHA256=*) RAW_SHA256=${kv#*=} ;; PROFILE=*) PROFILE=${kv#*=} ;;
             VARIANT=*) VARIANT=${kv#*=} ;;
+            SOURCE_PROFILE=*) SOURCE_PROFILE=${kv#*=} ;;
             NV_POLICY=original) NV_POLICY=original ;;
             *) umount "$mp"; part_fail 'unknown update request field'; return 1 ;;
         esac
@@ -58,10 +67,11 @@ part_update_pending() {
     case "$RAW_SHA256" in *[!0-9a-f]*|'') umount "$mp"; part_fail 'invalid image hash'; return 1 ;; esac
     case "$VARIANT" in standard|wps) ;; *) umount "$mp"; part_fail 'invalid update variant'; return 1 ;; esac
     actual_variant=$(part_update_variant "$mp") || { umount "$mp"; part_fail 'invalid current image variant'; return 1; }
-    if [ "$VERSION" != 1 ] || [ "$CID" != "$(cat /sys/class/block/$disk/device/cid)" ] ||
+    SOURCE_PROFILE=${SOURCE_PROFILE:-$PROFILE}
+    case "$SOURCE_PROFILE:$PROFILE" in *[!a-z0-9:-]*|:*|*:) umount "$mp"; part_fail 'invalid profile metadata'; return 1 ;; esac
+    if [ "$VERSION" != 1 ] || [ "$CID" != "$(storage_update_id "$disk")" ] ||
        [ "$ROOT_BYTES" != "$(blockdev --getsize64 "$dev")" ] ||
-       [ "$PROFILE" != "$(cat "$mp/etc/e5/device-profile")" ] ||
-       [ "$VARIANT" != "$actual_variant" ] ||
+       [ "$SOURCE_PROFILE" != "$(cat "$mp/etc/e5/device-profile")" ] ||
        [ ! -f "$mp/etc/e5/$KIND-root" ] || [ "$RAW_BYTES" -le 0 ] || [ "$RAW_BYTES" -gt "$ROOT_BYTES" ]; then
         umount "$mp"; part_fail 'update device/geometry verification'; return 1
     fi
@@ -116,14 +126,18 @@ part_update_pending() {
     tar -xf ext4-tools.tar -C tools || { part_fail 'ext4 tools'; return 1; }
     echo '2/5 writing verified image (all payloads are in RAM)' > /run/part-status
     mkfifo image.pipe
+    # The Y60 kernel need not enable TASK_IO_ACCOUNTING. Use the exact target
+    # partition's sector counter in the shared heartbeat in that case.
+    printf '%s %s\n' "$node" "$(awk '{print $7}' "/sys/class/block/$node/stat" 2>/dev/null)" > /run/part-disk
     gzip -dc openwrt.ext4.gz > image.pipe & producer=$!
     dd if=image.pipe of="$dev" bs=1048576 conv=fsync 2>/run/part-dd.err & writer=$!
     echo "$writer $RAW_BYTES" > /run/part-worker
     wait "$writer"; rc1=$?
     [ "$rc1" = 0 ] || kill "$producer" 2>/dev/null
     wait "$producer"; rc2=$?
-    rm -f image.pipe /run/part-worker
+    rm -f image.pipe /run/part-worker /run/part-disk
     [ "$rc1:$rc2" = 0:0 ] || { part_fail 'root write'; return 1; }
+    echo '2/5 reading back and verifying written image (write and flush finished)' > /run/part-status
     got=$(set -o pipefail; head -c "$RAW_BYTES" "$dev" | sha256sum | cut -d' ' -f1) || return 1
     [ "$got" = "$want" ] || { part_fail 'root readback'; return 1; }
     echo '3/5 checking and expanding filesystem' > /run/part-status

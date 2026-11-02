@@ -12,6 +12,14 @@ BASE = '020b970e351e'
 HERE = Path(__file__).resolve().parent
 
 
+def prepare_charger(kernel, recipient, charger_adapter=None):
+    if charger_adapter is not None:
+        charger_adapter(kernel)
+    else:
+        runpy.run_path(str(HERE / 'charger.py'))['apply'](
+            kernel, m8_revision_compat=recipient == 'm8')
+
+
 def apply(kernel, *, charger_adapter=None, recipient='m8'):
     kernel = Path(kernel)
     if recipient != 'yuanhang41s' and (kernel / 'drivers/usb/typec/yh41s-usb-policy.h').exists():
@@ -72,15 +80,10 @@ def apply(kernel, *, charger_adapter=None, recipient='m8'):
     # E5's clock core keeps legacy ibias tables and frequency tables distinct.
     text = text.replace('SPRD_PLL_HW(', 'SPRD_PLL_FTABLE_HW(')
     text = text.replace('SPRD_PLL_FW_NAME(', 'SPRD_PLL_FTABLE_FW_NAME(')
-    # Donor OFFSET means a fixed four-byte divider offset; this clock core
-    # takes that offset explicitly. Each call has nine plain arguments.
-    def divider(match):
-        fields = [p.strip() for p in match.group(1).split(',')]
-        if len(fields) != 9:
-            raise ValueError('Unexpected composite clock arguments')
-        fields.insert(6, '0x4')
-        return 'SPRD_COMP_CLK_DATA_OFFSET(' + ', '.join(fields) + ')'
-    text = re.sub(r'SPRD_COMP_CLK_DATA_OFFSET\(([^;]+?)\)', divider, text)
+    # Vendor div.c subtracts its fixed offset; upstream div.c adds it.
+    # Translate the sign as well as the extra API argument.
+    text = runpy.run_path(str(HERE.parent / 'common/clock-offsets.py'))[
+        'translate_legacy_offsets'](text)
     # The donor SC setters use regmap_update_bits, with offset zero here;
     # those operations are identical to this core's regular composite ops.
     text = text.replace('SPRD_SC_COMP_CLK_DATA(', 'SPRD_COMP_CLK_DATA(')
@@ -131,7 +134,7 @@ def apply(kernel, *, charger_adapter=None, recipient='m8'):
             '\t{ .compatible = "sprd,ums9620-pwm", .data = &ums9620_pwm_data },',
             '\t{ .compatible = "sprd,ums9620-pwm", .data = &ums9620_pwm_data },\n'
             '\t{ .compatible = "sprd,qogirn6pro-pwm", .data = &ums9620_pwm_data },')
-    (charger_adapter or runpy.run_path(str(HERE / 'charger.py'))['apply'])(kernel)
+    prepare_charger(kernel, recipient, charger_adapter)
     runpy.run_path(str(HERE.parent / 't551m/cpufreq.py'))['apply'](kernel)
     # M8 uses the older three-cluster cpufreq-data-v1 binding, like UMS9620.
     for name in ('sprd-cpufreq-v2-driver.c', 'sprd-cpufreq-v2.h'):
@@ -222,6 +225,7 @@ def apply(kernel, *, charger_adapter=None, recipient='m8'):
     text = path.read_text().replace('\ttlsc6x_do_update_ifneed();',
                                    '\t/* Preserve the M8 factory touch firmware. */')
     path.write_text(text)
+    runpy.run_path(str(HERE.parent / 'common/power-probe.py'))['apply'](kernel)
 
 
 if __name__ == '__main__':

@@ -198,9 +198,34 @@ const PLATFORM_ERRORS = [
     "Özel voltajla beklenmeyen kapanma oldu; fabrika voltajı geri yüklendi"
   ],
   [
-    "Secure firmware voltage ABI is not verified",
-    "固件电压接口尚未验证",
-    "Güvenli ürün yazılımının voltaj arayüzü doğrulanmadı"
+    "CPU voltage adjustment is not supported on this SoC",
+    "当前芯片尚未适配电压调整",
+    "Bu çipte CPU voltaj ayarı desteklenmiyor"
+  ],
+  [
+    "CPU voltage interface is missing from this kernel",
+    "当前内核缺少 CPU 调压接口，需要更新配套内核和模块",
+    "Bu çekirdekte CPU voltaj arayüzü eksik; çekirdeği ve eşleşen modülleri güncelleyin"
+  ],
+  [
+    "SML partitions are not ready; refresh after initialization",
+    "SML 分区尚未就绪，请稍后刷新",
+    "SML bölümleri hazır değil; başlatma tamamlanınca yenileyin"
+  ],
+  [
+    "SML partitions could not be read; refresh and check storage",
+    "无法读取 SML 分区，请刷新并检查存储状态",
+    "SML bölümleri okunamadı; yenileyin ve depolamayı denetleyin"
+  ],
+  [
+    "SML voltage ABI could not be established",
+    "尚未匹配到本机 SML 的调压协议，请保留原厂电压",
+    "Bu SML'nin voltaj protokolü doğrulanamadı; fabrika voltajını koruyun"
+  ],
+  [
+    "SML compatibility checker is not ready; refresh after installation",
+    "SML 兼容性检查组件尚未就绪，请安装完成后刷新",
+    "SML uyumluluk denetleyicisi hazır değil; kurulumdan sonra yenileyin"
   ],
   [
     "CPU driver failed to initialize; reboot to restore default voltage",
@@ -1222,6 +1247,7 @@ var DASH_I18N = {
 	'锁定': ['Lock', 'Kilitle'],
 	'已运行': ['Uptime', 'Çalışma süresi'],
 	'无线电已关': ['Radio off', 'Radyo kapalı'],
+	'未插卡': ['No SIM card', 'SIM kart takılı değil'],
 	'未驻留小区': ['No serving cell', 'Bağlı olunan hücre yok'],
 	'无应答': ['No response', 'Yanıt yok'],
 	'信号': ['Signal', 'Sinyal'],
@@ -1322,6 +1348,9 @@ var DASH_I18N = {
 	'共 ': ['Total ', 'Toplam '],
 	'余 ': ['Free ', 'Boş '],
 	'簇': ['Cluster ', 'Küme '],
+	'数据漫游': ['Data roaming', 'Veri dolaşımı'],
+	'使用中': ['In use', 'Kullanımda'],
+	'是': ['Yes', 'Evet'],
 	'否': ['No', 'Hayır'],
     '接入点 APN': ['Access points (APN)', 'Erişim noktaları (APN)'],
     '基带NV设置': ['Baseband NV settings', 'Temel bant NV ayarları'],
@@ -1907,6 +1936,9 @@ html.mud-bootstrap-theme{--surface:var(--background-color-high);--surface-sunken
 .mud-rsrp{font-size:2.3rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
 .mud-rsrp small{font-size:.9rem;font-weight:500}
 .mud-chips{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.mud-imei-label{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mud-imei-active{display:inline-flex;align-items:center;padding:1px 6px;border-radius:99px;font-size:.68rem;font-weight:600;line-height:1.4;color:var(--success,#2fbf71);background:color-mix(in srgb,var(--success,#2fbf71) 14%,transparent);white-space:nowrap}
+.mud-imei-active[hidden]{display:none}
 .mud-tag{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--surface-sunken,rgba(127,127,127,.1));font-size:.74rem;font-weight:600;font-variant-numeric:tabular-nums}
 .mud-q{display:inline-block;min-width:3em;padding:1px 8px;border-radius:99px;font-size:.74rem;font-weight:600;text-align:center}
 .mud-rows{display:grid;gap:2px}

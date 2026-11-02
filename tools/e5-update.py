@@ -43,7 +43,7 @@ def image_capacity(client):
         return int(GUI.ctx.record['plan']['openwrt_bytes'])
     # Use raw SSH stdout, without requiring od/hexdump or SFTP on OpenWrt.
     dev = execute(client, "readlink -f $(awk '$2==\"/\" {print $1}' /proc/mounts | tail -1)").strip()
-    if not re.fullmatch(r'/dev/(?:block/)?(?:mmcblk\d+(?:p\d+)?|loop\d+)', dev):
+    if not re.fullmatch(r'/dev/(?:block/)?(?:mmcblk\d+(?:p\d+)?|sd[a-z]+[1-9][0-9]*|loop\d+)', dev):
         raise ValueError('Cannot identify the current image root')
     _, out, err = client.exec_command(f'dd if={dev} bs=1024 skip=1 count=1 2>/dev/null', timeout=15)
     raw = out.read()
@@ -139,6 +139,16 @@ def save_nv_backup(client, stage, profile, compress=False):
             'printf "NV-BACKUP "; sha256sum '+shlex.quote(stage+'/nv.tar')+' | cut -d" " -f1; '
             'else echo NV-NONE; fi')
     except Exception as error:
+        detail = str(error)
+        if re.search(r'\b(?:nv_busy|nv_writer_busy|BlockingIOError)\b', detail):
+            raise ValueError('Another update or NV operation is active; retry after it finishes / '
+                             '更新或 NV 操作正在执行，请在完成后重试；未改用原机 NV') from error
+        # Only an identified working-copy integrity/source error can offer
+        # original-NV recovery. Connectivity, locking and program errors do
+        # not establish that the working NV is damaged.
+        if not re.search(r'\bnv_(?:invalid_(?:header|size|checksum|runtime)|origin_unavailable|'
+                         r'work_unavailable|snapshot_changed)\b', detail):
+            raise
         # Verify a separate source first. A mutex/transport/original-NV failure
         # cannot be bypassed by merely clicking a recovery button.
         try:
@@ -208,11 +218,16 @@ def main():
     # USB-connected devices reuse the same management address. Keep trust
     # within this connection rather than pinning that IP to one installation.
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    client.connect(a.host, username='root', password=GUI.password if GUI else os.environ['E5_TELNET_PASS'],
-                   look_for_keys=False, allow_agent=False, timeout=15, auth_timeout=20)
+    if GUI:
+        GUI.connect_ssh(client,a.host,GUI.password)
+    else:
+        client.connect(a.host, username='root', password=os.environ['E5_TELNET_PASS'],
+                       look_for_keys=False, allow_agent=False, timeout=30, banner_timeout=60, auth_timeout=60)
+        client.get_transport().set_keepalive(15)
     if GUI: GUI.validate_ssh(client)
     stage = None
     try:
+        source_profile = profile
         device_guard = (
             'if [ "$(id -u)" != 0 ] || [ "$(cat /etc/e5/device-profile 2>/dev/null)" != ' +
             shlex.quote(profile) + ' ]; then echo "device profile check failed" >&2; exit 1; fi; '
@@ -266,11 +281,11 @@ def main():
             head = Path(temporary) / 'boot-head.img'
             head.write_bytes(image[:boot['persist_log_offset']])
             for name in ('openwrt.ext4.gz', 'ext4-tools.tar', 'device-install-image.sh',
-                         'device-flash-boot.sh', 'device-stage-part-update.sh', 'e5-gpt',
+                         'device-flash-boot.sh', 'device-stage-part-update.sh', 'e5-gpt', 'storage.sh',
                          'e5-network-addons-snapshot', 'network-addons-software.list', 'nv-persistence.py'):
                 upload(client, files / name, stage + '/' + name)
             upload(client, head, stage + '/boot-head.img')
-            nv_backup = save_nv_backup(client, stage, profile, compress=layout in ('part', 'sd'))
+            nv_backup = save_nv_backup(client, stage, source_profile, compress=layout in ('part', 'sd'))
             nv_policy = json.loads((nv_backup.parent/'backup.json').read_text())['policy'] if nv_backup else 'preserve'
             command = ('umask 077; mkdir -p /run/e5-upgrade; '
                 '[ ! -L /run/e5-upgrade ] && [ "$(stat -c %u:%a /run/e5-upgrade)" = 0:700 ]; '
@@ -278,7 +293,7 @@ def main():
                 'flock -n 8 || { echo "another upgrade is running"; exit 1; }; '
                 'export E5_UPGRADE_LOCK_HELD=1; ' +
                 capacity_env + 'E5_NV_POLICY='+nv_policy+' E5_IMAGE_SIZE=' + str(a.raw_size) + ' E5_IMAGE_SHA256=' + shlex.quote(a.raw_sha256) +
-                ' E5_UPDATE_PROFILE=' + shlex.quote(profile) + ' E5_UPDATE_VARIANT=' + shlex.quote(variant) + ' sh ' + stage + '/device-stage-part-update.sh ' + stage)
+                ' E5_UPDATE_PROFILE=' + shlex.quote(profile) + ' E5_UPDATE_VARIANT=' + shlex.quote(variant) + ' E5_UPDATE_SOURCE_PROFILE=' + shlex.quote(source_profile) + ' sh ' + stage + '/device-stage-part-update.sh ' + stage)
             command += '; sh ' + stage + '/device-flash-boot.sh ' + stage + '/boot-head.img ' + \
                     hashlib.sha256(head.read_bytes()).hexdigest() + ' ' + str(boot['persist_log_offset'] >> 20)
             # Publish an internal update request only after boot readback passes.

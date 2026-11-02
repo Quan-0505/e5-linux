@@ -4,3 +4,6 @@
 [submodule "ci/infoscreen-plugins"]
 	path = ci/infoscreen-plugins
 	url = https://github.com/Enceka/infoscreen-plugins.git
+[submodule "installer"]
+	path = installer
+	url = https://github.com/kanoqwq/openwrt-tools.git

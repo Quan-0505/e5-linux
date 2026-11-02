@@ -8,17 +8,35 @@
   },
   "defaults": "{repo}/work/e5-port/clean-openwrt-base.tar",
   "busybox": "{repo}/work/t551m/busybox",
+  "ufs_identity_helper": "{repo}/out/changxing60/ufs-id",
   "block_apk": "{repo}/out/openwrt/block-mount-guarded.apk",
   "wifi_apks": "{repo}/work/wifi-sae",
   "local_kernel_build": {
     "source": "{workspace}/sources/e5-kernel",
     "revision": "020b970e351eee3887e6caaf2d653926e7086e44"
   },
+  "driver_api_checks": {
+    "y60": {
+      "reference_native": "yuanhang41s"
+    }
+  },
+  "native_kernel_builds": {
+    "k1": {
+      "source": "{workspace}/k1/linux-cache",
+      "objects": "{workspace}/k1/build",
+      "base_config": "{workspace}/kernels/m8/config"
+    },
+    "yuanhang41s": {
+      "source": "{workspace}/sources/e5-kernel",
+      "objects": "{workspace}/objects/e5-family",
+      "base_config": "{workspace}/kernels/m8/config"
+    }
+  },
   "profiles": {
     "e5": {
       "kernel": "{workspace}/kernels/e5",
-      "stock_boot": "{repo}/work/e5-port/boot-before.img",
-      "misc_head": "{repo}/work/e5-port/misc-head.bin"
+      "stock_boot": "/mnt/d/随身WiFi/荣悦E5刷机/spd_dump_for_ums9621/备份/boot_b.bin",
+      "misc_head": "/mnt/d/随身WiFi/荣悦E5刷机/spd_dump_for_ums9621/备份/misc.bin"
     },
     "t551m": {
       "kernel": "{workspace}/kernels/t551m",
@@ -49,6 +67,18 @@
       "kernel": "{workspace}/kernels/lym10k",
       "stock_boot": "/mnt/d/随身WiFi/岭燕老头乐/燕子备份/燕子备份/boot_b.bin",
       "misc_head": "/mnt/d/随身WiFi/岭燕老头乐/燕子备份/燕子备份/misc.bin"
+    },
+    "y60": {
+      "kernel": "{workspace}/kernels/y60",
+      "platform_config": "{workspace}/kernels/m8/config",
+      "stock_boot": "/mnt/d/老年机/酷派金世纪y60_20240108带震动版本备份/Image/boot_b.img",
+      "misc_head": "/mnt/d/老年机/酷派金世纪y60_20240108带震动版本备份/Image/misc.img"
+    },
+    "changxing60": {
+      "kernel": "{workspace}/kernels/changxing60",
+      "stock_boot": "{repo}/dumps/changxing60-stock/boot_a.img",
+      "misc_head": "{repo}/dumps/changxing60-stock/misc-head.bin",
+      "platform_config": "{workspace}/kernels/m8/config"
     }
   }
 }

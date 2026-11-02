@@ -1,5 +1,8 @@
 # Hardware and modem fixes
 
+- Before adapting UFS hardware, read `docs/UFS-PORTING.zh-CN.md`. The MU300
+  U30 Air results are reference evidence, not proof of E5 or Changxing 60
+  support. Verify this model's storage and stock behavior. Do not use fastboot.
 - Use each model's stock Android firmware behavior as the reference for power,
   charging, battery accounting, radio initialization and reconnection.
 - Prefer the actual device's driver/RIL binary and device tree over a merely
@@ -47,3 +50,11 @@
   reuse. Never automatically delete source/object/download caches, device dumps,
   installation backups, or previous releases. Do not run `docker system prune`
   or remove volumes as routine build cleanup.
+
+# Shared installer ownership
+
+- installer/ is the Git submodule https://github.com/kanoqwq/openwrt-tools, pinned to a reviewed commit. Read installer/AGENTS.md and installer/docs/BUILD.zh-CN.md before installer work.
+- Commit shared UI/backend/Android/runtime changes in that repository, then update this parent repository's gitlink. Never restore a full generated installer mirror or auto-follow an unpinned branch during packaging.
+- Fresh checkouts must run git submodule update --init --recursive. Parent CI must use recursive submodules.
+- E5 and MU300 keep distinct NV, storage identity and boot adapters. Both support eMMC/UFS. A model-name mismatch is a typed yes decision, not a hardcoded allowlist; other integrity and partition checks remain in effect.
+- Reuse one verified native installer build across both parents with the existing artifact environment variables; do not duplicate SDK, node_modules, Cargo targets or rootfs caches.

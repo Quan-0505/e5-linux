@@ -23,7 +23,8 @@ import zipfile
 TOP = Path(__file__).resolve().parents[1]
 sys.dont_write_bytecode = True
 OWNER = 'e5-linux-build-release-v1'
-PROFILES = ('e5', 't551m', 'm8', 't512n', 'yuanhang41s', 'k1', 'lym10k')
+PROFILES = ('e5', 't551m', 'm8', 't512n', 'yuanhang41s', 'k1', 'lym10k', 'changxing60')
+EXPERIMENTAL_PROFILES = ('y60',)
 COMMON = ('base', 'defaults', 'busybox', 'block_apk', 'wifi_apks')
 
 
@@ -61,7 +62,7 @@ def layout(config, workspace, profiles, repo=TOP):
     common = {key: path(data[key]) for key in COMMON}
     rows = {}
     for model in profiles:
-        if model not in PROFILES or model not in data['profiles']:
+        if model not in (*PROFILES, *EXPERIMENTAL_PROFILES) or model not in data['profiles']:
             raise ValueError('Unknown/unconfigured model: ' + model)
         rows[model] = {key: path(data['profiles'][model][key])
                        for key in ('kernel', 'stock_boot', 'misc_head')}
@@ -88,7 +89,7 @@ def workspace_lock(workspace):
 
 
 def stage_path(workspace, model):
-    if model not in PROFILES:
+    if model not in (*PROFILES, *EXPERIMENTAL_PROFILES):
         raise ValueError('Unknown staging model')
     parent = workspace / 'package-work/e5-release'
     target = parent / model
@@ -123,6 +124,8 @@ def installer_artifact(platform):
 
 
 def input_check(common, rows):
+    if not (TOP/'installer/package_gui.py').is_file():
+        raise ValueError('Initialize the shared installer submodule / 请先执行 git submodule update --init --recursive')
     missing = [str(p) for p in common.values() if not p.exists()]
     missing += [str(p) for row in rows.values() for p in row.values() if not p.exists()]
     if missing:
@@ -162,8 +165,10 @@ def digest(path):
     return h.hexdigest()
 
 
-def verify_archive(path):
+def verify_archive(path, require_android=False):
     with zipfile.ZipFile(path) as archive:
+        if require_android:
+            runpy.run_path(str(TOP/'installer/package_android.py'))['verify_archive'](archive)
         names = archive.namelist()
         if len(names) != len(set(names)) or archive.testzip():
             raise ValueError('ZIP duplicate entries or CRC failure: ' + str(path))
@@ -265,7 +270,7 @@ def package(task, common, rows):
         if len(matches) != 1:
             raise ValueError('Expected one completed archive for ' + model)
         archive = matches[0]
-        verify_archive(archive)
+        verify_archive(archive,require_android=True)
         assets.append({'profile': model, 'file': archive.name, 'bytes': archive.stat().st_size,
                        'sha256': digest(archive)})
         clean_stage(task.workspace, model)
@@ -303,10 +308,12 @@ def refresh_installers(task, common, rows, source):
     temporary_parent=task.workspace/'tmp';temporary_parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='e5-release-',dir=temporary_parent) as temporary:
         tools=Path(temporary)/'ext4-tools.tar'
+        native=Path(temporary)/'native'
+        task.run('installer-native',[sys.executable,TOP/'tools/package-diff-studio.py','--prepare','--package',native])
         task.run('installer-tools',[sys.executable,TOP/'openwrt/prepare-ext4-tools.py','--root',common['base'],'--include-lock','--out',tools])
         for profile,path in selected.items():
             target=pending/(path.stem+'-installer-g'+before['source_commit'][:8]+'.zip')
-            refresh(path,target,tools,before);verify_archive(target)
+            refresh(path,target,tools,before,native=native);verify_archive(target,require_android=True)
             checksum=digest(target)
             (pending/(target.name+'.sha256')).write_text(checksum+'  '+target.name+'\n')
             outputs.append({'profile':profile,'file':target.name,'bytes':target.stat().st_size,'sha256':checksum})
@@ -323,7 +330,7 @@ def refresh_installers(task, common, rows, source):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=('plan', 'check', 'package', 'refresh-installers', 'run', 'status', 'clean-staging'))
-    parser.add_argument('--profiles', nargs='+', choices=('all', *PROFILES), default=['all'])
+    parser.add_argument('--profiles', nargs='+', choices=('all', *PROFILES, *EXPERIMENTAL_PROFILES), default=['all'])
     parser.add_argument('--workspace', type=Path, default=Path.home() / 'openwrt-build')
     parser.add_argument('--config', type=Path, default=TOP / 'tools/build-layout.json')
     parser.add_argument('--label', default='build')

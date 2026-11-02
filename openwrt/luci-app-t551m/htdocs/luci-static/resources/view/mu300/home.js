@@ -14,6 +14,18 @@
  * 邻区行内「锁定」走 lock_set cell（SFUN 重启协议栈，约半分钟断网）；锁定状态来自
  * lock_get（页面加载时取一次，锁定操作后刷新）。 */
 
+// NR SA may roam while the LTE registration is absent. Never confuse the
+// permission to roam with the current network's registration state.
+function roamingLabel(cell, absent) {
+    if (absent) return '否';
+    var states = [cell && cell.reg5g, cell && cell.reg].filter(function(r) {
+        return r && r.stat != null;
+    }).map(function(r) { return Number(r.stat); });
+    if (states.some(function(n) { return n === 5 || n === 10; })) return '是';
+    if (states.some(function(n) { return n === 1 || n === 9; })) return '否';
+    return '--';
+}
+
 var DEFAULT_POLL_S = 2;
 var RATE_POLL_MS = 1000;
 var RATE_WIN = 40;
@@ -163,6 +175,7 @@ return view.extend({
       <div class="mud-rows">
         <div class="mud-r"><span class="mud-k">IPv4 / IPv6</span><span class="mud-v" id="mud-ip">--</span></div>
         <div class="mud-r"><span class="mud-k">APN</span><span class="mud-v" id="mud-apn">--</span></div>
+        <div class="mud-r"><span class="mud-k">数据漫游</span><span class="mud-v" id="mud-roaming">--</span></div>
         <div class="mud-r"><span class="mud-k">会话时长</span><span class="mud-v" id="mud-sess">--</span></div>
         <div class="mud-r"><span class="mud-k">注册状态</span><span class="mud-v" id="mud-reg">--</span></div>
         <div class="mud-r"><span class="mud-k">DNS</span><span class="mud-v" id="mud-dns">--</span></div>
@@ -216,7 +229,8 @@ return view.extend({
         <div class="mud-r"><span class="mud-k">调制解调器</span><span class="mud-v" id="mud-modem">--</span></div>
         <div class="mud-r"><span class="mud-k">运营商</span><span class="mud-v" id="mud-carr">--</span></div>
         <div class="mud-r"><span class="mud-k">PLMN</span><span class="mud-v" id="mud-plmn">--</span></div>
-        <div class="mud-r"><span class="mud-k">IMEI</span><span class="mud-v" id="mud-imei">--</span></div>
+        <div class="mud-r"><span class="mud-k mud-imei-label">IMEI1 (SIM1)<span class="mud-imei-active" id="mud-imei-active1" hidden></span></span><span class="mud-v" id="mud-imei1">--</span></div>
+        <div class="mud-r"><span class="mud-k mud-imei-label">IMEI2 (SIM2)<span class="mud-imei-active" id="mud-imei-active2" hidden></span></span><span class="mud-v" id="mud-imei2">--</span></div>
         <div class="mud-r"><span class="mud-k">IMSI</span><span class="mud-v" id="mud-imsi">--</span></div>
         <div class="mud-r"><span class="mud-k">ICCID</span><span class="mud-v" id="mud-iccid">--</span></div>
         <div class="mud-r"><span class="mud-k">本机号码</span><span class="mud-v" id="mud-msisdn">--</span></div>
@@ -392,7 +406,18 @@ return view.extend({
 			if (!s) return '--';
 			return this.identShown ? s : s.substring(0, 4) + '****' + s.substring(s.length - 3);
 		}.bind(this);
-		M.set('imei', mask(id && id.imei));
+		var modem = (this.lastInfo && this.lastInfo.modem) || {};
+		var imeis = modem.imeis || [];
+		[0, 1].forEach(function(slot) {
+			// A same-slot full snapshot can arrive before the background identity job.
+			var value = imeis[slot] || (cell && Number(cell.card != null ? cell.card : M.simSlot()) === slot && id && id.imei);
+			M.set('imei' + (slot + 1), mask(value));
+			var badge = M.v('imei-active' + (slot + 1));
+			if (badge) {
+				badge.hidden = modem.data_sim == null || Number(modem.data_sim) !== slot;
+				badge.textContent = '\u2713 ' + M.translate('使用中');
+			}
+		});
 		M.set('imsi', mask(id && id.imsi));
 		M.set('iccid', mask(id && id.iccid));
 		M.set('msisdn', mask(id && id.msisdn));
@@ -467,10 +492,21 @@ return view.extend({
 			/* A newer successful read supersedes the slow tier's old failure. */
 			delete c.error;
 		}
+		var viewedSlot = Number(c && c.card != null ? c.card : M.simSlot());
+		var sim = i.modem && i.modem.sims && i.modem.sims[viewedSlot];
+		var absent = !!(sim && sim.state === 'absent' && Number(sim.slot) === viewedSlot);
+		// SIM removal clears subscription/network data, while equipment identity
+		// and the real RF readback remain meaningful without a card.
+		if (absent) {
+			var equipment = c && c.ident;
+			c = { card: sim.slot, cfun: c && c.cfun, ident: equipment ? {
+				imei: equipment.imei, mfg: equipment.mfg, model: equipment.model, fw: equipment.fw
+			} : null };
+		}
 		this.lastCell = c;
 		/* 慢档数据（邻区/运营商/身份）只在整份缓存的时间戳变化时重绘 */
 		var fullTs = [c && c.card, st.cell && st.cell.ts, st.cell && st.cell.partial || 0,
-			st.cell && st.cell.neigh_pending || 0, c && c.error || ''].join(':');
+			st.cell && st.cell.neigh_pending || 0, c && c.error || '', absent ? 'absent' : ''].join(':');
 		var slowChanged = fullTs !== this.lastFullTs;
 		this.lastFullTs = fullTs;
 
@@ -486,8 +522,8 @@ return view.extend({
 		var label = M.qLabel(rsrp, rsrq, sinr), score = M.qScore({ rsrp: rsrp, rsrq: rsrq, sinr: sinr });
 		var col = M.qCol(label);
 
-		var rat = '--';
-		if (c && !c.error) {
+		var rat = absent ? '未插卡' : '--';
+		if (!absent && c && !c.error) {
 			var nr = c.nr && c.nr.band ? true : false;
 			var lte = c.lte && c.lte.band ? true : false;
 			if (nr && lte) rat = '5G NSA';
@@ -549,9 +585,10 @@ return view.extend({
 		M.v('ip').innerHTML = M.esc(w.ip4 || '--') + (w.ip6 ? '<br>' + M.esc(w.ip6) : '');
 		M.set('dns', w.dns || '--');
 		M.set('apn', w.apn || '--');
+		M.set('roaming', roamingLabel(c, absent));
 		M.set('sess', w.uptime ? M.fmtUptime(w.uptime) : '--');
 		var regmap = { 0: '未注册', 1: '已注册', 2: '搜索中', 3: '注册被拒', 4: '未知', 5: '已注册（漫游）', 7: '仅紧急', 8: '仅紧急', 10: '已注册' };
-		var reg = '--';
+		var reg = absent ? '未插卡' : '--';
 		if (c && c.reg) {
 			reg = regmap[c.reg.stat] || ('状态 ' + c.reg.stat);
 			if (c.reg.tac) reg += ' · TAC ' + c.reg.tac;
@@ -572,8 +609,9 @@ return view.extend({
 			M.set('carr', oper);
 			M.set('plmn', (c && c.operator && c.operator.plmn) ||
 				(c && c.ident && c.ident.imsi ? c.ident.imsi.substring(0, 5) : '--'));
-			this.paintIdent(c);
 		}
+
+		this.paintIdent(c);
 
 		/* -- 无线 · 局域网 · 设备 · SIM */
 		var wf = i.wifi || {};
