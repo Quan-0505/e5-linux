@@ -6,4 +6,4 @@
 	url = https://github.com/Enceka/infoscreen-plugins.git
 [submodule "installer"]
 	path = installer
-	url = https://github.com/kanoqwq/openwrt-tools.git
+	url = https://github.com/Quan-0505/openwrt-tools.git
