@@ -110,13 +110,24 @@ cp "$HERE/tests/modem-data-ports.py" "$WORK/modem-data-ports.py"
 cp "$HERE/tests/modem-data-port-rules.py" "$WORK/modem-data-port-rules.py"
 cp "$HERE/tests/sim-radio-parser.py" "$WORK/sim-radio-parser.py"
 cp "$HERE/files/modemmanager-unisoc-renew" "$WORK/modemmanager-unisoc-renew"
-# Keep the shared stager beside its overlay: it resolves runtime helpers
-# relative to __file__. Copying just the Python file loses those dependencies.
-COMMON="$TOP/device/openwrt_device_common"
-for f in shared/network-startup.py overlay/usr/libexec/e5-mm-report-ports \
-         overlay/etc/hotplug.d/wwan/26-e5-sipa-eth \
-         overlay/usr/libexec/e5-network-recovery overlay/etc/init.d/e5-network-recovery; do
-    [ -s "$COMMON/$f" ] || { echo "Missing shared ModemManager input: $COMMON/$f" >&2; exit 1; }
+# The stager resolves runtime helpers relative to its source file. Stage the
+# tracked equivalent and overlays in that expected layout; /device is an
+# ignored retired checkout and is intentionally not a CI/build input.
+SOURCE="$WORK/modemmanager-inputs"
+rm -rf "$SOURCE"
+mkdir -p "$SOURCE/devices/t551m" "$SOURCE/openwrt/overlay"
+[ -s "$TOP/devices/t551m/network-startup.py" ] || {
+    echo "Missing tracked ModemManager stager: $TOP/devices/t551m/network-startup.py" >&2; exit 1;
+}
+cp "$TOP/devices/t551m/network-startup.py" "$SOURCE/devices/t551m/network-startup.py"
+for f in usr/libexec/e5-mm-report-ports \
+         etc/hotplug.d/wwan/26-e5-sipa-eth \
+         usr/libexec/e5-network-recovery etc/init.d/e5-network-recovery; do
+    [ -s "$TOP/openwrt/overlay/$f" ] || {
+        echo "Missing tracked ModemManager overlay: $TOP/openwrt/overlay/$f" >&2; exit 1;
+    }
+    mkdir -p "$SOURCE/openwrt/overlay/$(dirname "$f")"
+    cp "$TOP/openwrt/overlay/$f" "$SOURCE/openwrt/overlay/$f"
 done
 
 # Compose the complete pinned base series, then downstream overrides.
@@ -141,7 +152,7 @@ DOCKER=${E5_DOCKER:-docker}
 case "$(uname -m)" in x86_64) PLAT=linux/amd64;; *) PLAT=linux/arm64;; esac
 Z=; [ "$DOCKER" = podman ] && Z=,z
 $DOCKER run --rm --platform $PLAT -v "$BUILD_VOLUME":/build \
-    -v "$COMMON":/device-common:ro$Z \
+    -v "$SOURCE":/source:ro$Z \
     -v "$WORK":/work:ro$Z -v "$OUT":/out${Z:+:z} -e VER="$VER" -e E5REV="$E5REV" \
     -e JOBS="${E5_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || nproc)}" \
     "${E5_MODEM_BUILD_IMAGE:-debian:trixie}" bash -euc '
@@ -182,7 +193,7 @@ for p in /work/patches/pkg/*.patch; do patch -p1 -d $P < "$p"; done
 # Match the rootfs stager: upgrading this APK must retain APN selection,
 # boot replay, port discovery, initial EPS preservation and PDP retries.
 # Package files have no board config, so only the shared glue is affected.
-python3 /device-common/shared/network-startup.py --root "$P/files" --profile e5
+python3 /source/devices/t551m/network-startup.py --root "$P/files" --profile e5
 cp /work/patches/src/*.patch $P/patches/
 rel=$(sed -n "s/^PKG_RELEASE:=//p" $P/Makefile)
 sed -i "s/^PKG_RELEASE:=.*/PKG_RELEASE:=$((rel + 900 + E5REV))/" $P/Makefile

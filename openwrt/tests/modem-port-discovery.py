@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Real shell metadata notification in an isolated fake sysfs; never sends AT."""
 from pathlib import Path
+import os
 import runpy
+import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 TOP = Path(__file__).resolve().parents[2]
 
@@ -137,6 +140,43 @@ main() {
             patch(root)
             self.assertEqual(before, helper.read_bytes())
             self.assertTrue(helper.stat().st_mode & 0o111)
+
+    def test_modemmanager_builder_stages_tracked_inputs_for_ci(self):
+        builder = (TOP/'openwrt/build-modemmanager.sh').read_text()
+        self.assertIn('devices/t551m/network-startup.py', builder)
+        self.assertIn('openwrt/overlay/$f', builder)
+        self.assertIn(':/source:ro', builder)
+        self.assertNotIn('openwrt_device_common', builder)
+        self.assertNotIn('/device-common:', builder)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root/'modemmanager-inputs'
+            helper = source/'devices/t551m/network-startup.py'
+            helper.parent.mkdir(parents=True)
+            shutil.copy2(TOP/'devices/t551m/network-startup.py', helper)
+            assets = (
+                'usr/libexec/e5-mm-report-ports',
+                'etc/hotplug.d/wwan/26-e5-sipa-eth',
+                'usr/libexec/e5-network-recovery',
+                'etc/init.d/e5-network-recovery',
+            )
+            for asset in assets:
+                target = source/'openwrt/overlay'/asset
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(TOP/'openwrt/overlay'/asset, target)
+
+            package = root/'package-files'
+            # This regression targets source resolution and copied helper
+            # payloads; rc.d symlink creation is covered by Linux CI tests.
+            with patch.object(Path, 'symlink_to', lambda self, *args, **kwargs: None):
+                runpy.run_path(str(helper))['patch_root'](package, 'e5')
+            for asset in assets:
+                installed = package/asset
+                expected = (TOP/'openwrt/overlay'/asset).read_bytes().replace(b'\r\n', b'\n')
+                self.assertEqual(installed.read_bytes(), expected, asset)
+                if os.name != 'nt':
+                    self.assertTrue(installed.stat().st_mode & 0o111, asset)
 
 
 if __name__ == '__main__': unittest.main()
