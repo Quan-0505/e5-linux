@@ -13,6 +13,7 @@ check() {
     fi
 }
 check python3 upstream/tests/test_kernel_source.py
+check python3 upstream/tests/test_e5_mainline_config.py
 check python3 upstream/test_usb_ncm.py linux-lts-e5
 check python3 tools/tests/android-bootchain.py
 check python3 openwrt/tests/block-probe.py

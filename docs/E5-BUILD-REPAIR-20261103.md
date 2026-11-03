@@ -35,3 +35,13 @@ compared with the request before writing. Restore that comparison in the
 device/geometry guard. Existing tests require both standard-to-WPS and
 WPS-to-standard requests to fail before WRITE or REBOOT. Run the complete
 offline-updater suite in the early Linux gate as well as the firmware gate.
+
+Run 41662158665 passed every prerequisite job but stopped before kernel
+compilation at the strict Kconfig gate. The requested `UCLAMP_TASK` symbols
+depend on `CPU_FREQ_GOV_SCHEDUTIL`, which this E5 mainline profile does not
+enable; `UMS9620_LPINTC` is not defined in the pinned `sprd-linux-devs/linux`
+`e5-6.18` source tree and is not an E5 UMS9621 module. Keep the config gate
+strict: mark the unused clamps disabled, remove the unsupported LPINTC request
+and its container-check mapping, and add a regression test. The failed job is
+a source/config mismatch, not a runner or artifact failure. Next run must still
+prove kernel compilation and all downstream artifact checks with publish=false.
