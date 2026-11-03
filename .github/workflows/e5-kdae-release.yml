@@ -212,7 +212,7 @@ jobs:
             e5-linux/work/network-addons/web/**
           if-no-files-found: error
   build:
-    needs: [block-package, wifi-package, rust-engine, windows-installer, macos-installer]
+    needs: [block-package, wifi-package, rust-engine, windows-installer, macos-installer, linux-installer-tests]
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     defaults:
@@ -474,6 +474,24 @@ jobs:
             e5-linux/out/release/build.json
             e5-linux/upstream/out-release/config
           if-no-files-found: ignore
+
+  linux-installer-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || vars.E5_SOURCE_REF || 'main' }}
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install installer test dependencies
+        run: python -m pip install paramiko lz4 -r installer/ota-requirements.txt
+      - name: Full installer regression including Linux-only runtime fixtures
+        run: python -X utf8 -m unittest discover -s installer/tests -v
 
   windows-installer:
     uses: ./.github/workflows/gui.yml
