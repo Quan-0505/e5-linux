@@ -28,3 +28,10 @@ remain. Independent logic suites now run through tools/ci-logic-checks.sh,
 which preserves every suite and reports all failures before failing the job;
 bootstrap checksum failures still stop immediately. Linux-specific filesystem
 and device tests require the CI runtime; Windows checks are not substitutes.
+
+Run 41650561785 completed the independent logic suites and isolated two
+offline-updater failures: the current-root variant was decoded but no longer
+compared with the request before writing. Restore that comparison in the
+device/geometry guard. Existing tests require both standard-to-WPS and
+WPS-to-standard requests to fail before WRITE or REBOOT. Run the complete
+offline-updater suite in the early Linux gate as well as the firmware gate.

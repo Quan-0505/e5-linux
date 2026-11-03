@@ -72,6 +72,7 @@ part_update_pending() {
     if [ "$VERSION" != 1 ] || [ "$CID" != "$(storage_update_id "$disk")" ] ||
        [ "$ROOT_BYTES" != "$(blockdev --getsize64 "$dev")" ] ||
        [ "$SOURCE_PROFILE" != "$(cat "$mp/etc/e5/device-profile")" ] ||
+       [ "$VARIANT" != "$actual_variant" ] ||
        [ ! -f "$mp/etc/e5/$KIND-root" ] || [ "$RAW_BYTES" -le 0 ] || [ "$RAW_BYTES" -gt "$ROOT_BYTES" ]; then
         umount "$mp"; part_fail 'update device/geometry verification'; return 1
     fi
