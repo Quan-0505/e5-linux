@@ -20,6 +20,7 @@ check python3 openwrt/tests/block-probe.py
 check python3 openwrt/tests/userdata-size.py
 check python3 openwrt/tests/flash-diagnostics.py
 check python3 openwrt/tests/install-entrypoints.py
+check python3 openwrt/tests/prepare-ext4-tools.py
 check python3 openwrt/tests/image-keep-config.py
 E5_TEST_IMAGE="e5-openwrt-base:$E5_WRT_VER" check python3 openwrt/tests/gpt-plan.py
 check python3 openwrt/tests/voice-audio.py
