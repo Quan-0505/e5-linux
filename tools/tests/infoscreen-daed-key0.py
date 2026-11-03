@@ -65,6 +65,9 @@ patch_call = 'tools/patch-e5-daed-shortcut.py "$R/usr/share/e5-infoscreen"'
 assert patch_call in builder
 assert builder.index('python3 /in/feature-source/devices/t551m/ui.py --root $R --profile e5') < builder.index(patch_call)
 assert builder.index('python3 /in/feature-source/devices/e5/stage.py --root $R') < builder.index(patch_call)
+ui_help = subprocess.run([sys.executable, str(TOP / 'devices/t551m/ui.py'), '--help'],
+                         check=True, capture_output=True, text=True).stdout
+assert '--profile' in ui_help and 'e5' in ui_help
 # The screen was already hotpatched with the earlier fixed 0 -> DAED mapping
 # on the E5. Keep support for that live state so the settings can be tested
 # without first restoring the older app.js.

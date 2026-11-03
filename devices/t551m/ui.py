@@ -22,10 +22,11 @@ PACKAGES = {
     'luci-i18n-aurora-config-tr-26.262.58276.362887a.apk':
         ('luci-app-aurora-config', '1.2.5', '2d11e934ec9d3efd4af4b6a8adc3ed10d2e9ea8c1b417cf55fe153ad1df66a3a'),
 }
+PROFILES = ('t551m', 'e5', 'm8', 't512n', 'yuanhang41s', 'k1', 'lym10k', 'changxing60', 'y60')
 
 
 def stage(root, profile='t551m'):
-    if profile not in ('t551m', 'e5', 'm8', 't512n', 'yuanhang41s', 'k1', 'lym10k', 'changxing60', 'y60'):
+    if profile not in PROFILES:
         raise ValueError('Unknown device profile: ' + profile)
     root = Path(root)
     # Also stage into archive-only roots; the defaults hook patches package
@@ -178,13 +179,14 @@ if __name__ == '__main__':
     group = ap.add_mutually_exclusive_group(required=True)
     group.add_argument('--root', type=Path)
     group.add_argument('--archive', type=Path)
+    ap.add_argument('--profile', choices=PROFILES, default='t551m')
     args = ap.parse_args()
     if args.root:
-        stage(args.root)
+        stage(args.root, args.profile)
     else:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            stage(root)
+            stage(root, args.profile)
             with tarfile.open(args.archive, 'w:gz') as archive:
                 for path in sorted(root.rglob('*')):
                     if path.is_symlink():
