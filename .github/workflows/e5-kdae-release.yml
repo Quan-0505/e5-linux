@@ -491,7 +491,9 @@ jobs:
       - name: Install installer test dependencies
         run: python -m pip install paramiko lz4 -r installer/ota-requirements.txt
       - name: Full installer regression including Linux-only runtime fixtures
-        run: python -X utf8 -m unittest discover -s installer/tests -v
+        # OTA fixtures restore root-owned files using the real chown/xattr path.
+        # Only temporary fixture trees are used; the device runtime is unchanged.
+        run: sudo "$(command -v python)" -X utf8 -m unittest discover -s installer/tests -v
 
   windows-installer:
     uses: ./.github/workflows/gui.yml
