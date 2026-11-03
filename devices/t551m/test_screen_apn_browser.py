@@ -39,7 +39,9 @@ class ScreenAPN(unittest.TestCase):
             threading.Thread(target=server.serve_forever,daemon=True).start()
             try:
                 with sync_playwright() as pw:
-                    browser=pw.chromium.launch(channel=os.environ.get('MU300_BROWSER_CHANNEL','msedge'),headless=True)
+                    # CI installs Playwright's bundled Chromium, not Edge.
+                    # An explicit channel remains available for local checks.
+                    browser=pw.chromium.launch(channel=os.environ.get('MU300_BROWSER_CHANNEL') or None,headless=True)
                     page=browser.new_page(viewport={'width':320,'height':480},has_touch=True)
                     errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
                     def route(request):
