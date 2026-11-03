@@ -18,3 +18,13 @@ staging tests run after that preparation, including on cache hits. The compiler
 also receives GLib's separate gio-unix header directory. No staging test or
 artifact validation was removed. Local cache regression uses temporary synthetic
 ELF fixtures only; actual ARM64 compilation and acceptance remain CI gates.
+
+Run 41643494197 passed all six prerequisite jobs. The early firmware test
+then rejected a stale literal driver-list assertion: boot/init also prepares
+firmware for axs15205. The test now executes the actual shell dispatch for
+ST7123, AXS15205 and WCN, checks that preparation precedes insmod, and confirms
+unrelated modules do not trigger it. The existing read-only fake-card tests
+remain. Independent logic suites now run through tools/ci-logic-checks.sh,
+which preserves every suite and reports all failures before failing the job;
+bootstrap checksum failures still stop immediately. Linux-specific filesystem
+and device tests require the CI runtime; Windows checks are not substitutes.

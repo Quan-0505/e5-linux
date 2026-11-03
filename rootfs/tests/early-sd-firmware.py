@@ -10,7 +10,16 @@ TOP=Path(__file__).resolve().parents[2]
 source=(TOP/'boot/init').read_text()
 function=source[source.index('early_card_firmware() {'):source.index('\nearly_device_firmware() {')]
 assert '-o ro,noload,noatime' in function
-assert source.index('st7123.ko|wcn_bsp.ko) early_device_firmware ;;') < source.index('insmod "/linux-modules/$module"')
+dispatch = re.search(r'case "\$module" in\n(.*?)\n\s*esac', source, re.S)
+assert dispatch, 'early module firmware dispatch is missing'
+assert dispatch.end() < source.index('insmod "/linux-modules/$module"')
+# Exercise the actual shell dispatch. Adding another firmware-dependent touch
+# driver must not break this contract or move firmware loading after insmod.
+for module in ('st7123.ko', 'axs15205.ko', 'wcn_bsp.ko', 'unrelated.ko'):
+    script = ('module=' + module + '\nearly_device_firmware() { echo firmware; }\n'
+              + dispatch.group(0) + '\necho insmod\n')
+    actual = subprocess.check_output(['sh', '-c', script], text=True).splitlines()
+    assert actual == (['insmod'] if module == 'unrelated.ko' else ['firmware', 'insmod']), (module, actual)
 with tempfile.TemporaryDirectory(prefix='e5-early-fw-') as directory:
     root=Path(directory)
     for path in ['sys/mmcblk0','sys/mmcblk1','dev','card/lib/firmware','card/etc/e5','card/sbin','bin','firmware']:
