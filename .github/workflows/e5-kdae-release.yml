@@ -302,8 +302,8 @@ jobs:
           python3 openwrt/tests/sms-multipart.py
           python3 openwrt/tests/power-events.py
           python3 devices/t551m/test_apn.py
+          python3 devices/common/test_screen_native_build.py
           python3 openwrt/tests/modem-port-discovery.py
-          python3 devices/t551m/test_screen_apn.py
           python3 openwrt/tests/screen-session-startup.py
           node devices/t551m/test_calls_transport.cjs
           python3 openwrt/tests/dual-sms-send.py
@@ -356,12 +356,14 @@ jobs:
           path: |
             e5-linux/out/openwrt/*.apk
             e5-linux/out/openwrt/e5-modemmanager-build.json
-          key: patched-apk-${{ runner.os }}-${{ runner.arch }}-${{ env.E5_WRT_VER }}-${{ hashFiles('e5-linux/tools/openwrt-package-state.py', 'e5-linux/devices/t551m/network-startup.py', 'e5-linux/openwrt/overlay/**', 'e5-linux/openwrt/tests/*.py', 'e5-linux/rootfs/deb-patches/*.patch', 'e5-linux/openwrt/tests/voice-identity.py', 'e5-linux/openwrt/tests/sim-power.py', 'e5-linux/openwrt/build-modemmanager.sh', 'e5-linux/openwrt/build-bluez.sh', 'e5-linux/openwrt/patches/**', 'e5-linux/rootfs/deb-patches/modemmanager-*.patch', 'e5-linux/rootfs/deb-patches/bluez-*.patch') }}
+            e5-linux/out/native-screen/
+          key: patched-apk-screen-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.E5_WRT_VER }}-${{ hashFiles('e5-linux/tools/openwrt-package-state.py', 'e5-linux/devices/t551m/network-startup.py', 'e5-linux/openwrt/overlay/**', 'e5-linux/openwrt/tests/*.py', 'e5-linux/rootfs/deb-patches/*.patch', 'e5-linux/openwrt/tests/voice-identity.py', 'e5-linux/openwrt/tests/sim-power.py', 'e5-linux/openwrt/build-modemmanager.sh', 'e5-linux/openwrt/build-bluez.sh', 'e5-linux/openwrt/patches/**', 'e5-linux/rootfs/deb-patches/modemmanager-*.patch', 'e5-linux/rootfs/deb-patches/bluez-*.patch', 'e5-linux/devices/common/build-screen-native.py', 'e5-linux/devices/common/infoscreen/native/**', 'e5-linux/tools/build-layout.json') }}
       - name: Compile patched ModemManager and BlueZ
         if: steps.packages.outputs.cache-hit != 'true'
         run: |
           bash openwrt/build-modemmanager.sh
           bash openwrt/build-bluez.sh
+          python3 devices/common/build-screen-native.py
           # This volume belongs to this ephemeral runner. Free it before image assembly.
           docker volume rm e5-openwrt-src
       - name: Save patched packages before image assembly
@@ -371,7 +373,14 @@ jobs:
           path: |
             e5-linux/out/openwrt/*.apk
             e5-linux/out/openwrt/e5-modemmanager-build.json
+            e5-linux/out/native-screen/
           key: ${{ steps.packages.outputs.cache-primary-key }}
+      - name: Verify native screen binaries and staged APN assets
+        run: |
+          # The builder rechecks source fingerprints and binary hashes even on
+          # cache hits. Staging must work after the build volume was released.
+          python3 devices/common/build-screen-native.py
+          python3 devices/t551m/test_screen_apn.py
       - name: Download native SDK guarded block package
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:

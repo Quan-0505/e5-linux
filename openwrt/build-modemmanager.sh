@@ -195,6 +195,9 @@ echo "modemmanager release $rel -> $((rel + 900 + E5REV)); patches:"; ls $P/patc
     echo "CONFIG_BPF_TOOLCHAIN_NONE=y"
     echo "# CONFIG_BPF_TOOLCHAIN_BUILD_LLVM is not set"
     echo "CONFIG_PACKAGE_modemmanager=m"
+    # The shared native screen daemons link against GLib and json-c using
+    # this same registered toolchain/sysroot before CI releases its volume.
+    echo "CONFIG_PACKAGE_libjson-c=m"
     echo "CONFIG_PACKAGE_modemmanager-rpcd=m"
     echo "CONFIG_MODEMMANAGER_WITH_NETIFD=y"
     echo "# CONFIG_MODEMMANAGER_WITH_MBIM is not set"
@@ -218,7 +221,7 @@ if [ ! -f staging_dir/.e5-kernel-ok ]; then
 fi
 echo "== modemmanager"
 make package/modemmanager/clean >/dev/null 2>&1 || true
-if ! make package/modemmanager/compile -j"$JOBS" V=s >/build/log 2>&1; then
+if ! make package/modemmanager/compile package/libs/libjson-c/compile -j"$JOBS" V=s >/build/log 2>&1; then
     cp /build/log /out/modemmanager-build.log
     tail -160 /build/log
     exit 1

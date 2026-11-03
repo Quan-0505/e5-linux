@@ -7,3 +7,14 @@ Local Windows installer suite: 625 tests, 520 passed, 105 platform-dependent ski
 Rust DAED is pinned to source 34c3962ba80672b68b39746ae076d65c538cb478, including upstream UI 76ad4577501b and core d0c477e62617. Its Debian build has passed separate live validation; E5 ARM64 acceptance remains pending. The eBPF compiler is pinned to the matching nightly-2026-05-29.
 
 The next standard E5 CI run must pass installer builds, firmware assembly and all artifact/source checks. It uses publish=false. No device flash is performed by CI.
+
+Run 41632391841 passed Windows/macOS/Linux installer gates and the Rust,
+Wi-Fi and block builds. Firmware checks then exposed a missing dependency:
+screen staging now builds shared ARM64 daemons, but ran before the registered
+OpenWrt toolchain existed. CI now builds json-c alongside ModemManager, builds
+the native screen binaries before disposing of that runner's toolchain volume,
+and caches binaries plus their source/toolchain fingerprints and hashes. APN
+staging tests run after that preparation, including on cache hits. The compiler
+also receives GLib's separate gio-unix header directory. No staging test or
+artifact validation was removed. Local cache regression uses temporary synthetic
+ELF fixtures only; actual ARM64 compilation and acceptance remain CI gates.

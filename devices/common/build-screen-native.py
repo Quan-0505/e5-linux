@@ -58,6 +58,7 @@ def build(names=None, config_path=None):
         args=[compiler,'-std=gnu11','-pthread','-Os','-g0','-Wall','-Wextra','-Werror','-fstack-protector-strong','-ffunction-sections','-fdata-sections','-Wl,--gc-sections','-Wl,-z,relro,-z,now','-s']
         if name=='t551m-screen-power':args+=['-static']
         else:args += ['-I'+sysroot+'/usr/include/glib-2.0','-I'+sysroot+'/usr/lib/glib-2.0/include',
+                      '-I'+sysroot+'/usr/include/gio-unix-2.0',
                       '-I'+sysroot+'/usr/include','-L'+sysroot+'/usr/lib','-Wl,-rpath-link,'+sysroot+'/usr/lib']
         args += ['/source/'+s for s in sources]+['-o','/out/'+name+'.tmp']
         if name!='t551m-screen-power':args+=['-lgio-2.0','-lgobject-2.0','-lglib-2.0','-ljson-c','-ldl','-lm']
