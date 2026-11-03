@@ -473,6 +473,9 @@ jobs:
     uses: ./.github/workflows/gui-macos.yml
     with:
       source_ref: ${{ inputs.source_ref || vars.E5_SOURCE_REF || 'main' }}
+      # macos-15 repeatedly failed to acquire an Apple Silicon hosted runner;
+      # use the alternate supported ARM pool for the firmware release gate.
+      runner: macos-14
 
   publish:
     needs: [build, windows-installer]
