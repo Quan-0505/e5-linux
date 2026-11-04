@@ -45,13 +45,19 @@ class Ext4Tools(unittest.TestCase):
 
     def test_mainline_rootfs_generates_the_addon_before_packaging(self):
         source = (TOP / 'openwrt/build-rootfs.sh').read_text(encoding='utf-8')
+        marker = "alpine:3.22 sh -euc '\n"
+        closing = "\nls -la /out/$IMG.gz'"
+        self.assertIn(marker, source)
+        self.assertIn(closing, source)
+        body = source.split(marker, 1)[1].split(closing, 1)[0]
         baseline = 'python3 /prepare-ext4-tools.py --root /tmp/r --out /out/ext4-tools.tar'
         addon = ('python3 /prepare-ext4-tools.py --root /tmp/r --lock-addon-from '
                  '/out/ext4-tools.tar --out /out/install-lock-tools.tar')
-        self.assertIn(baseline, source)
-        self.assertIn(addon, source)
-        self.assertLess(source.index(baseline), source.index(addon))
-        self.assertLess(source.index(addon), source.index('mke2fs -q -t ext4'))
+        self.assertNotIn("'", body, 'unescaped single quote terminates the Docker shell body')
+        self.assertIn(baseline, body)
+        self.assertIn(addon, body)
+        self.assertLess(body.index(baseline), body.index(addon))
+        self.assertLess(body.index(addon), body.index('mke2fs -q -t ext4'))
 
 
 if __name__ == '__main__':
