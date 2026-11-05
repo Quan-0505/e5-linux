@@ -118,6 +118,11 @@ def prepare():
     print(info['build_started_at'])
 
 
+def screen_native_hashes():
+    native=runpy.run_path(str(TOP/'devices/common/build-screen-native.py'))
+    return {'usr/libexec/'+name:file_digest(path) for name,path in native['build']().items()}
+
+
 def audit_root(info):
     expected = {}
     for source, root, relative, prefix in [
@@ -168,6 +173,9 @@ def audit_root(info):
         if source.is_file():
             expected['etc/e5-infoscreen/plugins/phone/' + source.name] = hashlib.sha256(source.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
     expected.update(e5_shortcut_overlay_hashes())
+    # Shared screen staging replaces the legacy Python launchers with current
+    # ARM64 binaries. The builder validates source inputs and cached ELF hashes.
+    expected.update(screen_native_hashes())
     wifi_id = runpy.run_path(str(TOP / 'openwrt/wifi-sae-state.py'))['build_id']()
     expected['etc/e5/wifi-sae.build-id'] = hashlib.sha256((wifi_id + '\n').encode()).hexdigest()
     expected['lib/netifd/hostapd-unisoc.sh'] = file_digest(TOP / 'openwrt/hostapd-unisoc.sh')

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """CI input/release gates, without a device, uploads or production credentials."""
 import importlib.util
+import hashlib
 import io
 import json
 import runpy
@@ -95,6 +96,8 @@ class BundleAndroidScope(unittest.TestCase):
 
 
 class RootAudit(unittest.TestCase):
+    NATIVE={name:b'current ELF '+name.encode() for name in ('t551m-screen-power','t551m-sim-status','e5-voice-native')}
+
     def audit(self, files, staged_vendor=None, kernel_out=None, nonexec=(), variant='standard'):
         with tempfile.TemporaryDirectory() as temp:
             top = Path(temp)
@@ -139,7 +142,8 @@ class RootAudit(unittest.TestCase):
             def stage_nv(root):
                 (root / 'opt/e5/vendor-start.sh').write_bytes(b'isolated NV fixture')
             env = {'E5_UPSTREAM_OUT': str(top / kernel_out)} if kernel_out else {}
-            with patch.object(release, 'screen_overlay_sources', return_value=SCREEN_SOURCES), patch.object(release, 'TOP', top), patch.object(release.subprocess, 'check_output', return_value=''), \
+            native_hashes={'usr/libexec/'+n:hashlib.sha256(v).hexdigest() for n,v in self.NATIVE.items()}
+            with patch.object(release, 'screen_native_hashes', return_value=native_hashes), patch.object(release, 'screen_overlay_sources', return_value=SCREEN_SOURCES), patch.object(release, 'TOP', top), patch.object(release.subprocess, 'check_output', return_value=''), \
                  patch.object(release.runpy, 'run_path', return_value={'stage_nv': stage_nv, 'build_id': lambda: wifi_id}), \
                  patch.dict(release.os.environ, env):
                 release.audit_root(info)
@@ -160,6 +164,7 @@ class RootAudit(unittest.TestCase):
                 'etc/e5/block-mount.build-id': (release.block_build_id() + '\n').encode(),
                 'sbin/block': b'block', 'lib/libblkid-tiny.so': b'library', 'etc/init.d/fstab': b'init',
                 'etc/e5/build-time': b'123', 'lib/modules/6.18-e5/modem/sipc_wwan.ko': b'module'}
+        files.update({'usr/libexec/'+n:v for n,v in self.NATIVE.items()})
         for source, target in SCREEN_FILES.items():
             files[target] = (SHARED / source).read_bytes().replace(b'\r\n', b'\n')
         for name, content in SCREEN_SOURCES.items():
@@ -178,6 +183,12 @@ class RootAudit(unittest.TestCase):
         info = self.audit(self.files())
         self.assertEqual(info['phone_version'], '1.5')
         self.assertEqual(info['daed_screen_app_version'], '1.0.0')
+
+    def test_stale_native_screen_binary_rejected(self):
+        for name in self.NATIVE:
+            files=self.files();files['usr/libexec/'+name]=b'legacy script or stale ELF'
+            with self.subTest(name=name),self.assertRaisesRegex(ValueError,'root source mismatch'):
+                self.audit(files)
 
     def test_wps_variant_marker_passes(self):
         files = self.files()
