@@ -165,13 +165,15 @@ def digest(path):
     return h.hexdigest()
 
 
-def verify_archive(path, require_android=False):
+def verify_archive(path):
     with zipfile.ZipFile(path) as archive:
-        if require_android:
-            runpy.run_path(str(TOP/'installer/package_android.py'))['verify_archive'](archive)
         names = archive.namelist()
         if len(names) != len(set(names)) or archive.testzip():
             raise ValueError('ZIP duplicate entries or CRC failure: ' + str(path))
+        forbidden_android = {'OpenWrt-Tools.apk','docs/GUI-BUILD-android.json','docs/ANDROID-INSTALLER.md'}
+        included_android = forbidden_android.intersection(names)
+        if included_android:
+            raise ValueError('E5 firmware bundles must not include the Android installer: ' + ', '.join(sorted(included_android)))
         if (names.count('files/boot.img') != 1 or names.count('files/openwrt.ext4.gz') != 1
                 or sum(n.endswith('/boot.img') or n == 'boot.img' for n in names) != 1
                 or sum(n.endswith(('openwrt.ext4.gz', 'rootfs.tar.gz', 'mu300-openwrt.tar.gz'))
@@ -270,7 +272,7 @@ def package(task, common, rows):
         if len(matches) != 1:
             raise ValueError('Expected one completed archive for ' + model)
         archive = matches[0]
-        verify_archive(archive,require_android=True)
+        verify_archive(archive)
         assets.append({'profile': model, 'file': archive.name, 'bytes': archive.stat().st_size,
                        'sha256': digest(archive)})
         clean_stage(task.workspace, model)
@@ -313,7 +315,7 @@ def refresh_installers(task, common, rows, source):
         task.run('installer-tools',[sys.executable,TOP/'openwrt/prepare-ext4-tools.py','--root',common['base'],'--include-lock','--out',tools])
         for profile,path in selected.items():
             target=pending/(path.stem+'-installer-g'+before['source_commit'][:8]+'.zip')
-            refresh(path,target,tools,before,native=native);verify_archive(target,require_android=True)
+            refresh(path,target,tools,before,native=native);verify_archive(target)
             checksum=digest(target)
             (pending/(target.name+'.sha256')).write_text(checksum+'  '+target.name+'\n')
             outputs.append({'profile':profile,'file':target.name,'bytes':target.stat().st_size,'sha256':checksum})

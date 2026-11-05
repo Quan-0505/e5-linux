@@ -86,6 +86,14 @@ class Bootstrap(unittest.TestCase):
             inputs.package_paths('P:cog\n\nP:libcogcore\n\nP:libwpewebkit\n\nP:vendor-firmware\n')
 
 
+class BundleAndroidScope(unittest.TestCase):
+    def test_android_control_app_is_excluded_but_switcher_is_kept(self):
+        release.verify_bundle_android_scope({'files/boot.img','extras/android/op-system-switcher.apk'})
+        for name in ('OpenWrt-Tools.apk','docs/GUI-BUILD-android.json','docs/ANDROID-INSTALLER.md'):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError,'must not be in an E5 firmware bundle'):
+                release.verify_bundle_android_scope({'files/boot.img',name})
+
+
 class RootAudit(unittest.TestCase):
     def audit(self, files, staged_vendor=None, kernel_out=None, nonexec=(), variant='standard'):
         with tempfile.TemporaryDirectory() as temp:

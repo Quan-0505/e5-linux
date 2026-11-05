@@ -22,6 +22,14 @@ RELEASE = TOP / 'out/release'
 BLOCK_SOURCES = ('block-mount.Dockerfile', 'build-block-mount.sh',
                  'build-block-mount-inner.sh', 'block-probe-guard.h',
                  'patches/fstools-probe-device-types.patch')
+ANDROID_CONTROL_FILES = frozenset({'OpenWrt-Tools.apk','docs/GUI-BUILD-android.json','docs/ANDROID-INSTALLER.md'})
+
+
+def verify_bundle_android_scope(members):
+    """Reject the standalone Android control installer from E5 firmware ZIPs."""
+    included=ANDROID_CONTROL_FILES.intersection(members)
+    if included:
+        raise ValueError('Android control installer must not be in an E5 firmware bundle: '+', '.join(sorted(included)))
 
 
 def block_build_id():
@@ -301,6 +309,7 @@ def verify():
             else:
                 members[name] = digest(stream)
     listed = {}
+    verify_bundle_android_scope(members)
     sums = 'files/SHA256SUMS' if 'files/SHA256SUMS' in data else 'SHA256SUMS'
     for line in data[sums].decode().splitlines():
         checksum, name = line.split(None, 1)

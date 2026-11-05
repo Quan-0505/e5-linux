@@ -43,6 +43,9 @@ E5_TEST_IMAGE="e5-openwrt-base:$E5_WRT_VER" check python3 rootfs/tests/sd-write.
 check python3 rootfs/tests/voice-state.py
 check python3 rootfs/tests/modem-coldboot.py
 check python3 tools/tests/ci-release.py
+check python3 tools/tests/package-diff-studio.py
+check python3 tools/tests/build-release.py
+check python3 tools/tests/refresh-native-installers.py
 check python3 tools/tests/infoscreen-daed-app.py
 check python3 tools/tests/infoscreen-daed-key0.py
 check python3 tools/tests/openwrt-package-state.py

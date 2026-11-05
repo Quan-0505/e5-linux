@@ -14,6 +14,7 @@ from pathlib import Path
 import zipfile
 
 TOP=Path(__file__).resolve().parents[1]
+ANDROID_INSTALLER_FILES={'OpenWrt-Tools.apk','docs/GUI-BUILD-android.json','docs/ANDROID-INSTALLER.md'}
 
 
 def digest(path):
@@ -42,16 +43,20 @@ def refresh(source,target,tools,revision,native=None):
         replacement[name]=(TOP/path).read_bytes().replace(b'\r\n',b'\n')
     with zipfile.ZipFile(source) as original:
         refresh_native=runpy.run_path(str(TOP/'tools/refresh-native-installers.py'))
-        removed=set()
+        removed=ANDROID_INSTALLER_FILES.intersection(original.namelist())
         if native is not None:
-            members,removed=refresh_native['replacements'](original,native)
+            members,native_removed=refresh_native['replacements'](original,native)
             replacement.update(members)
+            removed.update(native_removed)
         replacement['files/install-lock-tools.tar']=runpy.run_path(str(TOP/'openwrt/prepare-ext4-tools.py'))['lock_addon'](original.read('files/ext4-tools.tar'),tools)
         sums={name:checksum for line in original.read('files/SHA256SUMS').decode().splitlines()
               for checksum,name in [line.split(None,1)]}
         for name in removed:sums.pop(name,None)
         payload={n:sums[n] for n in ('files/boot.img','files/openwrt.ext4.gz','files/ext4-tools.tar')}
         guide=(Path(replacement['START-HERE.md']).read_bytes() if native is not None else original.read('START-HERE.md'))
+        if native is None:
+            guide=b'\n'.join(line for line in guide.splitlines()
+                if b'OpenWrt-Tools.apk' not in line and b'docs/ANDROID-INSTALLER.md' not in line)+b'\n'
         replacement['START-HERE.md']=guide+(
             '\n## Installer revision / 安装器修订\n\n'
             '随包安装器、Diff Studio 和安装脚本已刷新。'

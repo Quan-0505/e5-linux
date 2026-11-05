@@ -24,10 +24,17 @@ class DiffPackaging(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertTrue((self.root/'diff-tool.json').is_file())
         self.assertTrue((self.root/'OpenWrt-Diff-Studio.exe').is_file())
+        self.assertE5_android_installer_omitted()
 
     def setUp(self):
         temp=tempfile.TemporaryDirectory();self.addCleanup(temp.cleanup);self.root=Path(temp.name)/'package'
-        (self.root/'docs').mkdir(parents=True);(self.root/'START-HERE.md').write_text('Installer guide\n')
+        (self.root/'docs').mkdir(parents=True);(self.root/'START-HERE.md').write_text(
+            'Installer guide\n\nAndroid: OpenWrt-Tools.apk; see docs/ANDROID-INSTALLER.md.\n',encoding='utf-8')
+        (self.root/'OpenWrt-Tools.apk').write_bytes(b'stale signed app')
+        (self.root/'docs/GUI-BUILD-android.json').write_text('{}')
+        (self.root/'docs/ANDROID-INSTALLER.md').write_text('stale install instructions')
+        (self.root/'extras/android').mkdir(parents=True)
+        (self.root/'extras/android/op-system-switcher.apk').write_bytes(b'distinct system switcher')
         self.native={}
         for platform,label,files in [
             ('windows-x64','GUI-BUILD.json',{'OpenWrt-Installer.exe':b'MZ GUI','tools/backend/openwrt-backend.exe':b'MZ runtime','tools/adb.exe':b'adb'}),
@@ -45,10 +52,18 @@ class DiffPackaging(unittest.TestCase):
         self.assertEqual((self.root/'OpenWrt-Diff-Studio.exe').read_bytes(),self.native['OpenWrt-Installer.exe'])
         self.assertEqual((self.root/'OpenWrt-Diff-Studio.app/Contents/Info.plist').read_bytes(),b'unchanged signed metadata')
         self.assertTrue((self.root/'docs/DIFF-STUDIO.md').exists())
-        self.assertIn('OpenWrt-Diff-Studio.exe',(self.root/'START-HERE.md').read_text())
+        self.assertIn('OpenWrt-Diff-Studio.exe',(self.root/'START-HERE.md').read_text(encoding='utf-8'))
         self.assertNotIn('tools/adb.exe',manifest['files']);self.assertNotIn('tools/macos/adb',manifest['files'])
         self.assertFalse(any(n.startswith('files/') for n in manifest['files']))
         self.assertEqual(list(self.root.rglob('openwrt.ext4.gz')),[self.root/'files/openwrt.ext4.gz'])
+        self.assertE5_android_installer_omitted()
+
+    def assertE5_android_installer_omitted(self):
+        for name in ('OpenWrt-Tools.apk','docs/GUI-BUILD-android.json','docs/ANDROID-INSTALLER.md'):
+            self.assertFalse((self.root/name).exists(),name)
+        self.assertEqual((self.root/'extras/android/op-system-switcher.apk').read_bytes(),b'distinct system switcher')
+        self.assertNotIn('OpenWrt-Tools.apk',(self.root/'START-HERE.md').read_text(encoding='utf-8'))
+        self.assertNotIn('docs/ANDROID-INSTALLER.md',(self.root/'START-HERE.md').read_text(encoding='utf-8'))
 
     def test_export_contains_both_updaters_and_no_full_installer_payload(self):
         tool['attach'](self.root);patch=self.root.parent/'test.ota';patch.write_bytes(b'opaque patch fixture')

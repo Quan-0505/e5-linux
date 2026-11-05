@@ -4,6 +4,8 @@ import json
 from pathlib import Path, PurePosixPath
 import shutil
 
+ANDROID_INSTALLER_FILES={'OpenWrt-Tools.apk','docs/GUI-BUILD-android.json','docs/ANDROID-INSTALLER.md'}
+
 
 def digest(value):
     if isinstance(value,bytes):
@@ -23,7 +25,7 @@ def write(destination,value):
 def native_name(name):
     path=PurePosixPath(name)
     return (not path.is_absolute() and '..' not in path.parts and '\\' not in name and
-        (name in ('OpenWrt-Installer.exe','OpenWrt-Diff-Studio.exe','OpenWrt-Diff-Studio.py','OpenWrt-Tools.apk') or
+        (name in ('OpenWrt-Installer.exe','OpenWrt-Diff-Studio.exe','OpenWrt-Diff-Studio.py') or
          name.startswith(('tools/','backend/','OpenWrt-Installer.app/','OpenWrt-Diff-Studio.app/'))))
 
 
@@ -39,13 +41,8 @@ def replacements(original,studio):
             raise ValueError('Native installer and Diff Studio sources disagree')
         source=new['source']
         previous.update(old['files']);current.update(new['files'])
-    android=json.loads((studio/'docs/GUI-BUILD-android.json').read_text())
-    if (android.get('platform')!='android-aarch64' or android.get('debug') is not False or
-            set(android.get('files',{}))!={'OpenWrt-Tools.apk'} or
-            any(android.get('source',{}).get(k)!=v for k,v in source.items()) or
-            digest(studio/'OpenWrt-Tools.apk')!=android['files']['OpenWrt-Tools.apk']):
-        raise ValueError('Android installer inventory/source/checksum mismatch')
-    current.add('OpenWrt-Tools.apk')
+    if ANDROID_INSTALLER_FILES.intersection(current):
+        raise ValueError('E5 native refresh staging must not contain Android installer files')
     if not all(native_name(name) for name in previous|current):
         raise ValueError('Native inventory contains a non-installer path')
     required={'OpenWrt-Installer.exe','OpenWrt-Diff-Studio.exe',
@@ -55,14 +52,15 @@ def replacements(original,studio):
     if not required.issubset(current):
         raise ValueError('Native installer refresh requires both platforms and Diff Studio')
     docs={'START-HERE.md','docs/GUI-GUIDE.md','docs/INSTALLER-PROTOCOL.md',
-        'docs/GUI-BUILD.md','docs/GUI-VERIFICATION.md','docs/DIFF-STUDIO.md','docs/GUI-BUILD-android.json','docs/ANDROID-INSTALLER.md',*documents}
+        'docs/GUI-BUILD.md','docs/GUI-VERIFICATION.md','docs/DIFF-STUDIO.md',*documents}
     patches={}
     for name in sorted(current|docs):
         path=(studio/name).resolve()
         if not path.is_relative_to(studio) or not path.is_file():
             raise ValueError('Native refresh input is missing or outside staging: '+name)
         patches[name]=path
-    return patches,previous-current
+    legacy_android=ANDROID_INSTALLER_FILES.intersection(original.namelist())
+    return patches,(previous-current)|legacy_android
 
 
 def mode(name):
