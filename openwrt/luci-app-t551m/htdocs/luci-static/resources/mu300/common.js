@@ -44,9 +44,12 @@ function scopedRpc(method, params) {
 		});
 	};
 }
-function simSelector(root) {
+var simSelectorCleanup = null;
+function simSelector(root, layout) {
+	if (simSelectorCleanup) simSelectorCleanup();
+	var anchor=layout==='hero' && root.querySelector('.mud-hero-meta');
 	var row=document.createElement('div');
-	row.className='mud-card mud-sim-selector';
+	row.className=anchor?'mud-sim-selector mud-sim-hero':'mud-card mud-sim-selector';
 	row.innerHTML='<button type="button" class="mud-sim-toggle" aria-expanded="false" aria-controls="mud-sim-panel">'+
 		'<span class="mud-sim-title">查看 / 控制卡槽</span><span class="mud-sim-current"></span>'+
 		'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>'+
@@ -71,7 +74,17 @@ function simSelector(root) {
 		}
 	};
 	localize(row);
-	root.insertBefore(row,root.firstChild);
+	toggle.setAttribute('aria-label',translate('查看 / 控制卡槽')+' SIM '+(Number(simSlot())+1));
+	if(anchor)anchor.appendChild(row);else root.insertBefore(row,root.firstChild);
+	function outside(event){if(anchor && !row.contains(event.target))expand(false);}
+	var lifetime=new MutationObserver(function(){if(!root.isConnected)cleanup();});
+	function cleanup(){
+		lifetime.disconnect();row.remove();document.removeEventListener('click',outside);
+		if(simSelectorCleanup===cleanup)simSelectorCleanup=null;
+	}
+	simSelectorCleanup=cleanup;
+	document.addEventListener('click',outside);
+	lifetime.observe(document.body,{childList:true,subtree:true});
 	callSimGet().catch(function() {});
 	if (!simVisibilityBound) {
 		simVisibilityBound = true;
@@ -147,8 +160,10 @@ var callForwardStatus = rpc.declare({ object: 'mu300dash', method: 'forward_stat
 var callForwardSet = rpc.declare({ object: 'mu300dash', method: 'forward_set', params: [ 'payload' ], expect: { '': {} } });
 var callForwardClear = rpc.declare({ object: 'mu300dash', method: 'forward_log_clear', expect: { '': {} } });
 var callForwardTest = rpc.declare({ object: 'mu300dash', method: 'forward_test', params: [ 'profile' ], expect: { '': {} } });
-var callTrafficGet = scopedRpc('traffic_get');
-var callTrafficSet = scopedRpc('traffic_set',['payload']);
+var trafficGetRpc = rpc.declare({object:'mu300dash',method:'traffic_get',params:['slot'],expect:{'':{}},nobatch:true});
+var trafficSetRpc = rpc.declare({object:'mu300dash',method:'traffic_set',params:['payload','slot'],expect:{'':{}},nobatch:true});
+function callTrafficGet(slot) { return trafficGetRpc(slot == null ? simSlot() : String(slot)); }
+function callTrafficSet(payload, slot) { return trafficSetRpc(payload, slot == null ? simSlot() : String(slot)); }
 var callTrafficClear = rpc.declare({object:'mu300dash',method:'traffic_clear',params:['slot','confirm'],expect:{'':{}}});
 var callTtlGet = rpc.declare({ object: 'mu300dash', method: 'ttl_get', expect: { '': {} } });
 var callTtlSet = rpc.declare({ object: 'mu300dash', method: 'ttl_set', params: [ 'value' ], expect: { '': {} }, nobatch: true });
@@ -760,6 +775,29 @@ function errorText(value, language) {
 /* END SHARED PLATFORM MESSAGES */
 
 var DASH_I18N = {
+	"电池与电量": ["Battery & power", "Pil ve güç"],
+	"电池历史": ["Battery history", "Pil geçmişi"],
+	"电池使用时间": ["On battery", "Pilde geçen süre"],
+	"预估续航": ["Estimated time left", "Tahmini kalan süre"],
+	"自上次充满": ["Since last full charge", "Son tam şarjdan beri"],
+	"自上次充电": ["Since last charge", "Son şarjdan beri"],
+	"24 小时": ["24 hours", "24 saat"],
+	"7 天": ["7 days", "7 gün"],
+	"小时": ["h", "sa"],
+	"分钟": ["min", "dk"],
+	"已连接电源，未充电": ["Plugged in, not charging", "Güce bağlı, şarj olmuyor"],
+	"正在充电或已充满": ["Charging or full", "Şarj oluyor veya dolu"],
+	"电池放电功率": ["Power drawn from the battery", "Pilden çekilen güç"],
+	"时间区间": ["Time range", "Zaman aralığı"],
+	"每分钟记录，保留最近 10 天；关机或缺失时段留空。功率和电流为电池净值，不是充电器输入值。": ["Recorded every minute, kept for 10 days. Off-device and missing periods stay blank. Power and current are net battery values, not charger input.", "Dakikada bir kaydedilir, 10 gün saklanır. Kapalı veya eksik dönemler boş kalır. Güç ve akım, şarj girişi değil net pil değerleridir."],
+	"未检测到电池": ["No battery detected", "Pil algılanmadı"],
+	"暂无历史记录，采集后自动显示": ["No history yet; new readings will appear automatically", "Henüz geçmiş yok; yeni ölçümler otomatik görünür"],
+	"电池记录读取失败，请稍后重试": ["Could not read battery history; retry shortly", "Pil geçmişi okunamadı; biraz sonra yeniden deneyin"],
+	"连接电源时不估算续航": ["Not estimated while plugged in", "Güce bağlıyken tahmin edilmez"],
+	"放电记录不足，暂不估算": ["More discharge history is needed", "Daha fazla deşarj geçmişi gerekiyor"],
+	"按最近放电速度估算": ["Based on recent discharge", "Son deşarj hızına göre"],
+	"暂无记录": ["No readings", "Ölçüm yok"],
+	"已更新": ["Updated", "Güncellendi"],
 	"AT 通道正忙，正在等待更新…": ["AT channel busy; waiting for an update…", "AT kanalı meşgul; güncelleme bekleniyor…"],
 	"模组尚未返回有效的实时信号": ["The modem has not returned valid live signal data", "Modem henüz geçerli canlı sinyal verisi döndürmedi"],
 	"另一项 TTL 操作正在执行，请稍后重试": ["Another TTL operation is running; please retry shortly", "Başka bir TTL işlemi çalışıyor; biraz sonra yeniden deneyin"],
@@ -789,7 +827,12 @@ var DASH_I18N = {
 	"无法应用 TTL 设置": ["Cannot apply TTL settings", "TTL ayarı uygulanamadı"],
 	"TTL 无效": ["Invalid TTL", "Geçersiz TTL"],
 	"设置蜂窝出口数据包的 TTL 和 IPv6 跳数限制；仅影响蜂窝网络，不改变 Wi-Fi 或 USB 局域网。": ["Set the TTL and IPv6 hop limit of cellular outbound packets. Local Wi-Fi and USB traffic are unchanged.", "Hücresel çıkışın TTL ve IPv6 atlama sınırını ayarlar. Yerel Wi-Fi ve USB trafiğini değiştirmez."],
-	"启用后会关闭防火墙流量卸载，可能降低转发性能；关闭 TTL 后恢复由本功能修改的卸载设置。": ["Enabling TTL disables firewall flow offloading and may reduce forwarding performance. Turning TTL off restores offloading settings changed by this feature.", "TTL etkinleştirilince akış hızlandırması kapatılır; performans düşebilir. Kapatıldığında bu özelliğin değiştirdiği ayarlar geri yüklenir."],
+	"固定 TTL 可与软件流量卸载同时使用；IPv6 邻居发现等控制报文保持原值。启用期间暂停硬件流量卸载，关闭 TTL 后恢复原设置。": ["Fixed TTL works with software flow offloading. IPv6 neighbor discovery and other control packets keep their original hop limit. Hardware flow offloading is paused while fixed TTL is enabled, then restored when TTL is turned off.", "Sabit TTL, yazılımsal akış hızlandırmasıyla birlikte çalışır. IPv6 komşu keşfi ve diğer kontrol paketlerinin atlama sınırı korunur. Sabit TTL açıkken donanımsal akış hızlandırması duraklatılır; TTL kapatılınca geri yüklenir."],
+	"软件流量卸载": ["Software flow offloading", "Yazılımsal akış hızlandırma"],
+	"硬件流量卸载": ["Hardware flow offloading", "Donanımsal akış hızlandırma"],
+	"固定 TTL 期间暂停": ["Paused while fixed TTL is enabled", "Sabit TTL açıkken duraklatıldı"],
+	"等待蜂窝接口，出现后自动应用。": ["Waiting for a cellular interface; applies automatically when it appears.", "Hücresel arayüz bekleniyor; oluştuğunda otomatik uygulanır."],
+	"旧规则，请重新应用 TTL": ["Legacy rules; apply TTL again", "Eski kurallar; TTL ayarını yeniden uygulayın"],
 
     "自动模式兼容性": ["Automatic mode compatibility", "Otomatik mod uyumluluğu"],
     "机型默认": ["Model default", "Model varsayılanı"],
@@ -1103,6 +1146,10 @@ var DASH_I18N = {
 	'设备管理': ['Device management', 'Cihaz yönetimi'],
 	'USB 角色': ['USB role', 'USB rolü'],
 	'当前角色': ['Current role', 'Geçerli rol'],
+	'USB 链路速率': ['USB link speed', 'USB bağlantı hızı'],
+	'链路未连接': ['Link disconnected', 'Bağlantı yok'],
+	'未能确认': ['Unconfirmed', 'Doğrulanamadı'],
+	'当前协商的 USB 数据链路速率，不代表实时传输速度；接入扩展坞时显示与扩展坞的链路。': ['Negotiated USB data link speed, not current throughput. With a dock, this is the link to the dock.', 'Anlaşılan USB veri bağlantı hızı; anlık aktarım hızı değildir. Çoklayıcı takılıysa çoklayıcıya olan bağlantı gösterilir.'],
 	'切换 USB 角色': ['Switch USB role', 'USB rolünü değiştir'],
 	'设备模式': ['Device mode', 'Cihaz modu'],
 	'主机模式': ['Host mode', 'Ana makine modu'],
@@ -1902,6 +1949,16 @@ html.mud-bootstrap-theme{--surface:var(--background-color-high);--surface-sunken
 .mud-card>h3{margin:0 0 8px;font-size:.7rem;font-weight:600;color:var(--text-muted,var(--text-light,#787d85));letter-spacing:.08em}
 .mud-card>h3::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--brand,var(--primary,#2f7bf6));margin-right:7px;vertical-align:1px}
 .mud-hero{display:flex;flex-wrap:wrap;gap:12px 28px;align-items:center;background:var(--brand-subtle,var(--surface,#fff));margin-bottom:12px;padding:16px 20px}
+.mud-hero{position:relative}
+.mud-hero-meta{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.mud-sim-hero{position:relative;display:inline-block;margin-left:7px;font-size:.74rem;line-height:1.3;z-index:10;color:var(--text,#222)}
+.mud-sim-hero>.mud-sim-toggle{width:auto;min-height:0;gap:7px;white-space:nowrap;padding:4px 9px;border:1px solid var(--hairline,var(--border,#ddd));border-radius:999px;background:var(--surface,var(--background,#fff));font-weight:600}
+.mud-sim-hero .mud-sim-title{display:none}
+.mud-sim-hero .mud-sim-current{padding:0;border-radius:0;background:transparent;color:inherit;font-size:inherit;line-height:inherit}
+.mud-sim-hero .mud-sim-toggle svg{width:12px;height:12px}
+.mud-sim-hero>.mud-sim-panel{position:absolute;top:calc(100% + 8px);left:0;box-sizing:border-box;width:280px;max-width:calc(100vw - 32px);border:1px solid var(--hairline,var(--border,#ddd));border-radius:calc(var(--radius-base,.5rem) + .375rem);background:var(--surface,var(--background,#fff));box-shadow:var(--app-shadow-md,0 8px 28px rgba(0,0,0,.15))}
+.mud-sim-hero .mud-sim-options{padding:14px}
+@media(max-width:600px){.mud-hero-meta{padding-right:78px}.mud-sim-hero{position:absolute;right:14px;top:12px;margin:0}.mud-sim-hero>.mud-sim-panel{left:auto;right:0}}
 .mud-sec{padding:2px 2px 6px}
 .mud-sec>h3{margin:16px 0 10px;font-size:.7rem;font-weight:600;color:var(--text-muted,var(--text-light,#787d85));letter-spacing:.08em}
 .mud-sec>h3::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--brand,var(--primary,#2f7bf6));margin-right:7px;vertical-align:1px}

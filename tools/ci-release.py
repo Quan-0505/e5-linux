@@ -158,6 +158,13 @@ def audit_root(info):
     # than openwrt/overlay. Verify the selective cold-start adapter as well.
     for name in ('vendor-start.sh', 'e5-modem-coldboot'):
         expected['opt/e5/' + name] = file_digest(TOP / 'rootfs/overlay/opt/e5' / name)
+    helper = TOP / 'out/modem-loader/modem-loader-patch'
+    receipt = json.loads(helper.with_suffix('.build.json').read_text())
+    if (receipt['inputs']['source'] != file_digest(TOP/'openwrt/src/modem-loader-patch.c') or
+            receipt['inputs']['builder'] != file_digest(TOP/'devices/common/build-modem-loader.py') or
+            receipt['binary'] != file_digest(helper)):
+        raise ValueError('Loader recognizer build receipt differs from current sources')
+    expected['opt/e5/modem-loader-patch'] = receipt['binary']
     expected['etc/e5/block-mount.build-id'] = hashlib.sha256((block_build_id() + '\n').encode()).hexdigest()
     # E5 applies a repository-maintained keypad patch after copying upstream
     # info-screen sources into the image. Verify the patched files byte-for-byte.

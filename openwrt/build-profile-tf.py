@@ -125,6 +125,7 @@ def main():
         'ln -sf ../init.d/ttyd /target/etc/rc.d/K50ttyd && '
         'ucode /target/usr/libexec/unisoc-modem/disable-stock-upgrade /target')
     runpy.run_path(str(TOP / 'devices/t551m/network-startup.py'))['patch_root'](root, a.profile)
+    runpy.run_path(str(TOP / 'tools/stage-flow-offload.py'))['stage'](root)
     # The SMS forward signs DingTalk webhooks with the openssl CLI and sends SMTP
     # through msmtp; the clean base carries the backend files without the packages.
     # (downloads.openwrt.org interrupts mid-index often enough that the same
@@ -291,7 +292,21 @@ def main():
 
 
 def audit(root, profile, release):
+    for name in ('usr/sbin/unisoc-ra-renew','etc/init.d/unisoc-ra-renew'):
+        assert (root/name).read_bytes() == (TOP/'openwrt/overlay'/name).read_bytes().replace(b'\r\n',b'\n'), name
+        assert os.access(root/name, os.X_OK), name
+    for name in ('S98unisoc-ra-renew','K10unisoc-ra-renew'):
+        assert os.readlink(root/'etc/rc.d'/name) == '../init.d/unisoc-ra-renew'
     assert (root / 'etc/e5/device-profile').read_text().strip() == profile
+    assert json.loads((root / 'usr/share/unisoc-battery-history/profile.json').read_text())['family'] == 'e5'
+    for name in ('usr/share/ucode/mu300/battery-history.uc',
+                 'www/luci-static/resources/view/mu300/battery.js'):
+        assert (root / name).is_file(), name
+    for name in ('etc/init.d/unisoc-battery-history', 'usr/libexec/unisoc-modem/battery-history'):
+        assert os.access(root / name, os.X_OK), name
+    assert (root / 'etc/rc.d/S96unisoc-battery-history').is_symlink()
+    assert (root / 'etc/rc.d/K12unisoc-battery-history').is_symlink()
+    assert not (root / 'etc/e5/battery').exists(), 'Device battery history must not ship in releases'
     assert [p.name for p in (root / 'lib/modules').iterdir()] == [release]
     for directory in ('opt/e5/android', 'etc/dropbear', 'etc/ssh', 'root', 'tmp'):
         assert not any((root / directory).iterdir()), directory
@@ -318,6 +333,7 @@ def audit(root, profile, release):
                  'opt/e5/t551m-atd', 'usr/libexec/e5-mm-state',
                  'usr/libexec/e5-background', 'usr/libexec/e5-background-cpus',
                  'usr/libexec/e5-charge-core.uc', 'usr/libexec/e5-usb-watch.uc',
+                 'usr/libexec/unisoc-modem/device-usb', 'usr/libexec/unisoc-modem/usb-link.uc',
                  'usr/share/ucode/e5/dash.uc', 'usr/share/rpcd/ucode/e5status.uc'):
         assert (root / name).stat().st_size, name
     modem = (root / 'etc/config/unisoc_modem').read_text()

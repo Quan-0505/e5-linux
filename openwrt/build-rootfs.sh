@@ -103,6 +103,7 @@ FIRMWARE=${E5_FIRMWARE:-$TOP/rootfs/overlay/lib/firmware}
 ANDROID=${E5_ANDROID_SUBSET:-$TOP/work/android-subset}
 KBUILD=${E5_KBUILD:-$TOP/out_linux}
 mkdir -p "$WORK" "$OUT"
+MODEM_LOADER_PATCH=$(python3 "$TOP/devices/common/build-modem-loader.py")
 python3 "$TOP/tools/openwrt-package-state.py" check "$VER"
 BLOCK_APK="$OUT/block-mount-guarded.apk"
 E5_WRT_VER="$VER" sh "$HERE/build-block-mount.sh" "$BLOCK_APK"
@@ -281,6 +282,7 @@ VERSION=$(python3 "$TOP/tools/release-identity.py" --profile e5 \
 
 docker run --rm --platform linux/arm64 \
     -v "$OVERLAY":/in/overlay:ro -v "$TOP/rootfs/overlay/opt/e5":/in/opt-e5:ro \
+    -v "$MODEM_LOADER_PATCH":/in/modem-loader-patch:ro \
     -v "$WORK/release.json":/in/release.json:ro \
     -v "$TOP":/in/feature-source:ro -e E5_FEATURES="$FEATURES" -e E5_VARIANT="${E5_VARIANT:-standard}" -e E5_UI_CACHE=/tmp/e5-ui-cache \
     -e E5_INFOSCREEN=/in/infoscreen -e E5_INFOSCREEN_PLUGINS=/in/infoscreen-plugins \
@@ -445,6 +447,8 @@ fi
 for f in vendor-start.sh android-import-perms.sh e5-modem-coldboot android-run node-perms.sh regdb-load.sh gadget-guard.sh usb-watch.sh e5-next-boot e5-os e5-sd-registry e5-at e5-data-priority e5-audio-dsp e5-call-audio.py; do
     cp /in/opt-e5/$f $R/opt/e5/$f; chmod 755 $R/opt/e5/$f
 done
+cp /in/modem-loader-patch $R/opt/e5/modem-loader-patch
+chmod 755 $R/opt/e5/modem-loader-patch
 cp /in/logdw $R/opt/e5/bin/logdw && chmod 755 $R/opt/e5/bin/logdw
 cp /in/e5-vibrate $R/usr/bin/e5-vibrate && chmod 755 $R/usr/bin/e5-vibrate
 cp /in/e5-ctl-raw $R/opt/e5/e5-ctl-raw && chmod 755 $R/opt/e5/e5-ctl-raw
@@ -536,6 +540,8 @@ mkdir -p $R/usr/libexec/unisoc-modem
 cp /in/feature-source/openwrt/luci-app-t551m/root/usr/libexec/unisoc-modem/disable-stock-upgrade $R/usr/libexec/unisoc-modem/disable-stock-upgrade
 chmod 0755 $R/usr/libexec/unisoc-modem/disable-stock-upgrade
 ucode $R/usr/libexec/unisoc-modem/disable-stock-upgrade $R
+python3 /in/feature-source/tools/stage-flow-offload.py --root $R
+python3 /in/feature-source/tools/stage-ra-renew.py --root $R
 python3 /in/feature-source/installer/stage-ota.py --root $R
 python3 /in/feature-source/tools/release-ui-policy.py --root $R
 cd $R && tar -czf /out/$NAME .

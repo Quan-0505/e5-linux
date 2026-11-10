@@ -130,6 +130,16 @@ class RootAudit(unittest.TestCase):
                 (top / kernel_out).mkdir(parents=True)
                 (top / kernel_out / 'kernel.release').write_text('6.18-e5\n')
                 (top / 'upstream/out-release/kernel.release').write_text('wrong-default\n')
+            for name in ('openwrt/src/modem-loader-patch.c', 'devices/common/build-modem-loader.py'):
+                target = top/name; target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((TOP/name).read_bytes())
+            helper = top/'out/modem-loader/modem-loader-patch'
+            helper.parent.mkdir(parents=True); helper.write_bytes(b'helper fixture')
+            helper.with_suffix('.build.json').write_text(json.dumps({
+                'inputs': {'source':release.file_digest(top/'openwrt/src/modem-loader-patch.c'),
+                           'builder':release.file_digest(top/'devices/common/build-modem-loader.py')},
+                'binary':release.file_digest(helper)}))
+            files = {**files, 'opt/e5/modem-loader-patch':helper.read_bytes()}
             path = top / 'work/openwrt/e5-openwrt-25.12.6-generic-rootfs.tar.gz'
             with tarfile.open(path, 'w:gz') as archive:
                 for name, data in files.items():
