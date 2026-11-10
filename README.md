@@ -51,9 +51,20 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | `e5-linux-switch-*.zip` | 已 Root Android 上切回已安装 Linux 的 Magisk 模块，不是完整固件 |
 | `e5-openwrt-installer-windows.zip` | Windows 图形安装器；需配合完整固件 ZIP 使用 |
 
-**最新发布（2026-10-20）**：[build-20261020-001550-479d0fd](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261020-001550-479d0fd)，OpenWrt 25.12.6、E5 Linux `6.18.54-e5-gb93bbc3a36fd`、信息屏 1.6.7、电话插件 1.5。源码提交为 `479d0fd62af2849c01e77f60e4ab58830e73aad0`，对应[构建记录](https://github.com/Quan-0505/e5-linux/actions/runs/39281105646)。
+**最新发布（2026-11-05）**：[build-20261105-205111-de2f43c](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261105-205111-de2f43c)，OpenWrt 25.12.6、E5 Linux `6.18.54-e5`、信息屏 1.6.7、DAED 屏幕插件 1.4.7、电话插件 1.5。源码提交为 `de2f43c26e374673ae0eb112a26343c2c39f9b19`，对应[构建记录](https://github.com/Quan-0505/e5-linux/actions/runs/42026781175)。
 
-本次 Release 提供完整固件 ZIP、Android/Linux 切换 Magisk ZIP 和 Windows 图形安装器 ZIP。GitHub Actions 的 Rust daed、补丁软件包、固件构建、Windows 安装器及发布校验均成功。CI 不连接 E5；此版本仍需在设备上完成实机刷写与硬件验收。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
+本次 Release 提供完整固件 ZIP、Android/Linux 切换 Magisk ZIP 和 Windows 图形安装器 ZIP。GitHub Actions 的 Rust daed、补丁软件包、固件构建、Windows 安装器及发布校验均成功。
+
+**2026-11-10 E5 实机验收（内置 `e5root` 分区、保数据更新）：**已在真机从 2026-10-26 构建（`e5-r20261026.182235-g966b56d1`）经 `e5-update.py` 在线更新到本版本，写入 boot 槽位 b 并校验通过，重启后新系统自检正常（`e5-r20261105.125111-gde2f43c2`）。关键结论：
+
+- **5G SA 注册成功**：`AT+C5GREG` 为 `stat=1`、`AcT=11`，`AT+COPS` 为 `CHN-TELECOM,11`；服务小区 n5（ARFCN 176190，RSRP −89 dBm，RSRQ −12.0 dB，SINR 4.5 dB，15 MHz），邻区可见 n78 与 n1。同一位置旧构建只能驻留 LTE（`AcT=7`、`AT+C5GREG stat=4`）。
+- **数据面走 NR**：WAN 取得运营商地址，`ping 223.5.5.5` 丢包 0%，时延 22–70 ms。
+- **服务正常**：Rust daed 1.4.7、电话插件 1.5、nettest，以及 ModemManager / `e5-modemd` / `e5-nodebaby-guard` 均在运行。
+- 容量未变（`/dev/mmcblk0p71` 2.9 G），未改 GPT、未动 userdata；本机 `NV-NONE`，无 NV 需要归档。
+
+已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
+
+**CLI 更新补充说明：**本版 ZIP 的 `files/` 缺少 `nv-persistence.py`，包内 `scripts/tools/e5-update.py` 会因此报“找不到指定文件”而中止（不写盘、不重启，属安全失败）。本 Release 资产已附同名文件，下载后放入解压目录的 `files/` 即可正常使用命令行更新；走图形安装器的“更新 OpenWrt”入口不受影响。
 
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
@@ -119,7 +130,7 @@ CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂�
 ## 📚 更多资料
 
 - [内置分区原理与安装流程](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/INTERNAL-PARTITION-SYSTEM-20261012.zh-CN.md)
-- [2026-10-20 最新固件发布](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261020-001550-479d0fd)（CI 构建通过，E5 实机验收待完成）
+- [2026-11-05 最新固件发布](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261105-205111-de2f43c)（CI 通过；2026-11-10 完成 E5 实机保数据更新与 5G SA 验收）
 - [2026-10-18 固件发布与验证记录](docs/RELEASE-20261018-204830.zh-CN.md)
 - [2026-10-15 上游同步记录](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/UPSTREAM-20261015.zh-CN.md)
 - [KDAE 与节点小宝集成](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/KDAE-NODEBABY.zh-CN.md)
