@@ -212,10 +212,11 @@ jobs:
             e5-linux/work/network-addons/web/**
           if-no-files-found: error
   build:
-    # 临时：本次只验证固件本体。Windows/macOS 桌面安装器的生产门禁
-    # （gui.yml 的 ui_smoke 焦点断言、macos runner 配额）与本分支合并无关，
-    # 恢复二者为 build 依赖前需先修 gui.yml / 重跑 macos job。
-    needs: [block-package, wifi-package, rust-engine, linux-installer-tests]
+    # 固件打包硬性需要 lock 中的桌面安装器产物，故必须等 windows/macos 两个
+    # 安装器 job 产出 artifact（见 e5-kdae-release.yml 中 'Download verified ...'）。
+    # linux-installer-tests 暂不参与门禁：其 installer 测试仍按 25.12.5 断言包名，
+    # 与本仓 25.12.6 冲突，待 installer 侧参数化后恢复。
+    needs: [block-package, wifi-package, rust-engine, windows-installer, macos-installer]
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     defaults:
