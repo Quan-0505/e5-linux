@@ -219,6 +219,8 @@ jobs:
     timeout-minutes: 360
     env:
       E5_SKIP_DESKTOP_INSTALLERS: '1'
+      # 上游 install-entrypoints.py 的官方开关：不把 OpenWrt-Installer.exe/.app 附加进包
+      OPENWRT_GUI_OPTIONAL: '1'
     defaults:
       run:
         working-directory: e5-linux
