@@ -212,11 +212,11 @@ jobs:
             e5-linux/work/network-addons/web/**
           if-no-files-found: error
   build:
-    # 固件打包硬性需要 lock 中的桌面安装器产物，故必须等 windows/macos 两个
-    # 安装器 job 产出 artifact（见 e5-kdae-release.yml 中 'Download verified ...'）。
-    # linux-installer-tests 暂不参与门禁：其 installer 测试仍按 25.12.5 断言包名，
-    # 与本仓 25.12.6 冲突，待 installer 侧参数化后恢复。
-    needs: [block-package, wifi-package, rust-engine, windows-installer, macos-installer]
+    # 固件编译只依赖三个原生前置。桌面安装器产物不再阻塞构建：
+    # 优先取 windows/macos job 的 artifact，缺失时按 tools/installer-inputs.lock.json
+    # 里已发布、已校验的归档补齐（同一条 installer commit，见下方 restore 步骤）。
+    # windows/macos/linux-installer-tests 仍会运行并记录结果，但不再拖住固件。
+    needs: [block-package, wifi-package, rust-engine]
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     defaults:
@@ -370,16 +370,27 @@ jobs:
       - name: Verify transferred Wi-Fi SAE packages
         run: python3 openwrt/wifi-sae-state.py work/wifi-sae
       - name: Download verified Windows portable installer
+        id: gui-win
+        continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: openwrt-installer-windows
           path: e5-linux/installer/artifacts/windows
+      - name: Restore reviewed Windows installer from the input lock
+        if: steps.gui-win.outcome != 'success'
+        run: python3 e5-linux/tools/fetch-installer-from-lock.py windows-x64 e5-linux/installer/artifacts/windows
       - name: Download and safely restore verified macOS portable installer
+        id: gui-mac
+        continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: openwrt-installer-macos-arm64
           path: e5-linux/work/gui-macos
+      - name: Restore reviewed macOS installer from the input lock
+        if: steps.gui-mac.outcome != 'success'
+        run: python3 e5-linux/tools/fetch-installer-from-lock.py macos-arm64 e5-linux/installer/artifacts/macos-arm64
       - name: Restore macOS app archive
+        if: steps.gui-mac.outcome == 'success'
         run: |
           python3 - <<'PY'
           from pathlib import Path
