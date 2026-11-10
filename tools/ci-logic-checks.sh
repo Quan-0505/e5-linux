@@ -43,7 +43,11 @@ E5_TEST_IMAGE="e5-openwrt-base:$E5_WRT_VER" check python3 rootfs/tests/sd-write.
 check python3 rootfs/tests/voice-state.py
 check python3 rootfs/tests/modem-coldboot.py
 check python3 tools/tests/ci-release.py
-check python3 tools/tests/package-diff-studio.py
+# 固件线不构建桌面安装器（Windows/macOS/Android），Diff Studio 打包校验仅在
+# 桌面安装器线启用；固件包本身由 ci-release.py verify 覆盖。
+if [ "${E5_SKIP_DESKTOP_INSTALLERS:-0}" != 1 ]; then
+    check python3 tools/tests/package-diff-studio.py
+fi
 check python3 tools/tests/build-release.py
 check python3 tools/tests/refresh-native-installers.py
 check python3 tools/tests/infoscreen-daed-app.py

@@ -212,13 +212,13 @@ jobs:
             e5-linux/work/network-addons/web/**
           if-no-files-found: error
   build:
-    # 固件编译只依赖三个原生前置。桌面安装器产物不再阻塞构建：
-    # 优先取 windows/macos job 的 artifact，缺失时按 tools/installer-inputs.lock.json
-    # 里已发布、已校验的归档补齐（同一条 installer commit，见下方 restore 步骤）。
-    # windows/macos/linux-installer-tests 仍会运行并记录结果，但不再拖住固件。
+    # 固件线只编固件：不构建、不下载、不校验桌面安装器（Windows/macOS/Android），
+    # 因此没有 installer 输入锁、归档指纹，也没有 macOS runner 配额门禁。
     needs: [block-package, wifi-package, rust-engine]
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
+    env:
+      E5_SKIP_DESKTOP_INSTALLERS: '1'
     defaults:
       run:
         working-directory: e5-linux
@@ -369,57 +369,11 @@ jobs:
           path: e5-linux/work/wifi-sae
       - name: Verify transferred Wi-Fi SAE packages
         run: python3 openwrt/wifi-sae-state.py work/wifi-sae
-      - name: Download verified Windows portable installer
-        id: gui-win
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: openwrt-installer-windows
-          path: e5-linux/installer/artifacts/windows
-      - name: Restore reviewed Windows installer from the input lock
-        if: steps.gui-win.outcome != 'success'
-        run: python3 e5-linux/tools/fetch-installer-from-lock.py windows-x64 e5-linux/installer/artifacts/windows
-      - name: Download and safely restore verified macOS portable installer
-        id: gui-mac
-        continue-on-error: true
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: openwrt-installer-macos-arm64
-          path: e5-linux/work/gui-macos
-      - name: Restore reviewed macOS installer from the input lock
-        if: steps.gui-mac.outcome != 'success'
-        run: python3 e5-linux/tools/fetch-installer-from-lock.py macos-arm64 e5-linux/installer/artifacts/macos-arm64
-      - name: Restore reviewed Android installer inputs from the input lock
-        run: python3 e5-linux/tools/fetch-installer-from-lock.py android-aarch64 e5-linux/installer/artifacts/android
-      - name: Restore macOS app archive
-        if: steps.gui-mac.outcome == 'success'
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import tarfile
-
-          archive = Path('work/gui-macos/openwrt-installer-macos-arm64.tar.gz')
-          destination = Path('installer/artifacts/macos-arm64').resolve()
-          destination.mkdir(parents=True, exist_ok=True)
-          with tarfile.open(archive, 'r:gz') as bundle:
-              for member in bundle.getmembers():
-                  target = (destination / member.name).resolve()
-                  if not target.is_relative_to(destination):
-                      raise ValueError(f'Unsafe macOS artifact path: {member.name}')
-                  if member.issym() or member.islnk():
-                      link_target = (target.parent / member.linkname).resolve()
-                      if not link_target.is_relative_to(destination):
-                          raise ValueError(f'Unsafe macOS artifact link: {member.name}')
-              bundle.extractall(destination, filter='data')
-          PY
       - name: Assemble the generic mainline flash bundles
         env:
           E5_MAINLINE: '1'
           E5_VARIANT: ${{ inputs.variant || 'standard' }}
           E5_TOOLS_BUILD_IMAGE: e5-mainline-build
-          OPENWRT_GUI_ARTIFACT: ${{ github.workspace }}/e5-linux/installer/artifacts/windows
-          OPENWRT_GUI_MACOS_ARTIFACT: ${{ github.workspace }}/e5-linux/installer/artifacts/macos-arm64
-          OPENWRT_GUI_ANDROID_ARTIFACT: ${{ github.workspace }}/e5-linux/installer/artifacts/android
         run: |
           set -o pipefail
           export E5_INFOSCREEN="$GITHUB_WORKSPACE/e5-linux/ci/infoscreen"
@@ -457,99 +411,18 @@ jobs:
             e5-linux/upstream/out-release/config
           if-no-files-found: ignore
 
-  linux-installer-tests:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    env:
-      PYTHONUTF8: '1'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.source_ref || vars.E5_SOURCE_REF || 'main' }}
-          submodules: recursive
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install installer test dependencies
-        run: python -m pip install paramiko lz4 -r installer/ota-requirements.txt
-      - name: Install offline boot-update test dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y busybox e2fsprogs
-      - name: Verify offline updater including standard and WPS isolation
-        # Uses only temporary regular files and fake mounts; no devices.
-        run: python -X utf8 boot/tests/part-update.py
-      - name: Full installer regression including Linux-only runtime fixtures
-        # OTA fixtures restore root-owned files using the real chown/xattr path.
-        # Only temporary fixture trees are used; the device runtime is unchanged.
-        run: sudo "$(command -v python)" -X utf8 -m unittest discover -s installer/tests -v
-
-  windows-installer:
-    uses: ./.github/workflows/gui.yml
-    with:
-      source_ref: ${{ inputs.source_ref || vars.E5_SOURCE_REF || 'main' }}
-
-  macos-installer:
-    uses: ./.github/workflows/gui-macos.yml
-    with:
-      source_ref: ${{ inputs.source_ref || vars.E5_SOURCE_REF || 'main' }}
-      # macos-15 repeatedly failed to acquire an Apple Silicon hosted runner;
-      # use the alternate supported ARM pool for the firmware release gate.
-      runner: macos-14
-
   publish:
-    needs: [build, windows-installer]
+    needs: [build]
     if: github.event_name == 'push' || inputs.publish
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ needs.build.outputs.source }}
-          path: installer-source
-          persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: flash-release-${{ github.run_id }}-${{ github.run_attempt }}
           path: release
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: openwrt-installer-windows
-          path: installer-artifact
-      - name: Verify and package the portable Windows installer
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import hashlib, json, sys, zipfile
-          from pathlib import Path, PurePosixPath
-          sys.path.insert(0, 'installer-source/installer')
-          from package_gui import digest, sources
-          root = Path('installer-artifact').resolve()
-          meta = json.loads((root / 'build.json').read_text(encoding='utf-8'))
-          if meta.get('source') != sources():
-              raise SystemExit('Windows installer source fingerprint does not match the firmware source commit')
-          for name, wanted in meta.get('files', {}).items():
-              rel = PurePosixPath(name)
-              path = (root / Path(*rel.parts)).resolve()
-              if rel.is_absolute() or '..' in rel.parts or not path.is_relative_to(root) or digest(path) != wanted:
-                  raise SystemExit(f'Windows installer artifact failed its manifest check: {name}')
-          if not (root / 'OpenWrt-Installer.exe').is_file():
-              raise SystemExit('Windows installer executable is missing')
-          target = Path('release/e5-openwrt-installer-windows.zip')
-          with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
-              for path in sorted(root.rglob('*')):
-                  if path.is_file():
-                      archive.write(path, path.relative_to(root).as_posix())
-          print('Windows installer ZIP SHA-256:', digest(target))
-          PY
-          installer_sha="$(sha256sum release/e5-openwrt-installer-windows.zip | cut -d' ' -f1)"
-          {
-            cat release/release-notes.md
-            printf '\n\n## Windows portable installer\n\n'
-            printf '%s\n' 'Download `e5-openwrt-installer-windows.zip` for the standalone Windows GUI installer. Extract it and run `OpenWrt-Installer.exe`, keeping the adjacent `tools/` directory. This ZIP does not include firmware; use it with the complete E5 firmware package.'
-            printf '\n\nInstaller SHA-256: `%s`\n' "$installer_sha"
-          } > release/release-notes.updated.md
-          mv release/release-notes.updated.md release/release-notes.md
-      - name: Publish validated files through a draft release
+      - name: Publish validated firmware through a draft release
         working-directory: release
         env:
           GH_TOKEN: ${{ github.token }}
