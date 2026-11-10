@@ -4,6 +4,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import os
 from pathlib import Path
 import runpy
 import shlex
@@ -45,7 +46,14 @@ def finalize(package, profile, bootctl, variant='standard'):
     if variant not in {'standard', 'wps'}:
         raise ValueError('unsupported package variant')
     add_android_switcher(package)
-    add_diff_studio(package)
+    if os.environ.get('E5_SKIP_DESKTOP_INSTALLERS') == '1':
+        # 固件线不构建桌面安装器：Diff Studio 需要 OpenWrt-Installer.exe/.app 产物
+        # （installer 的 package_diff.attach 会校验 GUI 构建指纹），而它与固件本体
+        # 无关。E5_SKIP_DESKTOP_INSTALLERS=1 时不嵌入 Diff Studio；固件刷写、
+        # 升级与校验都不依赖它。
+        print('skipping Diff Studio: E5_SKIP_DESKTOP_INSTALLERS=1', flush=True)
+    else:
+        add_diff_studio(package)
     files = package / 'files'
     for name in ('OpenWrt-Installer.py', 'START-HERE.md', 'files/android-bootchain.sh',
                  'scripts/installer/boot-slots.py', 'scripts/installer/storage-api.py', 'scripts/installer/storage-lib.sh', 'scripts/installer/gpt-api.py', 'files/storage.sh',
