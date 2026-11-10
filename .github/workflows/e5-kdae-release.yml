@@ -389,6 +389,8 @@ jobs:
       - name: Restore reviewed macOS installer from the input lock
         if: steps.gui-mac.outcome != 'success'
         run: python3 e5-linux/tools/fetch-installer-from-lock.py macos-arm64 e5-linux/installer/artifacts/macos-arm64
+      - name: Restore reviewed Android installer inputs from the input lock
+        run: python3 e5-linux/tools/fetch-installer-from-lock.py android-aarch64 e5-linux/installer/artifacts/android
       - name: Restore macOS app archive
         if: steps.gui-mac.outcome == 'success'
         run: |
@@ -417,6 +419,7 @@ jobs:
           E5_TOOLS_BUILD_IMAGE: e5-mainline-build
           OPENWRT_GUI_ARTIFACT: ${{ github.workspace }}/e5-linux/installer/artifacts/windows
           OPENWRT_GUI_MACOS_ARTIFACT: ${{ github.workspace }}/e5-linux/installer/artifacts/macos-arm64
+          OPENWRT_GUI_ANDROID_ARTIFACT: ${{ github.workspace }}/e5-linux/installer/artifacts/android
         run: |
           set -o pipefail
           export E5_INFOSCREEN="$GITHUB_WORKSPACE/e5-linux/ci/infoscreen"
