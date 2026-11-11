@@ -124,6 +124,16 @@ printf "%s\n" "$ARGON_APKS" | while read -r sum f; do
 done
 # (only the pinned ones go in)
 EXTRA_LIST=$(printf "%s\n" "$ARGON_APKS" | awk '{print "/in/extra/" $2}' | tr '\n' ' ')
+# Themes kept in this repository (openwrt/themes/, see its README): they ride in the
+# same apk add as Argon, so every build ships them. The default theme is unchanged.
+THEMES_DIR="$HERE/themes"
+for theme in "$THEMES_DIR"/*.apk; do
+    [ -f "$theme" ] || continue
+    theme_name=$(basename "$theme")
+    cp -f "$theme" "$WORK/extra/$theme_name"
+    EXTRA_LIST="$EXTRA_LIST /in/extra/$theme_name"
+    echo "Themes: $theme_name"
+done
 
 ls "$OUT"/bluez-daemon-*.apk >/dev/null 2>&1 || {
     echo "no BlueZ package in $OUT -- run openwrt/build-bluez.sh first" >&2; exit 1; }
