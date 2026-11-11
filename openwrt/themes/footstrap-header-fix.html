@@ -1,0 +1,19 @@
+<style id="E5-HEADER-FIX">
+/* footstrap 的 header{display:flex;position:sticky;top:0} 是给顶部栏写的元素选择器，
+   但它同样命中页面内容里的 <header>（例如 luci-app-unisoc-ota 的 mud-ota-heading：
+   蓝色小标题 + h2 大标题 + 说明），三块被横排成一行并吸附到顶部，看起来就是标题
+   与说明叠在一起。内容区的 header 必须回到普通块级流。 */
+#view header,
+.fs-f header,
+.cbi-map header,
+.mud-ota-heading,
+header.mud-ota-heading {
+	display: block !important;
+	position: static !important;
+	overflow: visible !important;
+}
+#view header > *,
+.mud-ota-heading > * { display: block !important; }
+#view header > h2,
+.mud-ota-heading > h2 { margin: 4px 0 8px !important; }
+</style>

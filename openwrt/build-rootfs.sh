@@ -372,6 +372,16 @@ for p in $(sed -En "s/^P:luci-(app|proto)-//p" /lib/apk/db/installed); do
 done
 # the Argon theme (release packages, unsigned)
 apk_retry add --allow-untrusted $EXTRA_LIST >/dev/null
+# footstrap 的 header{display:flex;position:sticky} 会命中页面内容里的 <header>，
+# 把标题和说明横排到一行（unisoc-ota 的系统补丁页就是这样重叠的）。
+# 装完主题后把一段内联样式注入主题模板；模板随页面 HTML 下发，不受 CSS 缓存影响。
+# 此刻 rootfs 还是容器的实时文件系统（$R 在建好 /build/root 之后才有）
+FT_HEADER=/usr/share/ucode/luci/template/themes/footstrap/header.ut
+FT_FIX=/in/feature-source/openwrt/themes/footstrap-header-fix.html
+FT_PY=/in/feature-source/openwrt/themes/fix-footstrap-header.py
+if [ -f "$FT_HEADER" ] && [ -f "$FT_FIX" ] && [ -f "$FT_PY" ]; then
+    python3 "$FT_PY" "$FT_HEADER" "$FT_FIX" || true
+fi
 echo "argon: $(sed -n "/^P:luci-theme-argon$/{n;s/^V://p}" /lib/apk/db/installed)"
 # info screen packages (cage, cog, Mesa, ...), when there is one
 if [ -f /in/infoscreen/packages.txt ]; then
