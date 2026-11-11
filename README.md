@@ -66,6 +66,11 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 
 **CLI 更新补充说明：**本版 ZIP 的 `files/` 缺少 `nv-persistence.py`，包内 `scripts/tools/e5-update.py` 会因此报“找不到指定文件”而中止（不写盘、不重启，属安全失败）。本 Release 资产已附同名文件，下载后放入解压目录的 `files/` 即可正常使用命令行更新；走图形安装器的“更新 OpenWrt”入口不受影响。
 
+**2026-11-11 上游同步分支（尚未发布）：**`sync/upstream-20261110` 已并入上游 `sprd-linux-devs/e5-linux@d0cbadc` 的 12 个提交，并在 commit `5365bc2` 上完成全绿构建（[构建记录 #136](https://github.com/Quan-0505/e5-linux/actions/runs/42936624800)）。
+
+该分支把桌面安装器从固件流水线里彻底解耦：固件编译只依赖内核、rootfs、Rust daed 三个原生前置，不再构建 Windows/macOS/Android 安装器，因此没有 installer 输入锁、归档指纹和 macOS runner 配额门禁。Flash 包内仍保留 `OpenWrt-Installer.py` 与 `launchers/start-installer.cmd|sh`（无 GUI 产物时自动回退到 python 解释器），但不再嵌入 `.exe`/`.app` 与 Diff Studio。
+
+实机验证：把该分支更早的构建（`75ede44`）保数据刷入本机后，5G SA 正常（n5，ARFCN 176190，RSRP −94.5 dBm，SINR −0.2 dB），WAN 取得运营商地址、`ping` 0% 丢包，daed（Rust v3.2.2）与电话插件运行正常；同时发现并修复了 `uhttpd` 与 `uhttpd-mod-ucode` 版本错配导致信息屏 `127.0.0.1:8088` 无法启动的缺陷——现在构建时会把 uhttpd 与其 ucode/ubus 插件统一到 repository 版本，三者不一致即构建失败。该分支产物尚未发布到 Release。
 
 固件不包含个人订阅、节点、密码、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
 
@@ -131,6 +136,7 @@ CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂�
 
 - [内置分区原理与安装流程](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/INTERNAL-PARTITION-SYSTEM-20261012.zh-CN.md)
 - [2026-11-05 最新固件发布](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261105-205111-de2f43c)（CI 通过；2026-11-10 完成 E5 实机保数据更新与 5G SA 验收）
+- [2026-11-11 上游同步构建 #136](https://github.com/Quan-0505/e5-linux/actions/runs/42936624800)（已并入上游 `d0cbadc`；固件线已解耦桌面安装器，产物尚未发布）
 - [2026-10-18 固件发布与验证记录](docs/RELEASE-20261018-204830.zh-CN.md)
 - [2026-10-15 上游同步记录](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/UPSTREAM-20261015.zh-CN.md)
 - [KDAE 与节点小宝集成](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/KDAE-NODEBABY.zh-CN.md)
