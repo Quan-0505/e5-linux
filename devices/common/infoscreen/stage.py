@@ -1,6 +1,7 @@
 """Reproducible shared handheld adaptation of infoscreen 1.6.7 (see LICENSE/README)."""
 from pathlib import Path
 import json
+import hashlib
 import re
 
 HERE = Path(__file__).resolve().parent
@@ -197,23 +198,38 @@ function status() {''')
     settings = replace(settings, "default: '1', label: L('触摸', 'Touch'),", "default: '1', label: L('触摸', 'Touch'), confirm: true, apply: '/usr/libexec/t551m-screen-power sync',")
     settings = replace(settings, 'screen, usb_cat, system_cat, traffic_records, about ];', 'screen, mobile_ui, mobile_navigation, usb_cat, system_cat, traffic_records, ...cpu_categories, about ];')
     index = (HERE / 'base/index.html').read_text(encoding='utf-8')
+    # The kiosk's WebKit caches by URL: a changed mobile.js under the same name
+    # is never re-fetched, so the panel keeps painting the previous UI after a
+    # deploy.  Name the assets with a digest of their content, so the URL changes
+    # whenever any of them changes.
+    served = {
+        'app.js': app + '\n' + (HERE / 'apn.js').read_text(encoding='utf-8'),
+        'mobile.js': (HERE / 'mobile.js').read_text(encoding='utf-8'),
+        'calls.js': (HERE / 'calls.js').read_text(encoding='utf-8'),
+        'transport.js': (HERE / 'transport.js').read_text(encoding='utf-8'),
+        'power-menu.js': (HERE / 'power-menu.js').read_text(encoding='utf-8'),
+        'mobile.css': scalable_css((HERE / 'mobile.css').read_text(encoding='utf-8')),
+        'style.css': scalable_css((HERE / 'base/style.css').read_text(encoding='utf-8')),
+    }
+    digest = hashlib.sha1(''.join(served[k] for k in sorted(served)).encode('utf-8')).hexdigest()[:10]
     index = replace(index, '<link rel="stylesheet" href="style.css">', '<link rel="stylesheet" href="style.css">\n<link rel="stylesheet" href="mobile.css">')
     index = replace(index, '<script src="app.js"></script>', '<script src="transport.js"></script>\n<script src="power-menu.js"></script>\n<script src="mobile.js"></script>\n<script src="calls.js"></script>\n<script src="app.js"></script>')
+    for name in served:
+        index = index.replace('"%s"' % name, '"%s?v=%s"' % (name, digest))
     index = replace(index, '<section class="page" data-title="adv_info">', '<section class="page" data-title="adv_info"><div id="ad-freshness" hidden></div>')
-    app += '\n' + (HERE / 'apn.js').read_text(encoding='utf-8')
-    return {'www/app.js': app, 'api.uc': api, 'settings.uc': settings, 'www/index.html': index,
+    return {'www/app.js': served['app.js'], 'api.uc': api, 'settings.uc': settings, 'www/index.html': index,
             'xkb/rules/e5': (HERE / 'xkb/rules/e5').read_text(encoding='utf-8'),
             'xkb/symbols/e5': (HERE / 'xkb/symbols/e5').read_text(encoding='utf-8'),
             'updates.uc': (HERE / 'base/updates.uc').read_text(encoding='utf-8'),
             'ADAPTATION': 'e5-device-ui-v1\n',
-            'www/style.css': scalable_css((HERE / 'base/style.css').read_text(encoding='utf-8')),
-            'www/mobile.js': (HERE / 'mobile.js').read_text(encoding='utf-8'),
-            'www/calls.js': (HERE / 'calls.js').read_text(encoding='utf-8'),
-            'www/transport.js': (HERE / 'transport.js').read_text(encoding='utf-8'),
+            'www/style.css': served['style.css'],
+            'www/mobile.js': served['mobile.js'],
+            'www/calls.js': served['calls.js'],
+            'www/transport.js': served['transport.js'],
             'www/sdk/e5.js': (HERE / 'base/sdk.js').read_text(encoding='utf-8'),
-            'www/power-menu.js': (HERE / 'power-menu.js').read_text(encoding='utf-8'),
+            'www/power-menu.js': served['power-menu.js'],
             'www/mobile-phone.css': (HERE / 'mobile-phone.css').read_text(encoding='utf-8'),
-            'www/mobile.css': scalable_css((HERE / 'mobile.css').read_text(encoding='utf-8'))}
+            'www/mobile.css': served['mobile.css']}
 
 
 def stage(root):

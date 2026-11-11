@@ -40,7 +40,7 @@ function card_modem(m, sims) {
 				snr: cell.sinr ?? (s.tech == r.tech ? s.signal?.snr : null) };
 			r.cell = { type: cached.nr?.band ? '5gnr' : 'lte', band: (cached.nr?.band ? 'n' : 'B') + cell.band,
 				pci: cell.pci, arfcn: cell.arfcn ?? cell.earfcn,
-				bandwidth_mhz: cell.bw ? +replace(cell.bw, 'M', '') : null };
+				bandwidth_mhz: cell.bw_mhz ?? (cell.bw ? +replace(cell.bw, 'M', '') : null) };
 		}
 		s.tech = r.tech; s.radio_label = r.radio_label;
 	}

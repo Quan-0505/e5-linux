@@ -246,9 +246,9 @@ window.T551M = (() => {
 <nav id="mobile-nav" aria-label="主导航"></nav>
 <aside id="mobile-menu" hidden><div class="mobile-sheet-head"><h2 id="mobile-menu-title">全部页面</h2><button id="mobile-menu-close" aria-label="关闭">${svg('close')}</button></div><div class="mobile-grid">${titles.map((_, i) => `<button data-page="${i}">${svg(pageIcons[i])}<span data-page-label="${i}">${label(i)}</span></button>`).join('')}</div></aside>
 <section id="mobile-lockscreen" role="region" aria-label="锁屏"><div class="lock-top"><span id="lock-symbol">${svg('lock')}</span><div id="lock-date">—</div><div id="lock-time">--:--</div><div class="lock-online"><i></i><span id="lock-network">随身网络</span></div></div>
-<div id="lock-summary"><div class="lock-usage"><div id="lock-day"><span id="lock-day-label">今日已用</span><strong id="lock-day-value">—</strong></div><div id="lock-month"><span id="lock-month-label">本月已用</span><strong id="lock-month-value">—</strong></div></div>
+<div id="lock-summary"><div class="lock-carrier"><strong id="lock-operator">—</strong><span id="lock-radio" class="lock-badge" hidden>—</span></div><div class="lock-net"><span id="lock-cell" hidden></span><span id="lock-qci" hidden></span><span id="lock-ambr" hidden></span></div><div class="lock-usage"><div id="lock-day"><span id="lock-day-label">今日已用</span><strong id="lock-day-value">—</strong></div><div id="lock-month"><span id="lock-month-label">本月已用</span><strong id="lock-month-value">—</strong></div></div>
 <div id="lock-rates"><div><span>↓ <span id="lock-rx-label">下载</span></span><strong id="lock-rx">—</strong></div><div><span>↑ <span id="lock-tx-label">上传</span></span><strong id="lock-tx">—</strong></div></div>
-</div><div id="lock-swipe">${svg('up')}<span id="lock-hint">从下方向上滑动解锁</span><i></i></div></section>`);
+</div><div class="lock-foot"><span id="lock-clients">—</span><span id="lock-power">—</span></div><div id="lock-swipe">${svg('up')}<span id="lock-hint">从下方向上滑动解锁</span><i></i></div></section>`);
         mounted = true;
         bootTrafficPicker();
         T551MPower.boot();
@@ -323,6 +323,16 @@ window.T551M = (() => {
         if (value >= base && unit < units.length - 1) { value = 1; unit++; }
         return [String(value), units[unit]];
     }
+
+
+
+    function setOptional(id, text) {
+        const node = el(id);
+        if (!node) return;
+        node.hidden = !text;
+        node.textContent = text || '';
+    }
+
     function paintUsage() {
         for (const [id, key] of [['lock-day-value','today'],['lock-month-value','month']]) {
             const value = cachedUsage?.available && cachedUsage[key];
@@ -459,6 +469,28 @@ window.T551M = (() => {
         }
         setText('lock-network', data.wan?.up ? words('蜂窝网络已连接', 'Mobile network connected') : words('等待网络连接', 'Connecting'));
         el('lock-network').parentNode.classList.toggle('offline', !data.wan?.up);
+
+        // U60-style lock body: carrier + radio badge, clients, power, rate curve.
+        const lockSlot = data.modem?.sim_card;
+        const lockSim = (data.sims || []).find(s => s.slot === lockSlot) || {};
+        setText('lock-operator', operator(data.modem?.operator) || words('待获取运营商', 'Operator unavailable'));
+        const lockRadio = lockSim.radio_label || (data.modem?.tech ? techName(data.modem.tech) : '');
+        const lockRadioEl = el('lock-radio');
+        if (lockRadioEl) { lockRadioEl.hidden = !lockRadio; setText('lock-radio', lockRadio || '—'); }
+        // cell: serving band + bandwidth, QoS class and the granted rate
+        const lockCell = data.modem?.cell, lockQos = data.modem?.qos;
+        setOptional('lock-cell', lockCell?.band
+            ? lockCell.band + (lockCell.bandwidth_mhz ? ' · ' + lockCell.bandwidth_mhz + ' MHz' : '') : '');
+        setOptional('lock-qci', lockQos?.qci == null ? '' : 'QCI ' + lockQos.qci);
+        const mbps = value => value == null ? null : String(Math.round(value / 1000));
+        // 3GPP field order puts downlink before uplink in the AMBR pair
+        const up = mbps(lockQos?.ul_kbps), down = mbps(lockQos?.dl_kbps);
+        const ambrText = up == null && down == null ? '' : `${down ?? '—'}/${up ?? '—'} Mbps`;
+        setOptional('lock-ambr', ambrText);
+        setText('lock-clients', (data.clients?.length ?? 0) + words(' 台设备', ' devices'));
+        const lockBat = data.battery || {};
+        const lockPower = words({ charging: '充电中', discharging: '电池供电', full: '已充满', not_charging: '已停充' }[chargeState(lockBat)] || '电池', 'Battery');
+        setText('lock-power', (lockBat.capacity == null ? '--' : lockBat.capacity + '%') + ' · ' + lockPower);
         if (screenLocked) usage();
         if (first) {
             // Page restart must restore a physically responsive panel too.
