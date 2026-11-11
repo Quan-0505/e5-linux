@@ -398,7 +398,10 @@ echo "modemmanager $(sed -n "/^P:modemmanager$/{n;s/^V://p}" /lib/apk/db/install
 # 信息屏 127.0.0.1:8088 的 api 实例反复重启，屏幕上只剩 Page load error。
 # 这里把三者统一到 repository 版本，并强制校验，避免带错配的镜像出厂。
 apk_retry add --upgrade uhttpd uhttpd-mod-ubus uhttpd-mod-ucode >/dev/null 2>&1 || true
-pkg_ver() { awk -v want="P:$1" '$0==want{found=1;next} found&&/^V:/{sub(/^V:/,"");print;exit}' /lib/apk/db/installed; }
+# (this file is one single-quoted /bin/sh -euc program: no apostrophes allowed here)
+pkg_ver() {
+    grep -A1 -x "P:$1" /lib/apk/db/installed | sed -n "s/^V://p" | head -n 1
+}
 uhttpd_ver=$(pkg_ver uhttpd)
 [ -n "$uhttpd_ver" ] || { echo "uhttpd missing from the image" >&2; exit 1; }
 for p in uhttpd-mod-ucode uhttpd-mod-ubus; do
