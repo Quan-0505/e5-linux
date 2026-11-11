@@ -391,6 +391,22 @@ fi
 # (apk info <name> describes the repository package; the installed one is here)
 echo "modemmanager $(sed -n "/^P:modemmanager$/{n;s/^V://p}" /lib/apk/db/installed) installed"
 
+# uhttpd 与它的 ucode/ubus 插件必须同版本。镜像自带的 uhttpd 往往落后于
+# repository（例如 25.12.6 镜像带 2026.08.24，而 base 源已到 2026.11.05）；
+# LuCI/信息屏按需补装 uhttpd-mod-ucode 时，apk 只装模块、不升级已存在的主程序，
+# 于是 dlopen 失败并报 "Unable to open ucode handler: No such file or directory"，
+# 信息屏 127.0.0.1:8088 的 api 实例反复重启，屏幕上只剩 Page load error。
+# 这里把三者统一到 repository 版本，并强制校验，避免带错配的镜像出厂。
+apk_retry add --upgrade uhttpd uhttpd-mod-ubus uhttpd-mod-ucode >/dev/null 2>&1 || true
+pkg_ver() { awk -v want="P:$1" '$0==want{found=1;next} found&&/^V:/{sub(/^V:/,"");print;exit}' /lib/apk/db/installed; }
+uhttpd_ver=$(pkg_ver uhttpd)
+[ -n "$uhttpd_ver" ] || { echo "uhttpd missing from the image" >&2; exit 1; }
+for p in uhttpd-mod-ucode uhttpd-mod-ubus; do
+    v=$(pkg_ver "$p")
+    [ "$v" = "$uhttpd_ver" ] || { echo "uhttpd version mismatch: uhttpd=$uhttpd_ver $p=$v" >&2; exit 1; }
+done
+echo "uhttpd: $uhttpd_ver (ucode/ubus plugins matched)"
+
 R=/build/root; mkdir -p $R
 # the live filesystem of this container (OpenWrt and the packages), without the runtime mounts
 for e in /*; do
