@@ -888,7 +888,7 @@ function keyKind(e) {
 	if (k == 'Enter' || k == 'Select' || k == 'Accept' || c == 13) return 'ok';
 	if (k == 'BrowserBack' || k == 'GoBack' || k == 'Backspace' || k == 'Escape' || c == 8 || c == 27 || c == 166) return 'back';
 	if (k == 'Power' || k == 'PowerOff' || k == 'Standby' || k == 'Sleep') return 'power';
-	if (k >= '1' && k <= '9' && k.length == 1) return 'page' + k;
+	if (k >= '0' && k <= '9' && k.length == 1) return 'page' + k;
 	return null;
 }
 
@@ -962,7 +962,27 @@ document.addEventListener('keydown', (e) => {
 		break;
 	case 'hotspot': showPage(P.hotspot); break;
 	default:
-		if (kind && kind.startsWith('page')) showPage(+kind.slice(4) - 1);
+		if (kind && kind.startsWith('page')) {
+			const digit = +kind.slice(4);
+			// 用户在这个数字上配了快捷目标（app:xxx / page:N）就执行它，
+			// 没配才退回原来的切页行为；0 没有默认页面，只能靠快捷目标。
+			const target = last?.screen?.['shortcut_' + digit];
+			if (target && target != 'default') {
+				if (target.startsWith('app:')) {
+					const id = target.slice(4);
+					const hit = apps?.find((x) => x.id == id);
+					if (hit) { openApp(hit); break; }
+					loadApps().then(() => {
+						const m = apps?.find((x) => x.id == id);
+						if (m) openApp(m);
+						else toast(`${t('failed')}: ${id}`);
+					});
+					break;
+				}
+				if (target.startsWith('page:')) { showPage(+target.slice(5)); break; }
+			}
+			if (digit >= 1) showPage(digit - 1);
+		}
 	}
 }, true);
 

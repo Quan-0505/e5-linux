@@ -187,6 +187,8 @@ function status() {''')
         '''
     for i, fallback in enumerate(['0','1','2','3','7'], 1):
         config += f"nav_slot{i}: c.get('e5-infoscreen', 'main', 'nav_slot{i}') ?? '{fallback}',\n\t\t"
+    for digit in range(10):
+        config += f"shortcut_{digit}: c.get('e5-infoscreen', 'main', 'shortcut_{digit}') ?? 'default',\n\t\t"
     api = replace(api, "idle: +(c.get('e5-infoscreen', 'main', 'idle') ?? 60),", config + "idle: +(c.get('e5-infoscreen', 'main', 'idle') ?? 60),")
     api = replace(api, "return writefile(p + '/brightness', `${level}\\n`) != null;", "return system(`/usr/libexec/t551m-screen-power set ${level}`) == 0;")
     settings = (HERE / 'base/settings.uc').read_text(encoding='utf-8')
