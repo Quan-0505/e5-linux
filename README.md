@@ -21,45 +21,42 @@
 
 在 E5 原生 Linux 适配的基础上，整合 **OpenWrt、daed 管理控制台和节点小宝**，保留蜂窝上网、Wi-Fi 热点、USB 网络、信息屏以及短信等设备功能。
 
-本仓库主分支维护内置 eMMC 的独立 e5root 安装与更新，并集成 Rust daed；原 codex/e5-internal-kdae 分支保留为 Go 版本维护线。
+系统安装到内置 eMMC 的独立 `e5root` 分区，与 Android 双系统共存；也可安装到 TF 卡。日常升级走「更新 OpenWrt」入口，保留设置、daed 数据库与节点小宝绑定状态。
 
 <a id="features"></a>
 ## ✨ 功能介绍
 
 | 功能 | 说明 |
 | --- | --- |
-| **内置 OpenWrt** | OpenWrt 25.12.6，安装到独立 `e5root` 分区；已有内置安装通过更新入口升级 |
+| **OpenWrt 系统** | OpenWrt 25.12.6，安装到独立 `e5root` 分区或 TF 卡，与 Android 共存 |
 | **E5 原生内核** | Linux 6.18 LTS，保留 E5 充电、触屏、背光、音频和蜂窝硬件适配 |
 | **daed 管理界面** | Rust daed 3.2.2，提供订阅、节点、群组、DNS、路由、实时日志及热重载管理 |
 | **eBPF 数据面** | 构建时核对 BTF、BPF、veth、TC/clsact 等能力及匹配的内核模块 |
-| **节点小宝** | 预装官方 ARM64 4.3.5-734 客户端，提供 LuCI 服务入口，使用者自行登录绑定 |
+| **节点小宝** | 预装官方 ARM64 客户端，提供 LuCI 服务入口，使用者自行登录绑定 |
 | **蜂窝与热点** | ModemManager Unisoc 适配，提供 SIM/APN、蜂窝数据、Wi-Fi 热点和 USB 网络管理 |
-| **屏幕与短信** | DAED 信息屏适配提供运行状态、实时上下行与累计流量、单键启停、重载和订阅更新；手机扫码配对登录，密码不落盘，令牌按 DAED 30 天有效期保存；设置里可给物理键盘 `0–9` 分配快捷目标 |
-| **升级保留设置** | 保留本机 Rust daed 数据库及关联文件、CA 和节点小宝绑定状态；首次启动以非破坏性副本迁移保留 Go 账号和配置 |
-| **公开构建** | GitHub Actions 构建，Release 提供固件安装包及切换模块 |
+| **eSIM 与设备管理** | 同步上游 eUICC 管理、短信过滤、流量 CSV 与 USB/OTG 改进；具体功能取决于设备硬件与组件 |
+| **屏幕与短信** | 信息屏提供 DAED 开关、状态、重载和订阅更新；手机扫码配对登录，密码不落盘，令牌按 DAED 30 天有效期保存；设置里可给物理键盘 `0–9` 分配快捷目标 |
+| **升级保留设置** | 保留 daed 数据库、CA 与节点小宝绑定状态；首次启动以非破坏性副本迁移旧 Go 版本的账号与配置 |
+| **公开构建** | GitHub Actions 构建，Release 提供固件安装包及系统切换模块 |
 
-daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按自己的网络配置。软件预装不代表已配置订阅或已获得第三方服务权限；跨站点 UDP 单播也不等同于广播或 mDNS 自动发现。
+本次源码同步包含 SIPA 接收缓冲资源管理、Wi-Fi 恢复、数据卡状态接管及符合条件时的 WAN 恢复，并改进 OTA 启动请求和内置屏幕应用保留。构建和安装包校验结果以对应 Release 为准；CI 通过不代表本版本已经完成移动网络、充电或长期运行实机验收。
+
+daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按自己的网络配置。软件预装不代表已配置订阅或已获得第三方服务权限。
 
 <a id="download"></a>
 ## 📦 固件下载
 
-前往 **[Releases](https://github.com/Quan-0505/e5-linux/releases)** 下载完整 E5 安装包，解压后先看 **`START-HERE.md`**；各资产的 SHA-256 可在 GitHub Release 资产信息中核对。
+普通 E5 使用 `standard` 版本；E5-WPS 使用独立 `wps` 构建，不含节点小宝，仅供已有内置 `e5root` 的对应设备保配置更新，两种变体不可交叉使用。
+
+前往 **[Releases](https://github.com/Quan-0505/e5-linux/releases)** 下载完整安装包，解压后先看包内 **`START-HERE.md`**；各资产的 SHA-256 可在 Release 资产信息中核对。
 
 | 文件 | 用途 |
 | --- | --- |
-| `e5-openwrt-flash-*.zip` | 完整安装包，包含电脑安装器、系统镜像、工具及详细指南 |
+| `e5-openwrt-flash-*.zip` | 完整安装包，包含安装器、系统镜像、工具及详细指南 |
+| `e5-openwrt-flash-*.tar.gz` | 电脑解压用完整安装包；不能作为 Magisk 模块安装 |
 | `e5-linux-switch-*.zip` | 已 Root Android 上切回已安装 Linux 的 Magisk 模块，不是完整固件 |
-| `e5-openwrt-installer-windows.zip` | Windows 图形安装器；需配合完整固件 ZIP 使用 |
 
-**最新发布（2026-10-24）**：[build-20261024-085838-4917a34](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261024-085838-4917a34)，OpenWrt 25.12.6、E5 Linux `6.18.54-e5-gb93bbc3a36fd`、信息屏 1.6.7、DAED 屏幕插件 1.4.7、电话插件 1.5。源码提交为 `4917a3445a883be26a2c9f25e8f0868c6c201290`，对应[构建记录](https://github.com/Quan-0505/e5-linux/actions/runs/40046207659)。
-
-本次 Release 提供完整固件 ZIP、Android/Linux 切换 Magisk ZIP 和独立 Windows 图形安装器 ZIP；未重复上传内容相同的 TAR.GZ。三项资产均已核对 GitHub SHA-256。固件已在 E5 的现有内置 `e5root` 分区上保数据更新并启动验收：OpenWrt 与 5G 注册正常，Wi-Fi 无线电已启用且接口处于 AP 模式，DAED 和信息屏服务运行中；DAED 屏幕插件 1.4.7 与源码哈希一致，状态与流量接口可用，外网 HTTPS 探测成功。本次未使用 TF，未改 GPT、userdata 或 NV。已安装系统请使用“更新 OpenWrt”入口；不要把首次安装、重装或缩容入口当作普通升级。
-
-**2026-10-26 E5 上游同步：**移植了 ModemManager 的三项修复（SIPC 端口枚举完成条件、空 `C5GREG` 注册信息解析、副卡可选 IMSI 延后到主数据连接建立后读取），并将各机型新装默认网络模式统一为 152。已有明确选择 134 或 152 的配置会保留；升级只迁移机型默认回退值。NCM 忙队列刷新修复已包含在当前源码。本仓库的 E5 镜像不包含单独的 LYM-10K 机型适配。细节见[2026-10-26 上游同步记录](docs/UPSTREAM-20261026.zh-CN.md)。
-
-**2026-11-02 上游同步与普通 E5 构建：**正在同步上游 `79c20994c33302c5d759ce92313117c28e1810ea`，包括共享信息屏源码归并和缺少基带槽位元数据时的 NV 身份读取修复。保留 DAED 小屏流量界面、扫码授权、订阅更新、0–9 自定义快捷键及现有内置分区保配置更新。构建使用 OpenWrt 25.12.6、最新 E5 内核基线和当前上游设备策略；内核策略补丁及其哈希会记录进构建来源。新的普通 E5 包须通过完整 CI、包校验和实机测试后才发布。
-
-**E5-WPS 已验证发布（2026-10-27）：**[build-20261027-222206-9d080b2-e5wps](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261027-222206-9d080b2-e5wps)，对应源码 `9d080b224bc19ebe8335e253f049d5bfa02a2901`。WPS 使用 Rust DAED、不包含节点小宝；已有内置 e5root 上的保数据更新、信息屏和插件源码哈希、蜂窝 Ping 与 HTTPS 出口已验证。普通 E5 与 WPS 包有变体校验，不可混刷。
+固件不包含个人订阅、节点、DAED 账号、JWT、数据库、SSH 私钥或节点小宝组网身份。Wi-Fi、基带等设备运行文件由安装器从接收设备自身提取，不使用他人的 NV、校准或整机备份。
 
 <a id="install"></a>
 ## 🚀 安装与升级
@@ -68,7 +65,7 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 
 1. 核对设备确为老头乐 E5，准备可恢复的原机备份、稳定供电及可靠数据线。
 2. Android 侧准备好包内指南要求的 Root、ADB 和启动条件；Shell 超级用户请求需要在本机允许。
-3. 解压完整 E5 安装包，Windows 打开 `OpenWrt-Installer.exe`；也可在具备依赖的电脑运行 `python3 OpenWrt-Installer.py`。
+3. 解压完整安装包；Windows 运行 `launchers/start-installer.cmd`（需 Python 3.8+），Linux/macOS 运行 `launchers/start-installer.sh` 或 `python3 OpenWrt-Installer.py`。
 4. 按安装器选择存储位置、容量与热点设置，以该包的 `START-HERE.md` 为操作依据。
 
 | 方式 | 对存储的影响 |
@@ -77,16 +74,16 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 | **TF 卡** | 写入所选 TF 卡并清除安装目标上的原数据；使用包内对应入口 |
 | **旧 userdata 镜像** | 兼容入口，受 data 加密及文件系统状态限制，按安装器检查结果操作 |
 
-**安装到内置存储不等于删除全部 Android 分区。** 当前安装流程保留必要启动链及 Android 回退路径，不提供“一键擦除 Android 并回收全部空间”的承诺。加密 data 的内置安装可能要求恢复出厂；不要把首次安装、重装或缩容入口当作普通升级。
+**安装到内置存储不等于删除全部 Android 分区。** 安装流程保留必要启动链及 Android 回退路径，不提供「一键擦除 Android 并回收全部空间」的承诺。加密 data 的内置安装可能要求恢复出厂；不要把首次安装、重装或缩容入口当作普通升级。
 
 ### 已有 OpenWrt 更新
 
-设备运行 OpenWrt 时，通过 USB 网络连接电脑，打开新包安装器，选择 **更新 OpenWrt**（当前主入口菜单第 6 项）。
+设备运行 OpenWrt 时，通过 USB 网络或局域网连接电脑，打开新包安装器，选择 **更新 OpenWrt**。
 
 - 电脑通过 SSH 主动上传，检查机型、现有布局、容量和载荷哈希。
 - 重启进入 initramfs，将校验后的载荷复制到内存，卸载系统分区后更新内核与系统。
-- 保持原分区容量，恢复设备自己的配置及运行文件；本定制分支额外保留 daed 与节点小宝数据。
-- 已有独立分区更新不重新缩容、不修改 GPT；自行安装的其他软件包和未列入保留清单的文件需要另外备份。
+- 保持原分区容量，恢复设备自己的配置及运行文件，额外保留 daed 与节点小宝数据。
+- 不重新缩容、不修改 GPT；自行安装的其他软件包和未列入保留清单的文件需要另外备份。
 
 单根内置系统更新没有 TF 双系统分区的自动回退能力，写入期间应保持供电。详见[内置升级与恢复说明](docs/INTERNAL-UPGRADE-RESTORE.zh-CN.md)和[代理及节点小宝数据保留说明](docs/KDAE-NODEBABY.zh-CN.md)。
 
@@ -94,38 +91,36 @@ daed 的 DNS、直连/代理策略和节点小宝的转发/回程路由需要按
 
 | 入口 | 默认地址 / 使用方式 |
 | --- | --- |
-| LuCI | `http://192.168.9.1/`，使用自己的设备管理账号 |
+| LuCI | `http://192.168.9.1/`；首次登录默认账号/密码为 `root/root`，登录后立即修改密码 |
 | daed（Rust） | `http://192.168.9.1:2023/`；首次创建管理员、导入自己的订阅 |
 | 节点小宝 | `http://192.168.9.1:9118/`；使用自己的账号登录绑定 |
 | LuCI 快捷入口 | **服务 → daed / 节点小宝**，随设备当前管理地址打开 |
 
-上表为默认 LAN 地址，修改过网段后使用实际地址。固件不预置本人的账号、管理密码或无线密码。
+上表为默认 LAN 地址，修改过网段后使用实际地址。DAED 首次管理员由使用者创建，节点小宝由使用者登录绑定；热点名称/密码按安装流程从目标设备导入或生成。
 
-Linux 中可通过屏幕的系统切换入口，或 `e5-next-boot android && reboot` 返回 Android。Android 切回已安装的 OpenWrt，可使用电脑安装器的系统切换入口或独立切换模块；**不要反复刷完整固件来切换系统**。试启动失败回到 Android 时，应先检查启动日志。
+Linux 中可通过屏幕的系统切换入口，或 `e5-next-boot android && reboot` 返回 Android。Android 切回已安装的 OpenWrt，可使用电脑安装器的系统切换入口或独立切换模块；**不要反复刷完整固件来切换系统**。
 
 <a id="build"></a>
 ## 🔧 自行编译
 
-Rust 固件由 **Actions → Build and publish OpenWrt** 从 `main` 构建。要复现某次发布，请检出其发布说明记录的源码提交。Fork 后请核对工作流中的依赖与权限。
+固件由 **Actions → Build and publish OpenWrt** 从 `main` 构建。要复现某次发布，请检出其发布说明记录的源码提交；Fork 后请核对工作流中的依赖与权限。
 
 ```sh
 git clone --recurse-submodules --branch main https://github.com/Quan-0505/e5-linux.git
 cd e5-linux
 ```
 
-工作流构建 E5 内核、匹配模块、原生 ModemManager、信息屏、Rust daed、DaedNext 页面、公开 Geodata、节点小宝和完整安装包；校验软件来源、镜像元数据、模块能力及最终包哈希。Rust daed 与节点小宝来源见 [软件锁定清单](openwrt/network-addons/lock.json)。Go `wing.db` 由设备本地首次启动迁移到新的 Rust 数据库，源库不覆盖；配置迁移必须在设备上验收。
+工作流构建 E5 内核、匹配模块、原生 ModemManager、信息屏、Rust daed、DaedNext 页面、公开 Geodata、节点小宝和完整安装包；校验软件来源、镜像元数据、模块能力及最终包哈希。Rust daed 与节点小宝来源见[软件锁定清单](openwrt/network-addons/lock.json)。
 
-E5 信息屏上的 DAED 控制、扫码登录和实体数字 `0–9` 快捷按钮设置见[DAED 屏幕适配说明](docs/E5-DAED-INFOSCREEN.zh-CN.md)。构建时会在固定的信息屏上游版本之上应用仓库内的 E5 小补丁，按键锁和息屏保护仍由信息屏核心先处理。
+E5 信息屏上的 DAED 控制、扫码登录和实体数字 `0–9` 快捷按钮设置见[DAED 屏幕适配说明](docs/E5-DAED-INFOSCREEN.zh-CN.md)。
 
-CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂窝、通话、充电、Wi-Fi、代理或断电重启测试。发布说明应分别记录源码变化、打包结果和实机验证范围。
+CI 成功表示构建及所列检查通过，不能代替特定设备上的蜂窝、通话、充电、Wi-Fi、代理或断电重启测试。
 
 ## 📚 更多资料
 
-- [内置分区原理与安装流程](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/INTERNAL-PARTITION-SYSTEM-20261012.zh-CN.md)
-- [2026-10-24 最新固件发布](https://github.com/Quan-0505/e5-linux/releases/tag/build-20261024-085838-4917a34)（CI 与 E5 实机验收已完成）
-- [2026-10-18 固件发布与验证记录](docs/RELEASE-20261018-204830.zh-CN.md)
-- [2026-10-15 上游同步记录](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/UPSTREAM-20261015.zh-CN.md)
-- [KDAE 与节点小宝集成](https://github.com/Quan-0505/e5-linux/blob/codex/e5-internal-kdae/docs/KDAE-NODEBABY.zh-CN.md)
+- [内置分区原理与安装流程](docs/INTERNAL-PARTITION-SYSTEM-20261012.zh-CN.md)
+- [DAED 屏幕适配说明](docs/E5-DAED-INFOSCREEN.zh-CN.md)
+- [KDAE 与节点小宝集成](docs/KDAE-NODEBABY.zh-CN.md)
 - [上游技术说明（中文）](README.upstream.zh-CN.md) / [English](README.upstream.en.md)
 
 <a id="credits"></a>
