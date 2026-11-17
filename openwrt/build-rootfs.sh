@@ -370,8 +370,12 @@ fi
 # attended sysupgrade flashes whole-disk images: that would overwrite the eMMC
 # (removed before the translations below, whose package for it would hold it)
 apk del luci-app-attendedsysupgrade attendedsysupgrade-common owut >/dev/null 2>&1 || true
-if grep -q "^P:luci-app-attendedsysupgrade$" /lib/apk/db/installed; then
-    echo "luci-app-attendedsysupgrade is still installed" >&2; exit 1
+# apk preserves removed packages' conffiles. This generic image must not retain
+# an attended-sysupgrade configuration either: that UI targets whole-disk
+# images and could overwrite the modem's eMMC layout.
+rm -f /etc/config/attendedsysupgrade
+if grep -q "^P:luci-app-attendedsysupgrade$" /lib/apk/db/installed || [ -e /etc/config/attendedsysupgrade ]; then
+    echo "attended sysupgrade package or config is still present" >&2; exit 1
 fi
 # LuCI in Chinese: the base and each installed application translation
 # (the language is chosen at first boot, 93-e5-luci)

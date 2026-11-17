@@ -8,6 +8,15 @@ TOP = Path(__file__).resolve().parents[2]
 
 
 class StandaloneApkRetry(unittest.TestCase):
+    def test_removed_attended_upgrade_conffile_is_not_left_in_generic_image(self):
+        source = (TOP / "openwrt/build-rootfs.sh").read_text(encoding="utf-8")
+        start = source.index("# attended sysupgrade flashes whole-disk images")
+        end = source.index("# LuCI in Chinese", start)
+        section = source[start:end]
+        self.assertIn("apk del luci-app-attendedsysupgrade", section)
+        self.assertIn("rm -f /etc/config/attendedsysupgrade", section)
+        self.assertIn("[ -e /etc/config/attendedsysupgrade ]", section)
+
     def run_retry(self, succeeds_on):
         source = (TOP / "openwrt/build-rootfs.sh").read_text()
         container = source.split("alpine:3.22 sh -euc '\n", 1)[1]
