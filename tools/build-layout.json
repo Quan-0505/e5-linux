@@ -1,5 +1,6 @@
 {
   "format": 1,
+  "lpac_apks": "{workspace}/artifacts/lpac",
   "base": "{workspace}/base/e5",
   "installer_artifacts": "{workspace}/artifacts/openwrt-tools/{installer_revision}",
   "native_screen": {
@@ -12,6 +13,7 @@
   "ufs_identity_helper": "{repo}/out/changxing60/ufs-id",
   "block_apk": "{repo}/out/openwrt/block-mount-guarded.apk",
   "wifi_apks": "{repo}/work/wifi-sae",
+  "iwinfo_apks": "{repo}/work/iwinfo-ap-scan",
   "local_kernel_build": {
     "source": "{workspace}/sources/e5-kernel",
     "revision": "020b970e351eee3887e6caaf2d653926e7086e44"
@@ -55,7 +57,7 @@
       "misc_head": "{repo}/dumps/t512n-stock-20261018/misc-head.bin"
     },
     "yuanhang41s": {
-      "kernel": "{repo}/out/yuanhang41s/kernel",
+      "kernel": "{workspace}/kernels/yuanhang41s",
       "stock_boot": "{repo}/dumps/yuanhang41s-stock-20261020/boot_b.img",
       "misc_head": "{repo}/dumps/yuanhang41s-stock-20261020/misc-head.bin"
     },

@@ -3,6 +3,7 @@
 import gzip
 import hashlib
 import io
+import json
 import os
 import runpy
 import struct
@@ -62,6 +63,12 @@ class OfflineUpdate(unittest.TestCase):
             (base/'dev').mkdir()
             (base / 'etc/e5-infoscreen/plugins/phone').mkdir(parents=True)
             (base / 'etc/e5-infoscreen/plugins/phone/phone.js').write_text('new phone code')
+            esim = base / 'etc/e5-infoscreen/plugins/esim'
+            esim.mkdir(parents=True)
+            (esim/'manifest.json').write_text('{"id":"esim","version":"new"}')
+            (esim/'esim.css').write_text('new wallpaper-aware CSS')
+            (esim/'esim.js').write_text('new theme-aware JS')
+            (base/'etc/e5/release.json').write_text(json.dumps({'image_version':'new release'}))
             (base / 'etc/e5/device-profile').write_text('t551m\n')
             (base / 'etc/e5/image-version').write_text('new e5wps release\n' if new_variant == 'wps' else 'new release\n')
             if new_variant == 'wps':
@@ -73,15 +80,23 @@ class OfflineUpdate(unittest.TestCase):
             (pending / 'openwrt.ext4.gz').write_bytes(gzip.compress(raw,compresslevel=1))
             archive(pending / 'firmware.tar', {'lib/firmware/wcnmodem.bin':b'own firmware',
                 'opt/e5/android/vendor/bin/modem_control':b'#!/bin/sh\n'})
-            archive(pending / 'settings.tar', {'etc/config/wireless':'自己的热点'.encode(),
+            wireless="config wifi-iface user_ap\n option ssid '自己的热点'\n option encryption 'psk2+ccmp'\n option key 'user-new-password!'\n"
+            archive(pending / 'settings.tar', {'etc/config/wireless':wireless.encode(),
                 **({'etc/e5/sd-root':b'e5-openwrt-sd\n', 'etc/e5/sd-gen':b'7\n'} if kind == 'sd' else {}),
                 **({'etc/e5/device-variant':b'e5wps\n'} if old_variant == 'wps' else {}),
                 'etc/e5/image-version':b'OLD release', 'etc/e5/device-profile':b't551m\n',
                 'etc/e5-infoscreen/plugins/phone/phone.js':b'old phone code',
-                'etc/shadow':b'root:saved-password-hash:\n',
+                'etc/e5-infoscreen/plugins/esim/manifest.json':b'{"id":"esim","version":"old"}',
+                'etc/e5-infoscreen/plugins/esim/esim.css':b'old opaque CSS',
+                'etc/e5-infoscreen/plugins/esim/esim.js':b'old JS',
+                'etc/e5-infoscreen/plugins/esim/obsolete.js':b'removed built-in file',
+                'etc/e5-infoscreen/plugins/user-app/main.js':b'user installed app',
+                'etc/e5-infoscreen/wallpapers/desktop.png':b'user wallpaper',
+                'etc/e5/release.json':b'{"image_version":"old release"}',
                 'etc/daed/daed.db':b'saved-daed-account-database',
                 'etc/daed/wing.db':b'saved-daed-subscription-database',
-                'etc/daed/wing.db-wal':b'saved-daed-subscription-wal'})
+                'etc/daed/wing.db-wal':b'saved-daed-subscription-wal',
+                'etc/shadow':b'root:saved-password-hash:\n'})
             archive(pending / 'ext4-tools.tar', {'lib/ld-musl-aarch64.so.1':b'#!/bin/sh\nshift 3\nexec /usr/sbin/e2fsck "$@"\n',
                 'usr/sbin/e2fsck':b'placeholder'})
             hashes = ''.join(hashlib.sha256((pending/n).read_bytes()).hexdigest()+'  '+n+'\n'
@@ -149,13 +164,19 @@ reboot() {{ echo REBOOT >> "{root}/calls"; }}
                 self.assertEqual(result.returncode,0,result.stdout+result.stderr)
                 self.assertLess(calls.index('unmount '+str(mountpoint)),calls.index('WRITE'))
                 self.assertIn('REBOOT',calls)
-                self.assertEqual((new/'etc/config/wireless').read_text(),'自己的热点')
+                self.assertEqual((new/'etc/config/wireless').read_text(),wireless)
                 self.assertIn('saved-password-hash',(new/'etc/shadow').read_text())
                 self.assertEqual((new/'etc/e5/image-version').read_text(),
                     'new e5wps release\n' if variant == 'wps' else 'new release\n')
                 if variant == 'wps':
                     self.assertEqual((new/'etc/e5/device-variant').read_text(),'e5wps\n')
                 self.assertEqual((new/'etc/e5-infoscreen/plugins/phone/phone.js').read_text(),'new phone code')
+                self.assertEqual((new/'etc/e5-infoscreen/plugins/esim/esim.css').read_text(),'new wallpaper-aware CSS')
+                self.assertEqual((new/'etc/e5-infoscreen/plugins/esim/esim.js').read_text(),'new theme-aware JS')
+                self.assertEqual(json.loads((new/'etc/e5/release.json').read_text())['image_version'],'new release')
+                self.assertFalse((new/'etc/e5-infoscreen/plugins/esim/obsolete.js').exists())
+                self.assertEqual((new/'etc/e5-infoscreen/plugins/user-app/main.js').read_bytes(),b'user installed app')
+                self.assertEqual((new/'etc/e5-infoscreen/wallpapers/desktop.png').read_bytes(),b'user wallpaper')
                 self.assertEqual((new/'lib/firmware/wcnmodem.bin').read_bytes(),b'own firmware')
                 self.assertEqual((new/'etc/daed/daed.db').read_bytes(),b'saved-daed-account-database')
                 self.assertEqual((new/'etc/daed/wing.db').read_bytes(),b'saved-daed-subscription-database')

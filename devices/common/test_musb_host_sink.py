@@ -259,7 +259,7 @@ int main(void){struct value v={-1};
             subprocess.run([str(root / 'bq')], check=True)
 
 
-    def test_stopped_host_releases_core_session_pm_hold(self):
+    def test_host_session_pm_ownership_and_cleanup(self):
         import resource
         def no_core_dump():
             resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
@@ -306,31 +306,141 @@ static void flush_delayed_work(int *work){(void)work;if(queued){queued=0;musb_pm
 int main(void){
  struct ops ops={MUSB_DMA_SPRD};struct dev dev={0};struct hcd h={0};struct musb m={.controller=&dev,.ops=&ops,.hcd=&h};running=&m;
  for(int cycle=0;cycle<3;cycle++){
-  /* Glue owns one reference; an actual session interrupt acquires another. */
+  /* Actual SPRD role work owns one reference. Legacy core accounting
+   * used to add another; keep both teardown cases under test. */
   dev.usage++;devctl=MUSB_DEVCTL_SESSION;musb_pm_runtime_check_session(&m);
-  assert(m.session&&dev.usage==2);queued=0;h.rh_registered=true;musb_host_cleanup(&m);
+  assert(m.session==LEGACY_PM && dev.usage==1+LEGACY_PM);
+  queued=0;h.rh_registered=true;musb_host_cleanup(&m);
   assert(devctl==0);dev.usage--; /* Matching glue host-session put. */
   if(queued)musb_pm_runtime_check_session(&m); /* Existing core IRQ work. */
   assert(dev.usage==0&&!m.session); /* Parent can now suspend and change role. */
   musb_host_cleanup(&m);assert(dev.usage==0);
  }
- ops.quirks=0;queued=0;h.rh_registered=true;musb_host_cleanup(&m);assert(!queued);
+ ops.quirks=0;devctl=MUSB_DEVCTL_SESSION;musb_pm_runtime_check_session(&m);
+ assert(m.session&&dev.usage==1);devctl=0;musb_pm_runtime_check_session(&m);
+ assert(!m.session&&!dev.usage);
+ queued=0;h.rh_registered=true;musb_host_cleanup(&m);assert(!queued);
  assert(disabled==4);
 }
 '''
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             old = re.sub(r'\s*if \(musb->ops->quirks & MUSB_DMA_SPRD\) \{.*?\n\t\}', '', cleanup, flags=re.S)
-            for name, body in [('fixed', cleanup), ('old', old)]:
-                (root / (name+'.c')).write_text(prelude + check + stop + body + main)
+            guard='\tif (musb->ops->quirks & MUSB_DMA_SPRD)\n\t\treturn;\n'
+            has_owner_guard='SPRD role work owns runtime PM' in check
+            legacy=check.replace(guard,'',1) if has_owner_guard else check
+            variants=[('fixed',check,cleanup,not has_owner_guard),
+                      ('legacy-balanced',legacy,cleanup,True),
+                      ('old',legacy,old,True)]
+            for name, pm_check, body, legacy_pm in variants:
+                (root / (name+'.c')).write_text(prelude + pm_check + stop + body +
+                    '\n#define LEGACY_PM '+str(int(legacy_pm))+'\n'+main)
                 subprocess.run(['cc','-Wall','-Wextra','-Werror','-Wno-unused-variable',
                                 str(root/(name+'.c')),'-o',str(root/name)],check=True)
                 result = subprocess.run([str(root/name)],stdout=subprocess.PIPE,stderr=subprocess.PIPE,
                                         preexec_fn=no_core_dump)
-                if name == 'fixed':
+                if name != 'old':
                     self.assertEqual(result.returncode, 0, result.stderr.decode())
                 else:
                     self.assertNotEqual(result.returncode, 0, 'Old teardown must reproduce the leaked session')
+
+class VbusOnly(unittest.TestCase):
+    def test_manual_fallback_attachment_takeover_and_cleanup(self):
+        prelude = r'''
+#include <assert.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <errno.h>
+#define READ_ONCE(x) (x)
+#define WRITE_ONCE(x,v) ((x)=(v))
+#define IS_ERR_OR_NULL(p) (!(p) || (p)==(void *)-1)
+#define container_of(p,t,m) ((t *)((char *)(p)-offsetof(t,m)))
+#define to_delayed_work(p) container_of(p,struct delayed_work,work)
+#define dev_info(...) ((void)0)
+#define spin_lock_irqsave(p,f) ((void)(p),(f)=0)
+#define spin_unlock_irqrestore(p,f) ((void)(p),(void)(f))
+#define msecs_to_jiffies(x) (x)
+#define system_wq NULL
+enum {EXTCON_USB, EXTCON_SINK, EXTCON_USB_HOST};
+enum {TYPEC_PORT_UFP, TYPEC_PORT_DRP, TYPEC_PORT_DFP};
+enum {SC27XX_ATTACHED_SNK, SC27XX_DEBUG_CABLE, SC27XX_ATTACHED_SRC};
+struct extcon_dev {int levels[3];};
+struct work_struct {int unused;};
+struct delayed_work {struct work_struct work;};
+struct sc27xx_typec {
+ bool external_vbus_stopped,external_host_policy,vbus_only_connect,partner_connected;
+ int role_lock,external_vbus_lock,mode,pre_state;void *dev;
+ struct extcon_dev *vbus_dev,*edev;struct delayed_work external_vbus_work;
+};
+static int changes,queued,delay,locked;
+static void mutex_lock(int *m){(void)m;assert(!locked);locked=1;}
+static void mutex_unlock(int *m){(void)m;assert(locked);locked=0;}
+static int extcon_get_state(struct extcon_dev *d,int n){assert(!IS_ERR_OR_NULL(d));return d->levels[n];}
+static void extcon_set_state_sync(struct extcon_dev *d,int n,bool value){assert(locked);d->levels[n]=value;changes++;}
+static void mod_delayed_work(void *q,struct delayed_work *w,int t){(void)q;(void)w;queued++;delay=t;}
+static void cancel_delayed_work_sync(struct delayed_work *w){(void)w;queued=0;}
+'''
+        main = r'''
+int main(void) {
+ struct extcon_dev power={{1,0,0}},cc={{0,0,0}};
+ struct sc27xx_typec s={.vbus_dev=&power,.edev=&cc,.mode=TYPEC_PORT_UFP};
+ /* Automatic/device/ordinary host never acquire the fallback. */
+ sc27xx_external_vbus_queue(&s);assert(!queued);
+ sc27xx_external_vbus_work(&s.external_vbus_work.work);assert(!changes);
+ s.external_host_policy=true;
+ sc27xx_external_vbus_queue(&s);assert(queued==1&&delay==500);
+ sc27xx_external_vbus_work(&s.external_vbus_work.work);
+ assert(s.vbus_only_connect&&!s.partner_connected&&cc.levels[EXTCON_USB]&&cc.levels[EXTCON_SINK]);
+ assert(!cc.levels[EXTCON_USB_HOST]&&changes==2);
+ sc27xx_external_vbus_work(&s.external_vbus_work.work);assert(changes==2); /* No repeated events. */
+ /* Detach cancels presence immediately, even if CC never sent an IRQ. */
+ power.levels[EXTCON_USB]=0;sc27xx_external_vbus_queue(&s);assert(delay==0);
+ sc27xx_external_vbus_work(&s.external_vbus_work.work);
+ assert(!s.vbus_only_connect&&!cc.levels[EXTCON_USB]&&!cc.levels[EXTCON_SINK]);
+ /* Stale delayed arrival cannot invent power after the plug is removed. */
+ power.levels[EXTCON_USB]=1;sc27xx_external_vbus_queue(&s);assert(delay==500);
+ power.levels[EXTCON_USB]=0;sc27xx_external_vbus_work(&s.external_vbus_work.work);assert(!s.vbus_only_connect);
+ power.levels[EXTCON_USB]=1;sc27xx_external_vbus_work(&s.external_vbus_work.work);assert(s.vbus_only_connect);
+ /* A late real CC sink takes over without a false unplug/replug. */
+ int before=changes;s.partner_connected=true;s.pre_state=SC27XX_ATTACHED_SNK;
+ sc27xx_external_vbus_work(&s.external_vbus_work.work);
+ assert(!s.vbus_only_connect&&changes==before&&cc.levels[EXTCON_USB]);
+ s.partner_connected=false;cc.levels[EXTCON_USB]=cc.levels[EXTCON_SINK]=0;
+ sc27xx_external_vbus_work(&s.external_vbus_work.work);assert(s.vbus_only_connect);
+ /* Explicit policy exit releases fallback even while external VBUS stays high. */
+ s.external_host_policy=false;mutex_lock(&s.role_lock);sc27xx_external_vbus_clear(&s);mutex_unlock(&s.role_lock);
+ assert(!s.vbus_only_connect&&!cc.levels[EXTCON_USB]);
+ s.external_host_policy=true;
+ /* An active source or unreadable/absent power provider must not be accepted. */
+ for(int i=0;i<6;i++) {
+  s.mode=TYPEC_PORT_UFP;s.vbus_dev=&power;cc.levels[EXTCON_USB_HOST]=0;
+  if(i==0)s.vbus_dev=NULL;if(i==1)s.vbus_dev=(void *)-1;
+  if(i==2)power.levels[EXTCON_USB]=-EIO;if(i==3)s.mode=TYPEC_PORT_DFP;
+  if(i==4)cc.levels[EXTCON_USB_HOST]=1;if(i==5)cc.levels[EXTCON_USB_HOST]=-EIO;
+  sc27xx_external_vbus_work(&s.external_vbus_work.work);assert(!s.vbus_only_connect);
+  power.levels[EXTCON_USB]=1;
+ }
+ s.mode=TYPEC_PORT_UFP;cc.levels[EXTCON_USB_HOST]=0;
+ sc27xx_external_vbus_queue(&s);sc27xx_external_vbus_cleanup(&s);assert(!queued&&s.external_vbus_stopped);
+ sc27xx_external_vbus_queue(&s);sc27xx_external_vbus_work(&s.external_vbus_work.work);
+ assert(!queued&&!s.vbus_only_connect&&!locked);
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            adapter = runpy.run_path(str(HERE/'dwc3-typec-vbus.py'))['header']
+            variants = [('musb', 'role_lock', 'external_host_policy', (HERE/'host-sink-typec.h').read_text()),
+                        ('dwc3', 'policy_lock', 'external_host_policy', adapter(lock='policy_lock',policy='external_host_policy')),
+                        ('41s', 'role_lock', 'host_sink', adapter(lock='role_lock',policy='host_sink'))]
+            for name, lock, policy, header in variants:
+                with self.subTest(driver=name):
+                    fixture = lambda s:s.replace('role_lock',lock).replace('external_host_policy',policy)
+                    (root / 'vbus.c').write_text(fixture(prelude) + header + fixture(main))
+                    subprocess.run(['cc', '-Wall', '-Wextra', '-Werror', '-Wno-misleading-indentation',
+                                    '-fsanitize=address,undefined','-fno-pie','-no-pie',
+                                    str(root / 'vbus.c'), '-o', str(root / 'vbus')], check=True)
+                    subprocess.run([str(root / 'vbus')], check=True)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -43,12 +43,17 @@ def main():
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--apk-image', default='mu300-openwrt-base:25.12.6')
     p.add_argument('--wifi-apks', type=Path, default=TOP / 'work/wifi-sae')
+    p.add_argument('--iwinfo-apks', type=Path, default=TOP / 'work/iwinfo-ap-scan')
+    p.add_argument('--lpac-apks', type=Path, required=True)
     p.add_argument('--release-version', help='Optional explicit private release version')
     p.add_argument('--cc', default='aarch64-linux-gnu-gcc')
     a = p.parse_args()
     runpy.run_path(str(TOP / 'openwrt/bundle/flash.py'))['validate_installer_busybox'](a.busybox)
     wifi_build = runpy.run_path(str(TOP / 'openwrt/wifi-sae-state.py'))['inspect'](a.wifi_apks)
+    iwinfo_build = runpy.run_path(str(TOP / 'openwrt/iwinfo-ap-scan-state.py'))['inspect'](a.iwinfo_apks)
+    runpy.run_path(str(TOP / 'openwrt/lpac-state.py'))['inspect'](a.lpac_apks)
     wifi_args = ' '.join('/wifi-sae/' + n for n in sorted(wifi_build['apks']))
+    iwinfo_args = ' '.join('/iwinfo-ap-scan/' + n for n in sorted(iwinfo_build['apks']))
     if os.geteuid() != 0 or a.work.exists():
         p.error('Run as root with a new work directory')
     expected_id = runpy.run_path(str(TOP / 'tools/ci-release.py'))['block_build_id']()
@@ -106,25 +111,28 @@ def main():
         '-v', f'{root}:/target', '-v', f'{a.block_apk.resolve()}:/input/block.apk:ro',
         '-v', f'{TOP / "out/openwrt"}:/modem:ro',
         '-v', f'{a.wifi_apks.resolve()}:/wifi-sae:ro',
+        '-v', f'{a.iwinfo_apks.resolve()}:/iwinfo-ap-scan:ro',
         '--entrypoint', '/bin/sh', a.apk_image, '-ec',
         # Match the existing MU300 builder: transient index/download failures
         # retry in this staging tree, without restarting every model's package.
         'apk_retry() { attempt=1; while ! apk "$@"; do '
         '[ "$attempt" -lt 3 ] || return 1; attempt=$((attempt + 1)); '
         'echo "Retrying apk download (attempt $attempt/3)" >&2; sleep 3; done; }; '
-        'apk --root /target --no-scripts --no-network add --allow-untrusted /input/block.apk ' + modem_args + ' ' + wifi_args + ' && '
+        'apk --root /target --no-scripts --no-network add --allow-untrusted /input/block.apk ' + modem_args + ' ' + wifi_args + ' ' + iwinfo_args + ' && '
         'mkdir /tmp/modem-verify && apk extract --allow-untrusted --destination /tmp/modem-verify /modem/' + modem_daemon + ' && '
         'cmp /target/usr/sbin/ModemManager /tmp/modem-verify/usr/sbin/ModemManager && '
         'ucode /target/usr/libexec/unisoc-modem/disable-channel-analysis /target && '
+        'ucode /target/usr/libexec/unisoc-modem/limit-wifi-widths /target && '
         # Incremental builds must also add newly mandatory packages to old bases.
         'apk_retry --root /target update >/dev/null && '
         'apk_retry --root /target --no-scripts add ttyd luci-app-ttyd luci-i18n-ttyd-zh-cn luci-i18n-ttyd-tr iw-full '
-        'rpcd-mod-ucode ucode-mod-fs ucode-mod-ubus ucode-mod-uci ucode-mod-uloop ucode-mod-rtnl ucode-mod-nl80211 && '
+        'python3-openssl ca-bundle rpcd-mod-ucode ucode-mod-fs ucode-mod-ubus ucode-mod-uci ucode-mod-uloop ucode-mod-rtnl ucode-mod-nl80211 && '
         'sh /target/usr/libexec/e5-ttyd-bind /target && '
         'ln -sf ../init.d/ttyd /target/etc/rc.d/S99ttyd && '
         'ln -sf ../init.d/ttyd /target/etc/rc.d/K50ttyd && '
         'ucode /target/usr/libexec/unisoc-modem/disable-stock-upgrade /target')
     runpy.run_path(str(TOP / 'devices/t551m/network-startup.py'))['patch_root'](root, a.profile)
+    runpy.run_path(str(TOP / 'openwrt/stage-lpac.py'))['install'](root, a.lpac_apks, a.apk_image)
     runpy.run_path(str(TOP / 'tools/stage-flow-offload.py'))['stage'](root)
     # The SMS forward signs DingTalk webhooks with the openssl CLI and sends SMTP
     # through msmtp; the clean base carries the backend files without the packages.
@@ -143,6 +151,9 @@ def main():
         forward[pkg] = match.group(1)
     (root / 'etc/e5/block-mount.build-id').write_bytes(Path(str(a.block_apk) + '.build-id').read_bytes())
     (root / 'etc/e5/wifi-sae.build-id').write_text(wifi_build['build_id'] + '\n')
+    (root / 'etc/e5/iwinfo-ap-scan.build-id').write_text(iwinfo_build['build_id'] + '\n')
+    if not (root/'usr/lib/libiwinfo.so.20230701').is_file():
+        raise ValueError('AP scan library missing from rootfs')
     (root / 'etc/e5/wifi-sae.source-info').write_bytes((a.wifi_apks / 'source-info').read_bytes())
     # Do not execute target init scripts on the build host.
     fstab = (root / 'etc/init.d/fstab').read_text()
@@ -199,9 +210,9 @@ def main():
         '--misc-head', a.misc_head, '--kernel', a.kernel / 'Image.lk',
         '--modules', a.kernel / 'modules', '--module-order', boot_order,
         '--busybox', a.busybox, *ufs_args, '--init', init, '--cmdline',
-        'e5.lkpad=0000000000' if a.profile == 't512n' else '', '--out', files / 'boot.img')
+        'e5.lkpad=0000000000' if a.profile in ('t512n', 'lym10k') else '', '--out', files / 'boot.img')
     boot = json.loads((files / 'boot.json').read_text())
-    expected_command = ('e5.lkpad=0000000000 ' if a.profile == 't512n' else '') + 'e5.part_v=2'
+    expected_command = ('e5.lkpad=0000000000 ' if a.profile in ('t512n', 'lym10k') else '') + 'e5.part_v=2'
     assert boot['overlay_files'] == 0 and boot['cmdline'] == expected_command
     (files / 'boot.misc-slot-b-trial.bin').rename(files / 'boot-misc-slot-b.bin')
     sources = {}
@@ -292,6 +303,7 @@ def main():
 
 
 def audit(root, profile, release):
+    runpy.run_path(str(TOP/'openwrt/stage-lpac.py'))['audit'](root)
     for name in ('usr/sbin/unisoc-ra-renew','etc/init.d/unisoc-ra-renew'):
         assert (root/name).read_bytes() == (TOP/'openwrt/overlay'/name).read_bytes().replace(b'\r\n',b'\n'), name
         assert os.access(root/name, os.X_OK), name
@@ -328,6 +340,7 @@ def audit(root, profile, release):
     for name in ('sbin/block', 'lib/libblkid-tiny.so', 'etc/init.d/fstab',
                  'lib/netifd/hostapd-unisoc.sh', 'usr/share/ucode/wifi/unisoc-sae.uc',
                  'etc/e5/wifi-sae.build-id',
+                 'etc/e5/iwinfo-ap-scan.build-id', 'usr/lib/libiwinfo.so.20230701',
                  'usr/sbin/ModemManager', 'usr/libexec/e5-infoscreen/session',
                  'usr/bin/openssl', 'usr/bin/msmtp', 'usr/bin/python3',
                  'opt/e5/t551m-atd', 'usr/libexec/e5-mm-state',

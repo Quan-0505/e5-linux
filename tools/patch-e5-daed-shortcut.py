@@ -55,6 +55,11 @@ def main() -> int:
             ),
             (
                 "\tif (k == 'Power' || k == 'PowerOff' || k == 'Standby' || k == 'Sleep') return 'power';\n"
+                "\tif (k >= '0' && k <= '9' && k.length == 1) return 'page' + k;\n",
+                dynamic_key_mapping,
+            ),
+            (
+                "\tif (k == 'Power' || k == 'PowerOff' || k == 'Standby' || k == 'Sleep') return 'power';\n"
                 "\tif (k == '0' || e.code == 'Digit0' || e.code == 'Numpad0' || c == 48 || c == 96) return 'daed';\n"
                 "\tif (k >= '1' && k <= '9' && k.length == 1) return 'page' + k;\n",
                 dynamic_key_mapping,

@@ -53,6 +53,13 @@ python3 tools/build-release.py prepare-installers --workspace /home/kano/openwrt
 `OPENWRT_GUI_ANDROID_ARTIFACT` 仍可显式选择本机产物，且必须通过同样的源码／文件校验。
 发布器会将选定路径传给组包及安装器刷新子进程。
 
+维护者更新安装器输入时，先提交共享安装器并更新版本锁的提交及 URL；
+各平台原生重编后，显式选择已验证的产物，在受锁入口中运行
+`python3 tools/build-installer-inputs.py`。它在
+`{workspace}/cache/openwrt-tools-publish/<前7位>/` 生成工具归档和摘要，
+不含固件根、NV 或签名密钥。发布后填写真实摘要，再用 `prepare-installers`
+从公开链接重新验证；不能通过手改产物指纹接受旧二进制。
+
 ```sh
 python3 tools/build-release.py plan --profiles all
 python3 tools/build-release.py check --profiles e5 t551m m8 t512n yuanhang41s k1
@@ -71,6 +78,7 @@ python3 tools/build-release.py check --profiles e5 t551m m8 t512n yuanhang41s k1
 ```sh
 python3 tools/build-release.py run --label modem -- bash openwrt/build-modemmanager.sh
 python3 tools/build-release.py run --label wifi -- bash openwrt/build-hostapd.sh
+python3 tools/build-release.py run --label iwinfo-ap-scan -- sh openwrt/build-iwinfo-ap-scan.sh
 python3 tools/build-release.py run --label block-mount -- bash openwrt/build-block-mount.sh
 ```
 
@@ -104,6 +112,8 @@ K1 和远航41S 已有独立的原生源码／对象缓存，登记在 `tools/bu
 `sources/e5-kernel`＋`objects/e5-family`；后者的名字虽然含 e5-family，
 现有 `.config` 和 release 必须是远航41S，不能当其他机型的共享对象目录。
 两者的完整平台基线均为已验证的 `kernels/m8/config`，输出仍取各 profile 的 kernel 路径。
+远航41S 的交付件登记在工作区 `kernels/yuanhang41s`，必须使用区分大小写的 Linux
+文件系统；Windows 默认目录会将 `xt_RATEEST.ko` 与 `xt_rateest.ko` 相互覆盖。
 通过 `build-release.py run` 调用各自的 `devices/<profile>/build-kernel.py`，
 显式传入登记的 `--kernel`、`--build`、`--base-config`、`--out`；不建立新源码副本。
 远航41S 构建会重放自己的准备流程，之后使用 overlay 视图前需按下述规则核对底层指纹。

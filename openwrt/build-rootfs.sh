@@ -109,6 +109,10 @@ BLOCK_APK="$OUT/block-mount-guarded.apk"
 E5_WRT_VER="$VER" sh "$HERE/build-block-mount.sh" "$BLOCK_APK"
 WIFI_APKS="$TOP/work/wifi-sae"
 UNISOC_WRT_VER="$VER" sh "$HERE/build-hostapd.sh" "$WIFI_APKS"
+IWINFO_APKS=${UNISOC_IWINFO_APKS:-$TOP/work/iwinfo-ap-scan}
+sh "$HERE/build-iwinfo-ap-scan.sh" "$IWINFO_APKS"
+LPAC_APKS=${UNISOC_LPAC_APKS:-$(python3 "$TOP/openwrt/lpac-state.py" --path)}
+UNISOC_WRT_VER="$VER" sh "$TOP/openwrt/build-lpac.sh" "$LPAC_APKS"
 
 # the Argon theme: not in OpenWrt's feeds; its release's packages (arch all)
 ARGON_URL=https://github.com/jerrykuku/luci-theme-argon/releases/download/v2.4.7
@@ -305,6 +309,9 @@ docker run --rm --platform linux/arm64 \
     -v "$BLOCK_APK":/in/block-mount-guarded.apk:ro \
     -v "$BLOCK_APK.build-id":/in/block-mount.build-id:ro \
     -v "$WIFI_APKS":/in/wifi-sae:ro \
+    -v "$IWINFO_APKS":/in/iwinfo-ap-scan:ro \
+    -v "$LPAC_APKS":/in/lpac:ro \
+    -v "$TOP/openwrt":/in/euicc-source/openwrt:ro \
     -v "$SA":/in/sa:ro -e STANDALONE="$STANDALONE" -v "$RM":/in/root-modules:ro \
     -v "$WORK/extra":/in/extra:ro -e EXTRA_LIST="$EXTRA_LIST" -v "$TP":/in/transplant:ro \
     -v "$TAROUT":/out -e NAME="$NAME" -e VERSION="$VERSION" -e E5_BUILD_EPOCH="${E5_BUILD_EPOCH:-}" -e CONTAINERS="$CONTAINERS" \
@@ -339,6 +346,7 @@ apk_retry add --allow-untrusted /in/apk/bluez-libs-*.apk /in/apk/bluez-daemon-*.
 # (alsa-utils: aplay and amixer for the speaker, e5-audio-dsp and e5-volume)
 # (curl: the webhook of the SMS forward, /usr/libexec/e5-sms)
 apk_retry add --allow-untrusted /in/wifi-sae/*.apk >/dev/null
+apk_retry add --allow-untrusted /in/iwinfo-ap-scan/*.apk >/dev/null
 apk_retry add iwinfo iw-full ip-full bash mount-utils luci-proto-modemmanager dbus-utils alsa-utils curl openssl-util msmtp r8152-firmware ttyd luci-app-ttyd luci-i18n-ttyd-tr >/dev/null
 # The E5 screen authenticated Daed adapter uses the ucode filesystem module
 # for short-lived, permission-restricted curl request files.
@@ -353,7 +361,8 @@ openssl version
 # init script (which forbids loading the modules a connecting device needs)
 apk_retry add pulseaudio-daemon-avahi pulseaudio-tools >/dev/null
 # Reuse the tested Debian hostless FE_ST_VOICE backend for cellular audio.
-apk_retry add python3 python3-sqlite3 tc-full ip-full glib2 libjson-c5 alsa-lib rpcd-mod-ucode ucode-mod-rtnl ucode-mod-nl80211 >/dev/null
+apk_retry add --allow-untrusted /in/lpac/lpac-2.3.0-r1001.apk >/dev/null
+apk_retry add python3 python3-openssl python3-sqlite3 tc-full ip-full glib2 libjson-c5 alsa-lib rpcd-mod-ucode ucode-mod-rtnl ucode-mod-nl80211 >/dev/null
 if [ "$CONTAINERS" = 1 ]; then
     # Do not run dockerd post-install scripts inside the build container.
     apk add --no-scripts docker dockerd iptables-nft ip6tables-nft resize2fs >/dev/null
@@ -440,6 +449,10 @@ mkdir -p $R/proc $R/sys $R/dev $R/tmp $R/mnt/e5-disk $R/opt/e5/android $R/opt/e5
 mkdir -p $R/etc/e5
 cp /in/block-mount.build-id $R/etc/e5/block-mount.build-id
 cp /in/wifi-sae/build-id $R/etc/e5/wifi-sae.build-id
+cp /in/iwinfo-ap-scan/build-id $R/etc/e5/iwinfo-ap-scan.build-id
+[ -s "$R/usr/lib/libiwinfo.so.20230701" ] || {
+    echo "AP scan library missing from rootfs" >&2; exit 1;
+}
 cp /in/wifi-sae/source-info $R/etc/e5/wifi-sae.source-info
 for f in sbin/block lib/libblkid-tiny.so etc/init.d/fstab; do
     [ -s "$R/$f" ] || { echo "guarded block-mount payload missing: $f" >&2; exit 1; }
@@ -574,6 +587,7 @@ cp /in/feature-source/openwrt/overlay/etc/init.d/e5-boot-ok $R/etc/init.d/e5-boo
 chmod 755 $R/etc/init.d/e5-boot-ok
 if [ -f $R/usr/libexec/unisoc-modem/disable-channel-analysis ]; then
     ucode $R/usr/libexec/unisoc-modem/disable-channel-analysis $R
+    ucode $R/usr/libexec/unisoc-modem/limit-wifi-widths $R
 fi
 mkdir -p $R/usr/libexec/unisoc-modem
 cp /in/feature-source/openwrt/luci-app-t551m/root/usr/libexec/unisoc-modem/disable-stock-upgrade $R/usr/libexec/unisoc-modem/disable-stock-upgrade
@@ -583,6 +597,7 @@ python3 /in/feature-source/tools/stage-flow-offload.py --root $R
 python3 /in/feature-source/tools/stage-ra-renew.py --root $R
 python3 /in/feature-source/installer/stage-ota.py --root $R
 python3 /in/feature-source/tools/release-ui-policy.py --root $R
+python3 /in/euicc-source/openwrt/stage-lpac.py --root $R --artifacts /in/lpac
 cd $R && tar -czf /out/$NAME .
 ls -la /out/$NAME
 '

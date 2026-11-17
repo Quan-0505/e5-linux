@@ -59,15 +59,15 @@ assert 'www/e5-daed-login/index.html' in builder and 'www/cgi-bin/e5-daed-pair' 
 assert "openwrt/infoscreen-plugins/daed" in auditor
 assert "www/e5-daed-login/index.html" in auditor and "www/cgi-bin/e5-daed-pair" in auditor
 updater = (TOP / 'openwrt/device-install-image.sh').read_text(encoding='utf-8')
-assert 'for app in phone daed' in updater and 'appstash' in updater
+assert 'for app in phone esim daed' in updater and 'screen_apps' in updater
 assert 'apk_retry add ucode-mod-fs' in builder
 
 # The offline existing-root updater restores /etc/e5-infoscreen from the old
 # root. Keep the new firmware's bundled DAED plugin over that restore while
 # retaining the pairing token and unrelated user-installed plugins.
 part_update = (TOP / 'boot/part-update.sh').read_text(encoding='utf-8')
-save_daed = 'cp -a "$new/etc/e5-infoscreen/plugins/daed/." "$ram/new-daed/"'
-restore_daed = 'part_update_restore_bundled_daed_plugin "$new" "$ram/new-daed"'
+save_daed = 'cp -a "$new/etc/e5-infoscreen/plugins/$app/." "$ram/new-screen-apps/$app/"'
+restore_daed = 'cp -a "$ram/new-screen-apps/$app/." "$new/etc/e5-infoscreen/plugins/$app/"'
 restore_settings = 'tar -xf firmware.tar -C "$new" && tar -xf settings.tar -C "$new"'
 assert save_daed in part_update and part_update.index(save_daed) < part_update.index(restore_settings)
 assert restore_daed in part_update and part_update.index(restore_daed) > part_update.index(restore_settings)

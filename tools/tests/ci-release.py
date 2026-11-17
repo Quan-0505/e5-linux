@@ -112,6 +112,14 @@ class RootAudit(unittest.TestCase):
                 target = top / 'openwrt' / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((TOP / 'openwrt' / name).read_bytes())
+            # The release audit also verifies the current SAE source marker.
+            # Carry its real source inputs into this otherwise private tree.
+            wifi = runpy.run_path(str(TOP / 'openwrt/wifi-sae-state.py'))
+            for name in wifi['SOURCES']:
+                (top / 'openwrt' / name).write_bytes((TOP / 'openwrt' / name).read_bytes())
+            iwinfo = runpy.run_path(str(TOP / 'openwrt/iwinfo-ap-scan-state.py'))
+            for name in iwinfo['SOURCES']:
+                (top / 'openwrt' / name).write_bytes((TOP / 'openwrt' / name).read_bytes())
             wifi_id = runpy.run_path(str(TOP / 'openwrt/wifi-sae-state.py'))['build_id']()
             files['etc/e5/wifi-sae.build-id'] = (wifi_id + '\n').encode()
             files['lib/netifd/hostapd-unisoc.sh'] = (TOP / 'openwrt/hostapd-unisoc.sh').read_bytes()
@@ -154,7 +162,7 @@ class RootAudit(unittest.TestCase):
             env = {'E5_UPSTREAM_OUT': str(top / kernel_out)} if kernel_out else {}
             native_hashes={'usr/libexec/'+n:hashlib.sha256(v).hexdigest() for n,v in self.NATIVE.items()}
             with patch.object(release, 'screen_native_hashes', return_value=native_hashes), patch.object(release, 'screen_overlay_sources', return_value=SCREEN_SOURCES), patch.object(release, 'TOP', top), patch.object(release.subprocess, 'check_output', return_value=''), \
-                 patch.object(release.runpy, 'run_path', return_value={'stage_nv': stage_nv, 'build_id': lambda: wifi_id}), \
+                 patch.object(release.runpy, 'run_path', side_effect=lambda path: {'stage_nv': stage_nv, 'build_id': lambda: iwinfo['build_id']() if str(path).endswith('iwinfo-ap-scan-state.py') else wifi_id}), \
                  patch.dict(release.os.environ, env):
                 release.audit_root(info)
             return info
@@ -172,6 +180,7 @@ class RootAudit(unittest.TestCase):
                 'etc/e5-infoscreen/plugins/phone/manifest.json': json.dumps({'version': '1.4'}).encode(),
                 'etc/e5-infoscreen/plugins/daed/manifest.json': json.dumps({'version': '1.0.0'}).encode(),
                 'etc/e5/block-mount.build-id': (release.block_build_id() + '\n').encode(),
+                'etc/e5/iwinfo-ap-scan.build-id': (runpy.run_path(str(TOP / 'openwrt/iwinfo-ap-scan-state.py'))['build_id']() + '\n').encode(),
                 'sbin/block': b'block', 'lib/libblkid-tiny.so': b'library', 'etc/init.d/fstab': b'init',
                 'etc/e5/build-time': b'123', 'lib/modules/6.18-e5/modem/sipc_wwan.ko': b'module'}
         files.update({'usr/libexec/'+n:v for n,v in self.NATIVE.items()})

@@ -165,6 +165,9 @@ var trafficSetRpc = rpc.declare({object:'mu300dash',method:'traffic_set',params:
 function callTrafficGet(slot) { return trafficGetRpc(slot == null ? simSlot() : String(slot)); }
 function callTrafficSet(payload, slot) { return trafficSetRpc(payload, slot == null ? simSlot() : String(slot)); }
 var callTrafficClear = rpc.declare({object:'mu300dash',method:'traffic_clear',params:['slot','confirm'],expect:{'':{}}});
+var callTrafficExport = rpc.declare({object:'mu300dash',method:'traffic_export',params:['slot','backup'],expect:{'':{}},nobatch:true});
+var callTrafficImport = rpc.declare({object:'mu300dash',method:'traffic_import',params:['slot','csv','mode','confirm'],expect:{'':{}},nobatch:true});
+
 var callTtlGet = rpc.declare({ object: 'mu300dash', method: 'ttl_get', expect: { '': {} } });
 var callTtlSet = rpc.declare({ object: 'mu300dash', method: 'ttl_set', params: [ 'value' ], expect: { '': {} }, nobatch: true });
 var callUsbGet = rpc.declare({ object: 'mu300dash', method: 'usb_get', expect: { '': {} } });
@@ -908,7 +911,7 @@ var DASH_I18N = {
 	'按 SIM 独立配置': ['Separate profile per SIM', 'SIM başına ayrı profil'],
 	'正在编辑': ['Editing profile', 'Düzenlenen profil'],
 	'共用配置 / 电源通知': ['Shared profile / power notifications', 'Ortak profil / güç bildirimleri'],
-	'独立模式按收到短信的卡选择渠道和黑名单，不受上网卡切换影响。电源通知始终使用共用配置。': ['Separate mode selects the channel and blacklist by the receiving SIM, not the data SIM. Power notifications always use the shared profile.', 'Ayrı modda kanal ve kara liste veri SIM kartına değil, SMS alan karta göre seçilir. Güç bildirimleri her zaman ortak profili kullanır.'],
+	"独立模式按收到短信的卡选择渠道和筛选规则，不受上网卡切换影响。电源通知始终使用共用配置。": ["Separate mode selects the channel and filters by the receiving SIM, not the data SIM. Power notifications always use the shared profile.", "Ayrı modda kanal ve filtreler veri SIM kartına değil, SMS alan karta göre seçilir. Güç bildirimleri her zaman ortak profili kullanır."],
 	'当前配置用于新短信转发。': ['This profile handles new incoming SMS.', 'Bu profil yeni gelen SMS mesajlarını yönlendirir.'],
 	'当前配置不用于短信；保存后仍保留，可单独测试。': ['This profile is inactive for SMS; its settings are retained and can be tested separately.', 'Bu profil SMS için etkin değil; ayarları korunur ve ayrı olarak test edilebilir.'],
 	'电源通知请在共用配置中设置，独立模式下仍生效。': ['Configure power notifications in the shared profile; they remain active in separate mode.', 'Güç bildirimlerini ortak profilde ayarlayın; ayrı modda da etkin kalır.'],
@@ -1092,14 +1095,37 @@ var DASH_I18N = {
 	'短信接收号码 · 每行一个，最多 3 个': ['SMS recipients · one per line, up to 3', 'SMS alıcıları · satır başına bir, en fazla 3'],
 	'经本机 SIM 转发，可能产生短信费用；每条最多 70 个 UCS-2 单元，不限制每日转发条数。': ['Forwarding uses the device SIM and may incur SMS charges; up to 70 UCS-2 units per message, with no daily forwarding limit.', 'Yönlendirme cihazın SIM kartını kullanır ve ücret doğurabilir; mesaj başına en fazla 70 UCS-2 birimi, günlük yönlendirme sınırı yoktur.'],
 	'电源通知': ['Power notifications', 'Güç bildirimleri'],
+	"来电提醒": ["Incoming call alerts", "Gelen arama bildirimleri"],
+	"转发来电提醒": ["Forward incoming call alerts", "Gelen arama bildirimlerini yönlendir"],
+	"默认关闭。两个槽位的来电按当前配置模式转发，包含卡源和来电号码；每通电话只提醒一次。": ["Off by default. Calls on both slots use the selected forwarding mode, including the SIM source and caller number. One alert per call.", "Varsayılan olarak kapalıdır. İki yuvanın aramaları, SIM kaynağı ve arayan numarasıyla seçilen moda göre yönlendirilir. Her arama için bir bildirim gönderilir."],
 	'电源状态通知': ['Power status notifications', 'Güç durumu bildirimleri'],
 	'充电状态变化，或电量跨过 5%、20%、40%、60%、80%、100% 时通知。': ['Notify when charging status changes or battery level crosses 5%, 20%, 40%, 60%, 80%, or 100%.', 'Şarj durumu değiştiğinde veya pil seviyesi %5, %20, %40, %60, %80 ya da %100 eşiğini geçtiğinde bildir.'],
 	'设备暂未提供有效电池状态': ['No valid battery status is available on this device', 'Bu cihazda geçerli pil durumu yok'],
 	'设备备注': ['Device note', 'Cihaz notu'],
 	'黑名单': ['Blocklists', 'Engelleme listeleri'],
+	"正则筛选（可选）": ["Regular expression filters (optional)", "Düzenli ifade filtreleri (isteğe bağlı)"],
+	"旧版号码与关键词黑名单已停用；如需继续拦截，请在下方正则筛选中设置。": ["Legacy number and keyword blocklists are inactive. Set the regex filters below to continue blocking.", "Eski numara ve anahtar sözcük engelleme listeleri devre dışıdır. Engellemeye devam etmek için aşağıdaki düzenli ifade filtrelerini ayarlayın."],
+	"号码和正文的筛选须同时通过。仅影响新收到的短信，不影响电源或来电通知。": ["Both number and message filters must pass. Applies only to new incoming SMS, not power or incoming-call alerts.", "Numara ve mesaj filtrelerinin ikisi de geçmelidir. Yalnızca yeni SMS’lere uygulanır; güç ve arama bildirimlerini etkilemez."],
+	"号码筛选": ["Number filter", "Numara filtresi"],
+	"正文筛选": ["Message filter", "Mesaj filtresi"],
+	"关闭筛选": ["Filter off", "Filtre kapalı"],
+	"黑名单：匹配则不转发": ["Blocklist: do not forward matches", "Engelleme listesi: eşleşenleri yönlendirme"],
+	"白名单：仅匹配才转发": ["Allowlist: forward matches only", "İzin listesi: yalnızca eşleşenleri yönlendir"],
+	"号码正则 · 每行一条": ["Number expressions · one per line", "Numara ifadeleri · her satıra bir tane"],
+	"正文正则 · 每行一条": ["Message expressions · one per line", "Mesaj ifadeleri · her satıra bir tane"],
+	"忽略英文字母大小写": ["Ignore letter case", "Büyük/küçük harfi yok say"],
+	"每项最多 32 条，每条最多 512 字节。同项内任一行匹配即命中；白名单至少填写一条。": ["Up to 32 expressions per field, 512 bytes each. Any matching line counts; an allowlist needs at least one expression.", "Her alan için en fazla 32 ifade, ifade başına 512 bayt. Herhangi bir satırın eşleşmesi yeterlidir; izin listesinde en az bir ifade olmalıdır."],
+	"使用 POSIX 扩展正则，不加 / 分隔符；数字用 [0-9]。匹配原始号码（包含 +）和完整正文，点号可跨行。": ["Use POSIX extended expressions without / delimiters; use [0-9] for digits. Matches the original number (including +) and full message; dot can cross line breaks.", "/ ayırıcıları olmadan POSIX genişletilmiş ifadeler kullanın; rakamlar için [0-9] yazın. Özgün numara (+ dahil) ve mesajın tamamı eşleştirilir; nokta satır sonlarıyla da eşleşir."],
+	"号码正则表达式无效": ["Invalid number expression", "Geçersiz numara ifadesi"],
+	"正文正则表达式无效": ["Invalid message expression", "Geçersiz mesaj ifadesi"],
+	"号码白名单至少填写一条正则": ["The number allowlist needs at least one expression", "Numara izin listesinde en az bir ifade olmalıdır"],
+	"正文白名单至少填写一条正则": ["The message allowlist needs at least one expression", "Mesaj izin listesinde en az bir ifade olmalıdır"],
+	"短信筛选规则无效": ["Invalid SMS filter rules", "Geçersiz SMS filtre kuralları"],
+	"正则条数或长度超过上限": ["Too many expressions or an expression is too long", "Çok fazla ifade var veya bir ifade çok uzun"],
+	"第 %d 行": ["Line %d", "Satır %d"],
 	'号码黑名单 · 每行一个，最多 64 个': ['Number blocklist · one per line, up to 64', 'Numara engelleme listesi · satır başına bir, en fazla 64'],
 	'关键词黑名单 · 每行一个，最多 32 个': ['Keyword blocklist · one per line, up to 32', 'Anahtar kelime engelleme listesi · satır başına bir, en fazla 32'],
-	'命中的新短信只记为已处理，不会转发；清空规则后不会补发。规则不影响电源通知。': ['Matching new SMS are marked processed and not forwarded; clearing rules will not resend them. Power notifications are unaffected.', 'Eşleşen yeni SMS’ler işlenmiş sayılır ve yönlendirilmez; kurallar silinince tekrar gönderilmez. Güç bildirimleri etkilenmez.'],
+	'命中的新短信只记为已处理，不会转发；清空规则后不会补发。规则不影响电源或来电通知。': ['Matching new SMS are marked processed and not forwarded; clearing rules will not resend them. Power and incoming call notifications are unaffected.', 'Eşleşen yeni SMS’ler işlenmiş sayılır ve yönlendirilmez; kurallar silinince tekrar gönderilmez. Güç ve gelen arama bildirimleri etkilenmez.'],
 	'测试与状态': ['Test and status', 'Test ve durum'],
 	'设备独立执行，关闭页面仍生效；仅转发新短信，失败不自动重发。': ['Runs on the device even with this page closed; only new SMS are forwarded, and failed deliveries are not retried.', 'Sayfa kapalıyken de cihazda çalışır; yalnızca yeni SMS’ler yönlendirilir ve başarısız teslimatlar yeniden denenmez.'],
 	'保存设置': ['Save settings', 'Ayarları kaydet'],
@@ -1724,6 +1750,121 @@ Object.assign(DASH_I18N, {
   "射频设置请求无效": [
     "Invalid radio request",
     "Radyo isteği geçersiz"
+  ]
+});
+
+Object.assign(DASH_I18N, {
+  "流量备份与报表": [
+    "Traffic backup and reports",
+    "Veri yedekleme ve raporlar"
+  ],
+  "导出当前卡槽保留的全部每日和月度记录，字节数可用于报表。恢复不修改套餐设置。": [
+    "Export all retained daily and monthly records for this slot, with exact byte counts. Restoring keeps plan settings.",
+    "Bu yuvanın saklanan günlük ve aylık kayıtlarını tam bayt değerleriyle dışa aktarın. Geri yükleme tarife ayarlarını değiştirmez."
+  ],
+  "导出 CSV": [
+    "Export CSV",
+    "CSV dışa aktar"
+  ],
+  "下载上次恢复前备份": [
+    "Download pre-restore backup",
+    "Geri yükleme öncesi yedeği indir"
+  ],
+  "备份文件": [
+    "Backup file",
+    "Yedek dosyası"
+  ],
+  "恢复方式": [
+    "Restore mode",
+    "Geri yükleme yöntemi"
+  ],
+  "合并导入日期（相同日期覆盖）": [
+    "Merge dates (replace matching dates)",
+    "Tarihleri birleştir (eşleşen tarihleri değiştir)"
+  ],
+  "替换当前卡全部历史": [
+    "Replace all history for this slot",
+    "Bu yuvanın tüm geçmişini değiştir"
+  ],
+  "合并保留未导入的日期；替换会移除当前卡原有历史。恢复前会校验日月总量并保留一份原账本，同一文件重复恢复不会累加。": [
+    "Merge preserves unlisted dates; replace removes this slot’s existing history. Totals are checked and one original backup is kept before restoring. Restoring the same file never adds its usage twice.",
+    "Birleştirme listelenmeyen tarihleri korur; değiştirme bu yuvanın mevcut geçmişini siler. Geri yüklemeden önce toplamlar denetlenir ve bir özgün yedek tutulur. Aynı dosya yeniden yüklendiğinde kullanım iki kez eklenmez."
+  ],
+  "预览并恢复 CSV": [
+    "Preview and restore CSV",
+    "CSV önizle ve geri yükle"
+  ],
+  "CSV 格式或数据无效，请使用本页面导出的格式": [
+    "Invalid CSV format or data. Use this page’s export format.",
+    "CSV biçimi veya verileri geçersiz. Bu sayfanın dışa aktarma biçimini kullanın."
+  ],
+  "每日记录与月度汇总冲突，请核对 CSV 或选择替换全部历史": [
+    "Daily records conflict with monthly totals. Check the CSV or replace all history.",
+    "Günlük kayıtlarla aylık toplamlar uyuşmuyor. CSV dosyasını kontrol edin veya tüm geçmişi değiştirin."
+  ],
+  "合并结果超过历史保留范围，请选择替换全部历史或减少导入记录": [
+    "Merged history exceeds retention limits. Replace all history or import fewer records.",
+    "Birleştirilmiş geçmiş saklama sınırını aşıyor. Tüm geçmişi değiştirin veya daha az kayıt aktarın."
+  ],
+  "暂无恢复前备份": [
+    "No pre-restore backup available",
+    "Geri yükleme öncesi yedek yok"
+  ],
+  "流量备份或恢复失败": [
+    "Traffic backup or restore failed",
+    "Veri yedekleme veya geri yükleme başarısız"
+  ],
+  "查看卡槽已改变，请重新操作": [
+    "The viewed slot changed. Try again.",
+    "Görüntülenen yuva değişti. Yeniden deneyin."
+  ],
+  "备份统计槽位：": [
+    "Backup statistics slot: ",
+    "Yedekteki istatistik yuvası: "
+  ],
+  "恢复到：": [
+    "Restore to: ",
+    "Hedef: "
+  ],
+  "记录范围：": [
+    "Record range: ",
+    "Kayıt aralığı: "
+  ],
+  "每日记录：": [
+    "Daily records: ",
+    "Günlük kayıtlar: "
+  ],
+  "月度记录：": [
+    "Monthly records: ",
+    "Aylık kayıtlar: "
+  ],
+  "重合记录：": [
+    "Matching records: ",
+    "Eşleşen kayıtlar: "
+  ],
+  "将替换当前卡全部历史，原账本会先备份。": [
+    "All history for this slot will be replaced. The original ledger will be backed up first.",
+    "Bu yuvanın tüm geçmişi değiştirilecek. Önce özgün kayıtlar yedeklenecek."
+  ],
+  "仅覆盖导入日期，其他记录保留，原账本会先备份。": [
+    "Only imported dates will be replaced. Other records are kept and the original ledger is backed up first.",
+    "Yalnızca içe aktarılan tarihler değiştirilecek. Diğer kayıtlar korunacak ve önce özgün kayıtlar yedeklenecek."
+  ],
+  "恢复流量记录？": [
+    "Restore traffic history?",
+    "Veri geçmişi geri yüklensin mi?"
+  ],
+  "恢复": [
+    "Restore",
+    "Geri yükle"
+  ],
+  "正在恢复流量记录…": [
+    "Restoring traffic history…",
+    "Veri geçmişi geri yükleniyor…"
+  ],
+  "流量记录已恢复": [
+    "Traffic history restored",
+    "Veri geçmişi geri yüklendi"
   ]
 });
 
@@ -2442,6 +2583,7 @@ return baseclass.extend({
 	callSmsDel: callSmsDel, callSmsSync: callSmsSync,
 	callForwardGet: callForwardGet, callForwardStatus: callForwardStatus,
 	callForwardSet: callForwardSet, callForwardTest: callForwardTest, callForwardClear: callForwardClear,
+	callTrafficExport: callTrafficExport, callTrafficImport: callTrafficImport,
 	callTrafficGet: callTrafficGet, callTrafficSet: callTrafficSet, callTrafficClear: callTrafficClear,
 	callTtlGet: callTtlGet, callTtlSet: callTtlSet, callUsbGet: callUsbGet, callUsbSet: callUsbSet,
 	callUsbNetList: callUsbNetList, callUsbNetAdd: callUsbNetAdd,
