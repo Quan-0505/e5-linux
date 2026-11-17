@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 TOP=$(cd "$(dirname "$0")/.." && pwd)
+VER=${UNISOC_WRT_VER:-25.12.6}
+[ "$VER" = 25.12.6 ] || exit 1
 OUT=${1:-$TOP/work/iwinfo-ap-scan}
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
@@ -13,6 +15,6 @@ fi
 docker build -t unisoc-hostapd-build -f "$TOP/openwrt/hostapd.Dockerfile" "$TOP/openwrt"
 docker run --rm -v "${UNISOC_WRT_CACHE:-e5-openwrt-src}:/build" \
     -v "$TOP/openwrt:/src:ro" -v "$OUT:/out" \
-    -e "BUILD_ID=$BUILD_ID" -e "JOBS=${UNISOC_JOBS:-4}" \
+    -e "VER=$VER" -e "BUILD_ID=$BUILD_ID" -e "JOBS=${UNISOC_JOBS:-4}" \
     --entrypoint /bin/sh unisoc-hostapd-build /src/build-iwinfo-ap-scan-inner.sh
 python3 "$TOP/openwrt/iwinfo-ap-scan-state.py" "$OUT" >/dev/null

@@ -43,7 +43,7 @@ trap 'rm -rf "$stage"' EXIT
 cp "$apk" "$stage/"
 (cd "$stage" && sha256sum ./*.apk > SHA256SUMS)
 printf '%s\n' "$BUILD_ID" > "$stage/build-id"
-printf '%s\n' 'OpenWrt 25.12.5 / lpac 2.3.0-r1001' \
+printf '%s\n' 'OpenWrt 25.12.6 / lpac 2.3.0-r1001' \
     'upstream 2.3.0 archive: 661dffbd1e9e5732dab4a0bb0a9837d4906c8c66bd748bda262fe3e8d3e420f6' \
     'stdio connect/open/transmit success tests and NULL error cleanup corrected' > "$stage/source-info"
 cp "$stage/"*.apk "$stage/SHA256SUMS" "$stage/source-info" /out/

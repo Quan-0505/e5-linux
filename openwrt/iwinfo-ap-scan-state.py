@@ -22,7 +22,7 @@ def inspect(directory):
         raise ValueError('Expected exactly one AP scan library APK')
     checksum, name = rows[0].split()
     name = name.removeprefix('./')
-    if not re.fullmatch(r'libiwinfo20230701-2026\.01\.14~f5dd57a8-r1001\.apk', name):
+    if not re.fullmatch(r'libiwinfo20230701-2026\.05\.26~66bdd1a0-r1001\.apk', name):
         raise ValueError('Unexpected AP scan library APK')
     if not re.fullmatch('[a-f0-9]{64}', checksum) or hashlib.sha256((directory/name).read_bytes()).hexdigest() != checksum:
         raise ValueError('AP scan library checksum mismatch')

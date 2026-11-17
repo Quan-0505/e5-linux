@@ -1,10 +1,10 @@
 #!/bin/sh
-# One shared aarch64 OpenWrt 25.12.5 APK, built in the existing SDK cache.
+# One shared aarch64 OpenWrt 25.12.6 APK, built in the existing SDK cache.
 set -eu
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:?Pass the registered lpac artifact directory}
-VER=${UNISOC_WRT_VER:-25.12.5}
-[ "$VER" = 25.12.5 ] || { echo 'Update the pinned lpac build checks for this OpenWrt version' >&2; exit 1; }
+VER=${UNISOC_WRT_VER:-25.12.6}
+[ "$VER" = 25.12.6 ] || { echo 'Update the pinned lpac build checks for this OpenWrt version' >&2; exit 1; }
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 if python3 "$TOP/openwrt/lpac-state.py" "$OUT" >/dev/null 2>&1; then
