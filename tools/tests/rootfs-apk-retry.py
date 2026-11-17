@@ -17,6 +17,14 @@ class StandaloneApkRetry(unittest.TestCase):
         self.assertIn("rm -f /etc/config/attendedsysupgrade", section)
         self.assertIn("[ -e /etc/config/attendedsysupgrade ]", section)
 
+        policy = "ucode $R/usr/libexec/unisoc-modem/disable-stock-upgrade $R"
+        policy_at = source.index(policy)
+        tail = source[policy_at:]
+        self.assertIn('rm -f "$R/etc/config/attendedsysupgrade"', tail)
+        self.assertIn('if [ -e "$R/etc/config/attendedsysupgrade" ]; then', tail)
+        first_boot = (TOP / "openwrt/luci-app-t551m/root/etc/uci-defaults/97-unisoc-upgrade-policy").read_text(encoding="utf-8")
+        self.assertIn("disable-stock-upgrade /", first_boot)
+
     def run_retry(self, succeeds_on):
         source = (TOP / "openwrt/build-rootfs.sh").read_text()
         container = source.split("alpine:3.22 sh -euc '\n", 1)[1]

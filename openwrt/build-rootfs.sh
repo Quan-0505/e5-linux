@@ -597,6 +597,13 @@ mkdir -p $R/usr/libexec/unisoc-modem
 cp /in/feature-source/openwrt/luci-app-t551m/root/usr/libexec/unisoc-modem/disable-stock-upgrade $R/usr/libexec/unisoc-modem/disable-stock-upgrade
 chmod 0755 $R/usr/libexec/unisoc-modem/disable-stock-upgrade
 ucode $R/usr/libexec/unisoc-modem/disable-stock-upgrade $R
+# The policy helper creates a disabled ASU preference. Keep that device
+# configuration out of the generic archive. The first-boot uci-default
+# runs the same helper and recreates it on the modem.
+rm -f "$R/etc/config/attendedsysupgrade"
+if [ -e "$R/etc/config/attendedsysupgrade" ]; then
+    echo "attended sysupgrade config is still present in generic rootfs" >&2; exit 1
+fi
 python3 /in/feature-source/tools/stage-flow-offload.py --root $R
 python3 /in/feature-source/tools/stage-ra-renew.py --root $R
 python3 /in/feature-source/installer/stage-ota.py --root $R
