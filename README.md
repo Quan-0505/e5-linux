@@ -29,6 +29,7 @@
 | 功能 | 说明 |
 | --- | --- |
 | **OpenWrt 系统** | OpenWrt 25.12.6，安装到独立 `e5root` 分区或 TF 卡，与 Android 共存 |
+| **LuCI 管理后台** | 全新安装默认使用 [Vantage](https://github.com/anothaDev/luci-theme-vantage)，预装仪表盘及简体中文包；保配置升级保留已选主题 |
 | **E5 原生内核** | Linux 6.18 LTS，保留 E5 充电、触屏、背光、音频和蜂窝硬件适配 |
 | **daed 管理界面** | Rust daed 3.2.2，提供订阅、节点、群组、DNS、路由、实时日志及热重载管理 |
 | **eBPF 数据面** | 构建时核对 BTF、BPF、veth、TC/clsact 等能力及匹配的内核模块 |

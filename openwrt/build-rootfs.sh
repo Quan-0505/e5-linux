@@ -129,8 +129,9 @@ done
 # (only the pinned ones go in)
 EXTRA_LIST=$(printf "%s\n" "$ARGON_APKS" | awk '{print "/in/extra/" $2}' | tr '\n' ' ')
 # Themes kept in this repository (openwrt/themes/, see its README): they ride in the
-# same apk add as Argon, so every build ships them. The default theme is unchanged.
+# same apk add as Argon, so every build ships them.
 THEMES_DIR="$HERE/themes"
+(cd "$THEMES_DIR" && sha256sum -c VANTAGE-SHA256SUMS)
 for theme in "$THEMES_DIR"/*.apk; do
     [ -f "$theme" ] || continue
     theme_name=$(basename "$theme")
@@ -385,6 +386,8 @@ for p in $(sed -En "s/^P:luci-(app|proto)-//p" /lib/apk/db/installed); do
 done
 # the Argon theme (release packages, unsigned)
 apk_retry add --allow-untrusted $EXTRA_LIST >/dev/null
+[ -s /www/luci-static/vantage/vantage.css ]
+[ -s /usr/share/luci/menu.d/zz-luci-app-vantage.json ]
 # footstrap 的 header{display:flex;position:sticky} 会命中页面内容里的 <header>，
 # 把标题和说明横排到一行（unisoc-ota 的系统补丁页就是这样重叠的）。
 # 装完主题后把一段内联样式注入主题模板；模板随页面 HTML 下发，不受 CSS 缓存影响。
