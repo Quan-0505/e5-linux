@@ -318,7 +318,7 @@ docker run --rm --platform linux/arm64 \
     -v "$WORK/apk-cache":/cache -v "$TAROUT":/out -e NAME="$NAME" -e VERSION="$VERSION" -e E5_BUILD_EPOCH="${E5_BUILD_EPOCH:-}" -e CONTAINERS="$CONTAINERS" \
     e5-openwrt-base:$VER /bin/sh -euc '
 mkdir -p /var/lock /var/run /tmp
-apk() { command apk --cache-dir /cache "$@"; }
+apk() { command apk --cache-dir /cache --cache-packages "$@"; }
 # Recover interrupted package downloads, as in MU300 clean-tf-7.2. Keep
 # optional translation probes separate so missing translations fail quickly.
 apk_retry() {
