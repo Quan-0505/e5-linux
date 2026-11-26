@@ -391,11 +391,14 @@ for p in $(sed -En "s/^P:luci-(app|proto)-//p" /lib/apk/db/installed); do
 done
 # the Argon theme (release packages, unsigned)
 apk_retry add --allow-untrusted $EXTRA_LIST >/dev/null
+(cd /in/feature-source/work/appdpi-private && sha256sum -c /in/feature-source/openwrt/appdpi-geoip.SHA256SUMS)
 set -- /in/feature-source/work/appdpi-private/*.apk
 [ -f "$1" ]
 apk_retry add --no-scripts --allow-untrusted "$@" >/dev/null
 set --
 uci set appdpi.main.enabled=0
+uci set appdpi.geoip.enabled=1
+uci set appdpi.geoip.db='/etc/appdpi/geoip/qqwry.dat /etc/appdpi/geoip/zxipv6wry.db'
 uci commit appdpi
 [ -s /www/luci-static/vantage/vantage.css ]
 [ -s /usr/share/luci/menu.d/zz-luci-app-vantage.json ]
@@ -637,12 +640,14 @@ python3 /in/feature-source/tools/release-ui-policy.py --root $R
 python3 /in/euicc-source/openwrt/stage-lpac.py --root $R --artifacts /in/lpac
 ln -snf ../init.d/appdpi "$R/etc/rc.d/S95appdpi"
 ln -snf ../init.d/appdpi "$R/etc/rc.d/K10appdpi"
-for pkg in appdpi appdpi-rulepack luci-app-appdpi luci-i18n-appdpi-zh-cn e5-appdpi-bpf-builtin libpcap1 luci-theme-vantage; do
+for pkg in appdpi appdpi-rulepack luci-app-appdpi luci-i18n-appdpi-zh-cn e5-appdpi-bpf-builtin appdpi-geoip-qqwry appdpi-geoip-zxipv6wry libpcap1 luci-theme-vantage; do
     grep -Fxq "P:$pkg" "$R/lib/apk/db/installed"
 done
 test -x "$R/usr/bin/appdpi"
 python3 /in/feature-source/tools/patch-appdpi-acl.py "$R/usr/share/rpcd/acl.d/luci-app-appdpi.json"
 test "$(uci -c "$R/etc/config" get appdpi.main.enabled)" = 0
+test "$(uci -c "$R/etc/config" get appdpi.geoip.enabled)" = 1
+(cd "$R" && sha256sum -c /in/feature-source/openwrt/appdpi-geoip-files.SHA256SUMS)
 test "$(cat "$R/etc/e5/device-profile")" = e5
 test ! -e "$R/cache"
 test ! -e "$R/root/E5"
