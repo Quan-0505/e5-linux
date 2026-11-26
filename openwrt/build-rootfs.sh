@@ -299,7 +299,7 @@ docker run --rm --platform linux/arm64 \
     -v "$OVERLAY":/in/overlay:ro -v "$TOP/rootfs/overlay/opt/e5":/in/opt-e5:ro \
     -v "$MODEM_LOADER_PATCH":/in/modem-loader-patch:ro \
     -v "$WORK/release.json":/in/release.json:ro \
-    -v "$TOP":/in/feature-source:ro -e E5_FEATURES="$FEATURES" -e E5_VARIANT="${E5_VARIANT:-standard}" -e E5_UI_CACHE=/tmp/e5-ui-cache \
+    -v "$TOP":/in/feature-source:ro -v "$WORK/..":/in/feature-source/work:ro -e E5_FEATURES="$FEATURES" -e E5_VARIANT="${E5_VARIANT:-standard}" -e E5_UI_CACHE=/tmp/e5-ui-cache \
     -e E5_INFOSCREEN=/in/infoscreen -e E5_INFOSCREEN_PLUGINS=/in/infoscreen-plugins \
     -v "$OUT":/in/apk:ro -v "$BUSYBOX":/in/busybox:ro -v "$WORK/logdw":/in/logdw:ro \
     -v "$WORK/e5-vibrate":/in/e5-vibrate:ro -v "${INFOSCREEN:-$WORK/no-infoscreen}":/in/infoscreen:ro \
