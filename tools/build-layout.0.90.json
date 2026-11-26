@@ -1,0 +1,89 @@
+{
+  "format": 1,
+  "lpac_apks": "/root/E5/source/work/lpac",
+  "base": "/root/E5/source/work/openwrt/base",
+  "installer_artifacts": "{workspace}/artifacts/openwrt-tools/{installer_revision}",
+  "native_screen": {
+    "volume": "e5-openwrt-src",
+    "toolchain": "toolchain-aarch64_generic_gcc-14.3.0_musl",
+    "image": "debian:trixie"
+  },
+  "defaults": "/root/E5/source/work/openwrt/openwrt-25.12.6-armsr-armv8-rootfs.tar.gz",
+  "busybox": "/root/E5/source/work/busybox/ext/usr/bin/busybox",
+  "ufs_identity_helper": "{repo}/out/changxing60/ufs-id",
+  "block_apk": "/root/E5/upstream-20261127/out/openwrt/block-mount-guarded.apk",
+  "wifi_apks": "/root/E5/source/work/wifi-sae",
+  "iwinfo_apks": "/root/E5/source/work/iwinfo-ap-scan",
+  "local_kernel_build": {
+    "source": "{workspace}/sources/e5-kernel",
+    "revision": "020b970e351eee3887e6caaf2d653926e7086e44"
+  },
+  "driver_api_checks": {
+    "y60": {
+      "reference_native": "yuanhang41s"
+    }
+  },
+  "native_kernel_builds": {
+    "k1": {
+      "source": "{workspace}/k1/linux-cache",
+      "objects": "{workspace}/k1/build",
+      "base_config": "{workspace}/kernels/m8/config"
+    },
+    "yuanhang41s": {
+      "source": "{workspace}/sources/e5-kernel",
+      "objects": "{workspace}/objects/e5-family",
+      "base_config": "{workspace}/kernels/m8/config"
+    }
+  },
+  "profiles": {
+    "e5": {
+      "kernel": "/root/E5/upstream-20261127/upstream/out-release",
+      "torch_source": "{repo}/devices/e5/port/torch",
+      "torch_objects": "{workspace}/objects/e5-torch",
+      "stock_boot": "/root/E5/inputs/ci-components/boot_b.img",
+      "misc_head": "/root/E5/inputs/ci-components/misc-head.bin"
+    },
+    "t551m": {
+      "kernel": "{workspace}/kernels/t551m",
+      "stock_boot": "{repo}/dumps/t551m-original/boot_b.img",
+      "misc_head": "{repo}/dumps/t551m-original/misc-head.bin"
+    },
+    "m8": {
+      "kernel": "{workspace}/kernels/m8",
+      "stock_boot": "{repo}/dumps/m8-stock/boot_b.img",
+      "misc_head": "{repo}/dumps/m8-stock/misc-head.bin"
+    },
+    "t512n": {
+      "kernel": "{workspace}/kernels/t512n",
+      "stock_boot": "{repo}/dumps/t512n-stock-20261018/boot_b.img",
+      "misc_head": "{repo}/dumps/t512n-stock-20261018/misc-head.bin"
+    },
+    "yuanhang41s": {
+      "kernel": "{workspace}/kernels/yuanhang41s",
+      "stock_boot": "{repo}/dumps/yuanhang41s-stock-20261020/boot_b.img",
+      "misc_head": "{repo}/dumps/yuanhang41s-stock-20261020/misc-head.bin"
+    },
+    "k1": {
+      "kernel": "{workspace}/k1/kernel",
+      "stock_boot": "{repo}/dumps/k1-stock-20261020/boot_b.img",
+      "misc_head": "{repo}/dumps/k1-stock-20261020/misc-head.bin"
+    },
+    "lym10k": {
+      "kernel": "{workspace}/kernels/lym10k",
+      "stock_boot": "/mnt/d/\u968f\u8eabWiFi/\u5cad\u71d5\u8001\u5934\u4e50/\u71d5\u5b50\u5907\u4efd/\u71d5\u5b50\u5907\u4efd/boot_b.bin",
+      "misc_head": "/mnt/d/\u968f\u8eabWiFi/\u5cad\u71d5\u8001\u5934\u4e50/\u71d5\u5b50\u5907\u4efd/\u71d5\u5b50\u5907\u4efd/misc.bin"
+    },
+    "y60": {
+      "kernel": "{workspace}/kernels/y60",
+      "platform_config": "{workspace}/kernels/m8/config",
+      "stock_boot": "/mnt/d/\u8001\u5e74\u673a/\u9177\u6d3e\u91d1\u4e16\u7eaay60_20240108\u5e26\u9707\u52a8\u7248\u672c\u5907\u4efd/Image/boot_b.img",
+      "misc_head": "/mnt/d/\u8001\u5e74\u673a/\u9177\u6d3e\u91d1\u4e16\u7eaay60_20240108\u5e26\u9707\u52a8\u7248\u672c\u5907\u4efd/Image/misc.img"
+    },
+    "changxing60": {
+      "kernel": "{workspace}/kernels/changxing60",
+      "stock_boot": "{repo}/dumps/changxing60-stock/boot_a.img",
+      "misc_head": "{repo}/dumps/changxing60-stock/misc-head.bin",
+      "platform_config": "{workspace}/kernels/m8/config"
+    }
+  }
+}
