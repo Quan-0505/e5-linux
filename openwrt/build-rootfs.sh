@@ -348,7 +348,7 @@ apk_retry add --allow-untrusted /in/apk/bluez-libs-*.apk /in/apk/bluez-daemon-*.
 # (curl: the webhook of the SMS forward, /usr/libexec/e5-sms)
 apk_retry add --allow-untrusted /in/wifi-sae/*.apk >/dev/null
 apk_retry add --allow-untrusted /in/iwinfo-ap-scan/*.apk >/dev/null
-apk_retry add iwinfo iw-full ip-full bash mount-utils luci-proto-modemmanager dbus-utils alsa-utils curl openssl-util msmtp r8152-firmware ttyd luci-app-ttyd luci-i18n-ttyd-tr >/dev/null
+apk_retry add dnsmasq-full iwinfo iw-full ip-full bash mount-utils luci-proto-modemmanager dbus-utils alsa-utils curl openssl-util msmtp r8152-firmware ttyd luci-app-ttyd luci-i18n-ttyd-tr >/dev/null
 # The E5 screen authenticated Daed adapter uses the ucode filesystem module
 # for short-lived, permission-restricted curl request files.
 apk_retry add ucode-mod-fs iw-full >/dev/null
@@ -473,6 +473,8 @@ cp -a /in/overlay/. $R/
 rm -f $R/.device-overlay.json
 # Separate public add-ons: never copy a live device state directory.
 python3 /in/feature-source/tools/stage-network-addons.py --root $R --variant "$E5_VARIANT"
+[ -s $R/lib/preinit/31_unisoc_fast_boot ] || { echo "Missing fast-boot preinit policy" >&2; exit 1; }
+chmod 0755 $R/etc/uci-defaults/95-disable-ap-uapsd
 if [ "$CONTAINERS" = 1 ]; then
     python3 $R/usr/libexec/e5-container-setup --root $R
 fi
@@ -609,6 +611,7 @@ if [ -e "$R/etc/config/attendedsysupgrade" ]; then
 fi
 python3 /in/feature-source/tools/stage-flow-offload.py --root $R
 python3 /in/feature-source/tools/stage-ra-renew.py --root $R
+python3 /in/feature-source/tools/stage-ntp.py --root $R
 python3 /in/feature-source/installer/stage-ota.py --root $R
 python3 /in/feature-source/tools/release-ui-policy.py --root $R
 python3 /in/euicc-source/openwrt/stage-lpac.py --root $R --artifacts /in/lpac

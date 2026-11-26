@@ -235,7 +235,8 @@ def main():
             subprocess.run(['python3', str(TOP/'devices/common/test_dwc3_host_sink.py')],
                            env=dict(os.environ, E5_TEST_KERNEL=str(source)), check=True)
         if args.profile in ('e5', 't551m', 't512n', 'lym10k'):
-            for test in ('test_usb_gadget_session.py', 'test_usb_host_start.py',
+            for test in ('test_usb_host_preparation.py', 'test_usb_udc_api.py',
+                         'test_usb_gadget_session.py', 'test_usb_host_start.py',
                          'test_usb_host_lifecycle.py'):
                 subprocess.run(['python3', str(TOP/'devices/t551m'/test), str(source)], check=True)
             subprocess.run(['python3', str(TOP/'devices/common/test_musb_host_sink.py')],
@@ -246,6 +247,7 @@ def main():
         subprocess.run(['python3',str(TOP/'devices/common/test_power_probe.py'),
                         '--kernel',str(source)],check=True)
         if args.profile=='e5':
+            subprocess.run(['python3',str(TOP/'devices/e5/test_torch.py')],check=True)
             subprocess.run(['python3',str(TOP/'devices/e5/test_charger.py'),str(source)],check=True)
             subprocess.run(['python3',str(TOP/'devices/e5/test_charger_readback.py'),str(source)],check=True)
             subprocess.run(['python3',str(TOP/'devices/e5/test_otg_readback.py'),str(source)],check=True)

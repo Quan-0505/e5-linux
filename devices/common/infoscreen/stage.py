@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 import hashlib
 import re
+import runpy
 
 HERE = Path(__file__).resolve().parent
 
@@ -234,8 +235,11 @@ function status() {''')
             'www/mobile.css': served['mobile.css']}
 
 
-def stage(root):
+def stage(root, profile=None):
     root = Path(root)
+    # Image-owned E5 app code lives under /usr so OTA does not treat it as
+    # user configuration. The board marker keeps other screen models intact.
+    runpy.run_path(str(HERE.parents[1] / 'e5/torch-screen.py'))['stage'](root, profile=profile)
     for name, content in sources().items():
         dest = root / 'usr/share/e5-infoscreen' / name
         dest.parent.mkdir(parents=True, exist_ok=True)

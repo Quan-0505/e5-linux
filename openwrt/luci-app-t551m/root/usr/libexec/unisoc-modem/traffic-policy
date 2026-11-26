@@ -1,0 +1,113 @@
+#!/usr/bin/ucode
+// One-shot policy worker/RPC. Accounting owns the sampling timer.
+import * as fs from 'fs';
+import * as uci from 'uci';
+import * as ubus from 'ubus';
+import * as policy from './traffic-policy.uc';
+
+const BASE=getenv('MU300_TRAFFIC_DIR') || '/etc/unisoc-modem/traffic';
+const RUN=getenv('MU300_TRAFFIC_RUN') || '/run/unisoc-modem-traffic';
+const SELF=sourcepath(), LIB=fs.dirname(SELF), cfg=uci.cursor();
+let connection;
+function mkdir(path) {
+    if (fs.stat(path)?.type=='directory') return;
+    let parent=fs.dirname(path);
+    if (parent!=path) mkdir(parent);
+    if (!fs.mkdir(path,448)) die('storage_failed');
+}
+function read(path,fallback) {
+    let raw=fs.readfile(path);
+    if (raw==null) { if (fs.stat(path)) die('storage_failed'); return fallback; }
+    return json(raw);
+}
+function write(path,data) {
+    mkdir(fs.dirname(path));
+    let raw=sprintf('%J\n',data), temp=path+'.new';
+    if (fs.writefile(temp,raw)!=length(raw) || !fs.chmod(temp,384) || !fs.rename(temp,path)) {
+        fs.unlink(temp); die('storage_failed');
+    }
+}
+function quote(s) { return "'"+replace(s,/'/g,"'\\''")+"'"; }
+function uci_get(key,fallback) { let p=split(key,'.'); return cfg.get(p[0],p[1],p[2]) ?? fallback; }
+function active_slot() {
+    for (let path in ['/sys/module/sipc_wwan/parameters/card','/run/mu300-data-sim-actual']) {
+        let slot=trim(fs.readfile(path) || '');
+        if (slot in ['0','1']) return slot;
+    }
+    let slot=uci_get('unisoc_modem.main.data_sim','0');
+    if (!(slot in ['0','1'])) die('invalid_slot');
+    return slot;
+}
+function bus(iface,method) {
+    connection ??= ubus.connect(null,3);
+    if (!connection) die('operation_failed');
+    let result=connection.call('network.interface.'+iface,method,{});
+    if (ubus.error(true)) die('operation_failed');
+    return result ?? {};
+}
+function restart(slot) {
+    // Preserve each platform's existing serialized scope and command owner.
+    let argv=fs.stat(LIB+'/sim-scope.sh') ? ['/bin/sh','-c',
+        '. "$1"; sim_scope "$2" || exit 1; exec "$3" restart',
+        'traffic-policy',LIB+'/sim-scope.sh',slot,LIB+'/lock'] : [LIB+'/lock','restart'];
+    let command='env -u MU300_DASH_DIR -u MU300_STATE_DIR -u MU300_SCOPED_SLOT -u MU300_AT_DIR -u MU300_DASH_AT_DIR '+
+        'MU300_SIM_SLOT='+quote(slot)+' '+join(' ',map(argv,quote));
+    // The minimal firmware need not ship a timeout applet. Use ucode's native
+    // deadline; keep output private and owned by this serialized worker.
+    let path=RUN+'/policy-restart-output';
+    if (fs.writefile(path,'')!=0 || !fs.chmod(path,384)) die('storage_failed');
+    let rc=system(command+' >'+quote(path)+' 2>&1',210000);
+    let output=fs.readfile(path) || ''; fs.unlink(path);
+    if (rc!=0) die(trim(substr(output,-320)) || 'restart_failed');
+    if (index(output,'RECONNECT-DEFERRED')>=0) return 'radio_off';
+    let result;
+    try { result=json(output); } catch(e) { return 'done'; }
+    if (!result?.ok || result.reconnect=='failed') die(result?.reconnect_error || result?.error || 'restart_failed');
+    return result.reconnect=='deferred' ? 'radio_off' : 'done';
+}
+function lock(name,nonblocking,fn) {
+    let file=fs.open(RUN+'/'+name,'a');
+    if (!file) die('storage_failed');
+    fs.chmod(RUN+'/'+name,384);
+    if (!file.lock(nonblocking ? 'xn' : 'x')) { file.close(); die('operation_busy'); }
+    let result;
+    try { result=fn(); } catch(e) { file.close(); die(e.message); }
+    file.close(); return result;
+}
+const io={
+    settings:()=>read(BASE+'/policy.json',{}), state:()=>read(BASE+'/policy-state.json',{}),
+    save:(state)=>write(BASE+'/policy-state.json',state),
+    status:(state)=>write(RUN+'/policy-status.json',state), runtime:()=>read(RUN+'/policy-status.json',{}),
+    write_config:(settings)=>write(BASE+'/policy.json',settings),
+    configure:(fn)=>lock('policy-config.lock',false,fn),
+    check_idle:()=>lock('policy.lock',true,()=>null),
+    spawn:(force)=>{
+        let cmd='ucode '+quote(SELF)+' tick'+(force ? ' force' : '')+' </dev/null >/dev/null 2>&1 &';
+        if (system(cmd)!=0) die('operation_failed');
+    },
+    snapshot:(slot)=>{
+        let path=RUN+'/view-sim'+slot+'.json';
+        if (!fs.stat(path)) path=RUN+(slot=='1' ? '/sim1' : '')+'/view.json';
+        return read(path,{});
+    },
+    now:time, active_slot, uci:uci_get, bus, restart,
+    boot:()=>trim(fs.readfile('/proc/sys/kernel/random/boot_id') || ''),
+    switching:()=>!!fs.stat('/run/unisoc-data-sim-switch')
+};
+try {
+    mkdir(BASE); mkdir(RUN);
+    let controller=policy.controller(io), result;
+    if (ARGV[0]=='tick') result=lock('policy.lock',true,()=>{ controller.tick(ARGV[1]=='force'); return {ok:1}; });
+    else {
+        let input=fs.open('/dev/stdin','r'), raw=input?.read(8193) || ''; input?.close();
+        if (length(raw)>8192) die('invalid_config');
+        result=controller.api(ARGV[0],json(raw));
+    }
+    if (ARGV[0]!='tick') print(sprintf('%J\n',result));
+}
+catch(e) {
+    if (ARGV[0]=='tick' && e.message!='operation_busy') {
+        try { write(RUN+'/policy-status.json',{error:e.message,last_check:time()}); } catch(write_error) {}
+    }
+    print(sprintf('%J\n',{ok:0,error:e.message})); exit(1);
+}

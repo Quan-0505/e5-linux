@@ -217,7 +217,7 @@ class HostImageCapacity(unittest.TestCase):
                     helper.parent.mkdir(parents=True)
                     shutil.copy2(TOP / 'openwrt/bundle/boot-slots.py', helper)
                     gui = SimpleNamespace(password='', ctx=SimpleNamespace(record={'plan': {'openwrt_bytes': capacity}}),
-                                          validate_ssh=Mock(), action=lambda name, operation: operation())
+                                          validate_ssh=Mock(), connect_ssh=Mock(), action=lambda name, operation: operation())
                     commands = []
                     def execute(_client, command, **_options):
                         commands.append(command)

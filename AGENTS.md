@@ -1,5 +1,17 @@
 # Hardware and modem fixes
 
+- Implement new firmware-side control and background features in ucode. Python
+  remains available for host builds, offline diagnostics and tests, rather than
+  being the default runtime implementation. Prefer existing ubus, modem and
+  device events plus deadline timers; do not introduce independent polling when
+  the required event or accounting sample already exists. Preserve native
+  hardware drivers and existing AT ownership/ordering during migrations.
+- For runtime migrations, complete at least six documented regression rounds
+  before reporting readiness. Compare against the original implementation and
+  cover real RPC/event dispatch, concurrency/fault recovery, upgrade/rollback
+  with preserved user data, and sustained execution. Fix differences and rerun
+  the final matrix; keep offline results distinct from hardware acceptance.
+
 - NR0 is the sole ingress for automatic modem URC events. Do not select an
   event channel by SIM number or wait on NR3 for SIM2 notifications. The
   ingress channel does not identify the event's SIM; confirm the target using
@@ -57,6 +69,28 @@
   reuse. Never automatically delete source/object/download caches, device dumps,
   installation backups, or previous releases. Do not run `docker system prune`
   or remove volumes as routine build cleanup.
+
+# Info-screen feature delivery
+
+- Every new or changed info-screen feature must be integrated into the tracked
+  build/staging paths for complete images, ordinary updates and differential
+  OTA, including screen-only updates where applicable. Carry all required UI
+  assets, manifests, backends, services, drivers/modules and startup integration;
+  a working hot deployment alone is not delivery completion.
+- Keep firmware-owned application code in image-owned, updateable paths. Keep
+  user settings, wallpaper and third-party application data separate. Check
+  configuration preservation and plugin symlinks so retained old files cannot
+  shadow the incoming code. New defaults and module startup must also work on
+  systems upgraded by diff, without requiring a fresh installation.
+- Use the shared screen staging path for shared features, and gate hardware
+  features by the actual supported model. Ship matching kernel/modules when
+  needed; do not expose a nonfunctional control on other models.
+- For new applications or changes to delivery/ownership, run meaningful offline
+  regressions through the actual diff generator/applier and ordinary-update
+  migration: cover first introduction and a subsequent update, while preserving
+  user configuration and data. Do not tighten OTA checks to make these tests
+  pass. When producing packages, verify the delivered files before reporting
+  inclusion. Keep offline verification distinct from hardware acceptance.
 
 # Shared installer ownership
 

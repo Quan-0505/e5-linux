@@ -151,7 +151,7 @@ def stage(root, profile='t551m'):
     shutil.copyfile(voltage_checker, voltage_target)
     voltage_target.chmod(0o755)
     runpy.run_path(str(Path(__file__).with_name('ui-cleanup.py')))['cleanup'](root)
-    runpy.run_path(str(TOP / 'devices/common/infoscreen/stage.py'))['stage'](root)
+    runpy.run_path(str(TOP / 'devices/common/infoscreen/stage.py'))['stage'](root, profile=profile)
     policy = TOP / 'tools/release-ui-policy.py'
     target = root / 'opt/e5/release-ui-policy'
     shutil.copyfile(policy, target)
