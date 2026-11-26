@@ -173,6 +173,7 @@ class Archives(unittest.TestCase):
     def fixture(self, path, *, corrupt=False, extra=None):
         files = {'files/boot.img': b'boot', 'files/openwrt.ext4.gz': b'root', 'OpenWrt-Installer.py': b'cli'}
         runtime = {'OpenWrt-Diff-Studio.exe': b'native diff', 'OpenWrt-Diff-Studio.py': b'diff CLI',
+                   'OpenWrt-Diff-Studio-macOS.command': b'#!/bin/sh\n',
                    'OpenWrt-Diff-Studio.app/Contents/MacOS/openwrt-installer': b'mac diff',
                    'tools/backend/openwrt-backend.exe': b'Windows backend',
                    'tools/macos/backend/openwrt-backend': b'Mac backend'}
