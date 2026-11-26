@@ -460,10 +460,12 @@ echo "uhttpd: $uhttpd_ver (ucode/ubus plugins matched)"
 R=/build/root; mkdir -p $R
 # the live filesystem of this container (OpenWrt and the packages), without the runtime mounts
 for e in /*; do
-    case "$e" in /proc|/sys|/dev|/build|/in|/out|/tmp) continue ;; esac
+    case "$e" in /proc|/sys|/dev|/build|/in|/out|/tmp|/cache|/root) continue ;; esac
     cp -a "$e" $R/
 done
 mkdir -p $R/proc $R/sys $R/dev $R/tmp $R/mnt/e5-disk $R/opt/e5/android $R/opt/e5/bin $R/etc/e5linux
+# Target home is empty; host-side mount ancestors are never firmware inputs.
+mkdir -p $R/root && chmod 700 $R/root
 mkdir -p $R/etc/e5
 cp /in/block-mount.build-id $R/etc/e5/block-mount.build-id
 cp /in/wifi-sae/build-id $R/etc/e5/wifi-sae.build-id
@@ -638,6 +640,8 @@ done
 test -x "$R/usr/bin/appdpi"
 python3 /in/feature-source/tools/patch-appdpi-acl.py "$R/usr/share/rpcd/acl.d/luci-app-appdpi.json"
 test "$(uci -c "$R/etc/config" get appdpi.main.enabled)" = 0
+test ! -e "$R/cache"
+test ! -e "$R/root/E5"
 cd $R && tar -czf /out/$NAME .
 ls -la /out/$NAME
 '
