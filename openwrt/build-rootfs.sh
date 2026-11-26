@@ -165,6 +165,9 @@ docker run --rm --platform linux/arm64 -v "$TOP/openwrt/src":/src:ro \
         gcc -static -Os -s -Wall -Wextra -o /out/e5-sim-probe /src/e5-sim-probe.c &&
         gcc -std=c11 -static -Os -s -Wall -Wextra -Werror -o /out/t551m-at /at-source/at-client.c'
 python3 "$TOP/devices/t551m/build-at-client.py" --binary "$WORK/t551m-at"
+# Shared screen staging runs inside the compiler-free target container.
+python3 "$TOP/devices/t551m/build-at-owner.py"
+python3 "$TOP/devices/common/build-sml-voltage.py"
 
 # what a standalone image carries of the device's own (the Debian root's in the
 # directory form); an empty directory each otherwise
