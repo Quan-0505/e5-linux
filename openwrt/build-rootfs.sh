@@ -289,7 +289,7 @@ fi
 mkdir -p "$TP"
 
 # (an empty directory stands for no info screen)
-mkdir -p "$WORK/no-infoscreen"
+mkdir -p "$WORK/no-infoscreen" "$WORK/apk-cache"
 echo "info screen: ${INFOSCREEN:-(none)}"
 VERSION=$(python3 "$TOP/tools/release-identity.py" --profile e5 \
     --kernel "$(cat "$SA/audio/release")" --openwrt "$VER" \
@@ -315,9 +315,10 @@ docker run --rm --platform linux/arm64 \
     -v "$TOP/openwrt":/in/euicc-source/openwrt:ro \
     -v "$SA":/in/sa:ro -e STANDALONE="$STANDALONE" -v "$RM":/in/root-modules:ro \
     -v "$WORK/extra":/in/extra:ro -e EXTRA_LIST="$EXTRA_LIST" -v "$TP":/in/transplant:ro \
-    -v "$TAROUT":/out -e NAME="$NAME" -e VERSION="$VERSION" -e E5_BUILD_EPOCH="${E5_BUILD_EPOCH:-}" -e CONTAINERS="$CONTAINERS" \
+    -v "$WORK/apk-cache":/cache -v "$TAROUT":/out -e NAME="$NAME" -e VERSION="$VERSION" -e E5_BUILD_EPOCH="${E5_BUILD_EPOCH:-}" -e CONTAINERS="$CONTAINERS" \
     e5-openwrt-base:$VER /bin/sh -euc '
 mkdir -p /var/lock /var/run /tmp
+apk() { command apk --cache-dir /cache "$@"; }
 # Recover interrupted package downloads, as in MU300 clean-tf-7.2. Keep
 # optional translation probes separate so missing translations fail quickly.
 apk_retry() {
@@ -416,10 +417,10 @@ if [ -f /in/infoscreen/packages.txt ]; then
     grep -v "^#" /in/infoscreen/packages.txt > /tmp/pk
     if [ -s /tmp/tp ]; then grep -vxF -f /tmp/tp /tmp/pk > /tmp/pk2 || true; mv /tmp/pk2 /tmp/pk; fi
     [ -s /tmp/pk ] || { echo "no info screen packages to install" >&2; exit 1; }
-    apk add $(cat /tmp/pk) >/dev/null
+    apk_retry add $(cat /tmp/pk) >/dev/null
     echo "info screen packages: $(wc -l < /tmp/pk)"
     if [ -s /tmp/tp ]; then
-        apk add $(cat /in/transplant/deps) >/dev/null
+        apk_retry add $(cat /in/transplant/deps) >/dev/null
         cp -a /in/transplant/root/. /
         cat /in/transplant/installed >> /lib/apk/db/installed
         cat /in/transplant/names >> /etc/apk/world
