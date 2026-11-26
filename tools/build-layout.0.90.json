@@ -40,8 +40,8 @@
       "kernel": "/root/E5/upstream-20261127/upstream/out-release",
       "torch_source": "{repo}/devices/e5/port/torch",
       "torch_objects": "{workspace}/objects/e5-torch",
-      "stock_boot": "/root/E5/inputs/ci-components/boot_b.img",
-      "misc_head": "/root/E5/inputs/ci-components/misc-head.bin"
+      "stock_boot": "/root/E5/source/dumps/boot_b.img",
+      "misc_head": "/root/E5/source/dumps/misc-head.bin"
     },
     "t551m": {
       "kernel": "{workspace}/kernels/t551m",
