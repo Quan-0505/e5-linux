@@ -168,6 +168,7 @@ python3 "$TOP/devices/t551m/build-at-client.py" --binary "$WORK/t551m-at"
 # Shared screen staging runs inside the compiler-free target container.
 python3 "$TOP/devices/t551m/build-at-owner.py"
 python3 "$TOP/devices/common/build-sml-voltage.py"
+python3 "$TOP/devices/common/build-screen-native.py"
 
 # what a standalone image carries of the device's own (the Debian root's in the
 # directory form); an empty directory each otherwise
