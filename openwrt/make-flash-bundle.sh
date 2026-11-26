@@ -161,7 +161,7 @@ fi
 python3 "$HERE/bundle/install-entrypoints.py" "$P"
 cp "$HERE/bundle/part-write.sh" "$P/files/"
 test -f "$OUT/ext4-tools.tar" || { echo 'Missing ext4-tools.tar: openwrt/prepare-ext4-tools.py --root CLEAN_ARM64_ROOT --out out/openwrt/ext4-tools.tar' >&2; exit 1; }
-tar -tf "$OUT/ext4-tools.tar" | grep -qx 'ext4-geometry.sh' || {
+tar -tf "$OUT/ext4-tools.tar" | grep -x 'ext4-geometry.sh' >/dev/null || {
     echo 'ext4-tools.tar is stale: rebuild it with openwrt/prepare-ext4-tools.py before packaging' >&2; exit 1;
 }
 cp "$OUT/ext4-tools.tar" "$P/files/"
