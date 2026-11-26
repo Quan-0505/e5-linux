@@ -351,7 +351,7 @@ apk_retry add --allow-untrusted /in/iwinfo-ap-scan/*.apk >/dev/null
 apk_retry add dnsmasq-full iwinfo iw-full ip-full bash mount-utils luci-proto-modemmanager dbus-utils alsa-utils curl openssl-util msmtp r8152-firmware ttyd luci-app-ttyd luci-i18n-ttyd-tr >/dev/null
 # The E5 screen authenticated Daed adapter uses the ucode filesystem module
 # for short-lived, permission-restricted curl request files.
-apk_retry add ucode-mod-fs iw-full >/dev/null
+apk_retry add ucode-mod-fs iw-full libpcap1 >/dev/null
 # SMS email encoding and DingTalk signatures need the OpenSSL command itself.
 command -v openssl >/dev/null
 openssl version
@@ -386,6 +386,12 @@ for p in $(sed -En "s/^P:luci-(app|proto)-//p" /lib/apk/db/installed); do
 done
 # the Argon theme (release packages, unsigned)
 apk_retry add --allow-untrusted $EXTRA_LIST >/dev/null
+set -- /in/feature-source/work/appdpi-private/*.apk
+[ -f "$1" ]
+apk_retry add --no-scripts --allow-untrusted "$@" >/dev/null
+set --
+uci set appdpi.main.enabled=0
+uci commit appdpi
 [ -s /www/luci-static/vantage/vantage.css ]
 [ -s /usr/share/luci/menu.d/zz-luci-app-vantage.json ]
 # footstrap 的 header{display:flex;position:sticky} 会命中页面内容里的 <header>，
@@ -585,6 +591,10 @@ if [ "$E5_FEATURES" = 1 ]; then
 elif [ -n "$screen" ]; then
     python3 /in/feature-source/devices/t551m/ui.py --root $R --profile e5
 fi
+if [ -f "$R/etc/uci-defaults/98-t551m-ui" ]; then
+    sed -i "s|/luci-static/aurora|/luci-static/vantage|" "$R/etc/uci-defaults/98-t551m-ui"
+    grep -q "/luci-static/vantage" "$R/etc/uci-defaults/98-t551m-ui"
+fi
 # Apply the E5 DAED keypad shortcut after all info-screen staging. The shared
 # staging step copies upstream files into the root and would otherwise erase
 # this device-specific overlay.
@@ -615,6 +625,14 @@ python3 /in/feature-source/tools/stage-ntp.py --root $R
 python3 /in/feature-source/installer/stage-ota.py --root $R
 python3 /in/feature-source/tools/release-ui-policy.py --root $R
 python3 /in/euicc-source/openwrt/stage-lpac.py --root $R --artifacts /in/lpac
+ln -snf ../init.d/appdpi "$R/etc/rc.d/S95appdpi"
+ln -snf ../init.d/appdpi "$R/etc/rc.d/K10appdpi"
+for pkg in appdpi appdpi-rulepack luci-app-appdpi luci-i18n-appdpi-zh-cn e5-appdpi-bpf-builtin libpcap1 luci-theme-vantage; do
+    grep -Fxq "P:$pkg" "$R/lib/apk/db/installed"
+done
+test -x "$R/usr/bin/appdpi"
+python3 /in/feature-source/tools/patch-appdpi-acl.py "$R/usr/share/rpcd/acl.d/luci-app-appdpi.json"
+test "$(uci -c "$R/etc/config" get appdpi.main.enabled)" = 0
 cd $R && tar -czf /out/$NAME .
 ls -la /out/$NAME
 '

@@ -43,6 +43,8 @@ def add_diff_studio(package):
 
 def finalize(package, profile, bootctl, variant='standard'):
     package, bootctl = Path(package), Path(bootctl)
+    # The SSH updater uploads this standalone NV archive helper.
+    shutil.copy2(HERE.parent / "luci-app-t551m/root/usr/lib/e5/nv_persistence.py", package / "files/nv-persistence.py")
     if variant not in {'standard', 'wps'}:
         raise ValueError('unsupported package variant')
     add_android_switcher(package)
@@ -56,7 +58,7 @@ def finalize(package, profile, bootctl, variant='standard'):
     else:
         add_diff_studio(package)
     files = package / 'files'
-    for name in ('OpenWrt-Installer.py', 'START-HERE.md', 'files/android-bootchain.sh',
+    for name in ('files/nv-persistence.py', 'OpenWrt-Installer.py', 'START-HERE.md', 'files/android-bootchain.sh',
                  'scripts/installer/boot-slots.py', 'scripts/installer/storage-api.py', 'scripts/installer/storage-lib.sh', 'scripts/installer/gpt-api.py', 'files/storage.sh',
                  'files/collect-device-files.sh', 'files/android-loop.sh', 'files/ext4-tools.tar', 'files/install-lock-tools.tar', 'files/busybox', 'scripts/tools/sprd-bt-config.py',
                  'scripts/tools/vbc-profile/vbc-profile.py'):

@@ -1,4 +1,5 @@
 #!/bin/bash
+export E5_MAGISK_BUILD_IMAGE=e5-private-arm64-tools:3.22
 set -euo pipefail
 TOP=$(cd "$(dirname "$0")/.." && pwd)
 DEST="$TOP/out/magisk"

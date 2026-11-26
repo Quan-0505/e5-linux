@@ -1,4 +1,5 @@
 #!/bin/bash
+export E5_TOOLS_BUILD_IMAGE=e5-private-arm64-tools:3.22 E5_MAGISK_BUILD_IMAGE=e5-private-arm64-tools:3.22
 # Build the flash package for other people's E5s:
 # out/openwrt/e5-openwrt-flash-<version>-<timestamp>-<git>.tar.gz, unpacked and run as
 # ./flash.sh (openwrt/bundle/README.md is its manual).
@@ -81,7 +82,9 @@ if [ -n "$MAINLINE" ]; then
     [ "$(strings "$KERNEL" | grep -c 'e5\.openwrt=' || true)" = 0 ] ||
         { echo "$KERNEL has e5.openwrt= on its command line: a trial kernel" >&2; exit 1; }
     E5_UPSTREAM_OUT=$KOUT sh "$TOP/upstream/root-modules.sh"
-    if [ -n "${E5_IMAGE_FROM:-}" ]; then
+    if [ "${E5_IMAGE_READY:-0}" = 1 ]; then
+        [ -s "$IMG" ] || { echo "prepared root image is missing" >&2; exit 1; }
+    elif [ -n "${E5_IMAGE_FROM:-}" ]; then
         bash "$HERE/image-add-modules.sh" "$E5_IMAGE_FROM" "$KOUT/root-modules.tar" "$IMG"
     else
         # the image always again: it has to carry this kernel's root modules

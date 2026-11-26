@@ -32,6 +32,7 @@ fi
 
 # An empty variable overrides kbuild's default, so unset it for local builds.
 [ -n "${KBUILD_BUILD_TIMESTAMP:-}" ] || unset KBUILD_BUILD_TIMESTAMP
+if [ "$(uname -m)" = x86_64 ]; then export CROSS_COMPILE=aarch64-linux-gnu-; fi
 cd /src/linux
 python3 /work/check-kernel-source.py .
 python3 /source/tools/prepare-release-kernel.py . --check

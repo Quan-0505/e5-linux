@@ -264,6 +264,7 @@ def audit_root(info):
 def internal_update_sources():
     return {
         'scripts/tools/e5-update.py': TOP / 'tools/e5-update.py',
+        'files/nv-persistence.py': TOP / 'openwrt/luci-app-t551m/root/usr/lib/e5/nv_persistence.py',
         'files/device-stage-part-update.sh': TOP / 'openwrt/device-stage-part-update.sh',
         'files/device-flash-boot.sh': TOP / 'openwrt/device-flash-boot.sh',
         'files/e5-network-addons-snapshot': TOP / 'openwrt/network-addons/overlay/usr/libexec/e5-network-addons-snapshot',
