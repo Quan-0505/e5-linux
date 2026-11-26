@@ -168,7 +168,7 @@ class RootAudit(unittest.TestCase):
             return info
 
     def files(self):
-        files = {'etc/e5/block-mount.build-id': b'fixture-block-build\n',
+        files = {'etc/e5/device-profile': b'e5\n', 'etc/e5/block-mount.build-id': b'fixture-block-build\n',
                 'sbin/block': b'block fixture', 'lib/libblkid-tiny.so': b'probe fixture',
                 'etc/init.d/fstab': b'fstab fixture',
                 'etc/init.d/e5-boot-ok': b'#!/bin/sh\n',
@@ -197,6 +197,19 @@ class RootAudit(unittest.TestCase):
             for name in ('settings.uc', 'api.uc', 'www/app.js', 'www/mobile.js'):
                 files['usr/share/e5-infoscreen/' + name] = (root / name).read_bytes()
         return files
+
+    def test_missing_or_wrong_profile_rejected_for_both_variants(self):
+        for variant in ('standard', 'wps'):
+            for value in (None, b'', b't551m\n'):
+                files = self.files()
+                if variant == 'wps':
+                    files['etc/e5/device-variant'] = b'e5wps\n'
+                if value is None:
+                    files.pop('etc/e5/device-profile')
+                else:
+                    files['etc/e5/device-profile'] = value
+                with self.subTest(variant=variant, value=value), self.assertRaisesRegex(ValueError, 'device-profile'):
+                    self.audit(files, variant=variant)
 
     def test_same_release_and_epoch_pass(self):
         info = self.audit(self.files())

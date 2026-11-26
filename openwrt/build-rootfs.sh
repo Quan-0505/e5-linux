@@ -467,6 +467,9 @@ mkdir -p $R/proc $R/sys $R/dev $R/tmp $R/mnt/e5-disk $R/opt/e5/android $R/opt/e5
 # Target home is empty; host-side mount ancestors are never firmware inputs.
 mkdir -p $R/root && chmod 700 $R/root
 mkdir -p $R/etc/e5
+# Required by the offline updater for both standard and WPS E5.
+printf "e5\n" > $R/etc/e5/device-profile
+chmod 644 $R/etc/e5/device-profile
 cp /in/block-mount.build-id $R/etc/e5/block-mount.build-id
 cp /in/wifi-sae/build-id $R/etc/e5/wifi-sae.build-id
 cp /in/iwinfo-ap-scan/build-id $R/etc/e5/iwinfo-ap-scan.build-id
@@ -640,6 +643,7 @@ done
 test -x "$R/usr/bin/appdpi"
 python3 /in/feature-source/tools/patch-appdpi-acl.py "$R/usr/share/rpcd/acl.d/luci-app-appdpi.json"
 test "$(uci -c "$R/etc/config" get appdpi.main.enabled)" = 0
+test "$(cat "$R/etc/e5/device-profile")" = e5
 test ! -e "$R/cache"
 test ! -e "$R/root/E5"
 cd $R && tar -czf /out/$NAME .

@@ -198,7 +198,7 @@ def audit_root(info):
         raise ValueError(f'root filesystem archive was not built: {rootfs}; inspect bundle-build.log for the original failure')
     forbidden = re.compile(r'^(?:lib/firmware/(?:wcnmodem|gnssmodem|l_agdsp|wifi_board|sprd/)|'
                            r'opt/e5/android/.+|etc/e5/install\.conf|etc/dropbear/dropbear_.+_host_key|etc/ssh/ssh_host_)')
-    wanted = {'usr/share/e5-infoscreen/VERSION', 'etc/e5-infoscreen/plugins/phone/manifest.json',
+    wanted = {'etc/e5/device-profile', 'usr/share/e5-infoscreen/VERSION', 'etc/e5-infoscreen/plugins/phone/manifest.json',
               'etc/e5-infoscreen/plugins/daed/manifest.json',
               'www/e5-daed-login/index.html', 'www/cgi-bin/e5-daed-pair',
               'etc/e5/build-time', 'etc/machine-id', 'usr/bin/openssl', 'etc/e5/feature-port.json',
@@ -249,6 +249,8 @@ def audit_root(info):
         raise ValueError('root image build time differs from CI compile start')
     if 'usr/bin/openssl' not in versions:
         raise ValueError('OpenWrt image is missing openssl-util (/usr/bin/openssl)')
+    if versions.get('etc/e5/device-profile', b'').strip() != b'e5':
+        raise ValueError('root filesystem is missing the required E5 device-profile marker')
     variant_marker = versions.get('etc/e5/device-variant', b'').strip()
     if info.get('variant', 'standard') == 'wps' and variant_marker != b'e5wps':
         raise ValueError('WPS root filesystem variant marker missing or invalid')
