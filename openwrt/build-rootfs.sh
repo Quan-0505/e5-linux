@@ -398,7 +398,7 @@ apk_retry add --no-scripts --allow-untrusted "$@" >/dev/null
 set --
 uci set appdpi.main.enabled=0
 uci set appdpi.geoip.enabled=1
-uci set appdpi.geoip.db='/etc/appdpi/geoip/qqwry.dat /etc/appdpi/geoip/zxipv6wry.db'
+uci set "appdpi.geoip.db=/etc/appdpi/geoip/qqwry.dat /etc/appdpi/geoip/zxipv6wry.db"
 uci commit appdpi
 [ -s /www/luci-static/vantage/vantage.css ]
 [ -s /usr/share/luci/menu.d/zz-luci-app-vantage.json ]
